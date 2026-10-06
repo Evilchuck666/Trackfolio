@@ -30,7 +30,6 @@ jobs:
           - name: macOS Apple Silicon
             runner: macos-15
     env:
-      UV_PYTHON_PREFERENCE: only-managed
       UV_NO_PROGRESS: "1"
 
     steps:
