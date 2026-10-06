@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import signal
 import subprocess
 
 import pytest
@@ -62,7 +63,7 @@ def test_qt_abort_is_reported_without_aborting_doctor(doctor, monkeypatch):
     def abort(command, **kwargs):
         assert command[0] == doctor.sys.executable
         return subprocess.CompletedProcess(
-            command, -6, "", "xcb plugin: libxcb-cursor.so.0 missing"
+            command, -signal.SIGABRT, "", "xcb plugin: libxcb-cursor.so.0 missing"
         )
 
     monkeypatch.setattr(doctor.subprocess, "run", abort)
