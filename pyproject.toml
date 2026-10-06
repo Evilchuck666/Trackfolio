@@ -1,0 +1,52 @@
+[project]
+name = "trackfolio"
+version = "0.1.0"
+description = "Entorno y núcleo independiente para gestionar metadatos de bibliotecas FLAC y MP3."
+readme = "README.md"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "alembic>=1.16,<2",
+    "mutagen>=1.47,<2",
+    "platformdirs>=4,<5",
+    "sqlalchemy>=2.0,<3",
+]
+
+[project.optional-dependencies]
+gui = ["pyside6==6.11.2"]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.15,<2",
+    "pytest>=8,<10",
+    "ruff>=0.12,<1",
+]
+
+[build-system]
+requires = ["uv_build==0.12.10"]
+build-backend = "uv_build"
+
+[tool.uv]
+required-version = "==0.12.10"
+python-preference = "only-managed"
+required-environments = [
+    "sys_platform == 'win32' and platform_machine == 'AMD64'",
+    "sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "sys_platform == 'linux' and platform_machine == 'x86_64'",
+]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+files = ["src", "scripts"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"

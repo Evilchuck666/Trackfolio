@@ -1,0 +1,41 @@
+# Entornos locales y cachés.
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Distribuciones generadas.
+build/
+dist/
+*.egg-info/
+
+# Configuración y datos de cada equipo.
+.env
+.env.*
+!.env.example
+*.local
+data/
+music/
+*.db
+*.sqlite
+*.sqlite3
+*-wal
+*-shm
+*.flac
+*.mp3
+!tests/fixtures/**/*.flac
+!tests/fixtures/**/*.mp3
+!tests/fixtures/**/*.sqlite3
+
+# Archivos del sistema y del editor.
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*.code-workspace.local

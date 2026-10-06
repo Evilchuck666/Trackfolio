@@ -1,0 +1,161 @@
+name: Entorno multiplataforma
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  environment:
+    name: ${{ matrix.name }} / CPython 3.13.15
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: GNU/Linux x86-64
+            runner: ubuntu-24.04
+          - name: Windows x86-64
+            runner: windows-2022
+          - name: macOS Intel
+            runner: macos-15-intel
+          - name: macOS Apple Silicon
+            runner: macos-15
+    env:
+      UV_PYTHON_PREFERENCE: only-managed
+      UV_NO_PROGRESS: "1"
+
+    steps:
+      - name: Obtener el repositorio
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Instalar uv fijado
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.12.10"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Instalar Python administrado desde .python-version
+        run: uv python install --managed-python
+
+      - name: Preparar el núcleo desde el lock
+        run: uv run --no-project --python 3.13.15 python scripts/bootstrap.py --core
+
+      - name: Verificar que el núcleo no instala Qt
+        shell: uv run --locked python {0}
+        run: |
+          from importlib.util import find_spec
+
+          assert find_spec("PySide6") is None, "El entorno del núcleo contiene PySide6."
+          print("El núcleo funciona sin instalar PySide6.")
+
+      - name: Diagnosticar el núcleo
+        run: uv run --locked python scripts/doctor.py --core
+
+      # Son paquetes de ejecución de Qt y de Xvfb en el runner, sin SDK de Qt.
+      # Se instalan después de comprobar que el núcleo no necesita escritorio.
+      - name: Instalar bibliotecas gráficas del runner Linux
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            xvfb xauth fonts-dejavu-core libgl1 libegl1 libfontconfig1 \
+            libx11-xcb1 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 \
+            libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-glx0 \
+            libxcb-randr0 libxcb-shape0 libxcb-sync1 libxcb-xfixes0 \
+            libxcb-xkb1 libxcb-util1
+
+      - name: Preparar la GUI desde el lock sin pantalla
+        run: uv run --no-project --python 3.13.15 python scripts/bootstrap.py --gui --platform offscreen
+
+      - name: Diagnosticar Qt sin pantalla
+        run: uv run --locked --extra gui python scripts/doctor.py --gui --platform offscreen
+
+      - name: Comprobar el backend X11 bajo Xvfb
+        if: runner.os == 'Linux'
+        run: xvfb-run --auto-servernum uv run --locked --extra gui python scripts/doctor.py --gui --platform xcb
+
+      - name: Comprobar el backend nativo de Windows o macOS
+        if: runner.os != 'Linux'
+        run: uv run --locked --extra gui python scripts/doctor.py --gui
+
+      - name: Analizar código
+        run: uv run --locked --extra gui ruff check .
+
+      - name: Comprobar formato
+        run: uv run --locked --extra gui ruff format --check .
+
+      - name: Comprobar tipos
+        run: uv run --locked --extra gui mypy
+
+      - name: Ejecutar pruebas de infraestructura
+        run: uv run --locked --extra gui pytest
+
+      - name: Construir wheel y distribución de fuentes
+        run: uv build --clear
+
+      - name: Verificar recursos e importar el wheel en un entorno aislado
+        shell: uv run --no-project --python 3.13.15 python {0}
+        run: |
+          import os
+          from pathlib import Path
+          import subprocess
+          import tarfile
+          import tempfile
+          from zipfile import ZipFile
+
+          wheel = next(Path("dist").resolve().glob("*.whl"))
+          source = next(Path("dist").resolve().glob("*.tar.gz"))
+          with ZipFile(wheel) as artifact:
+              assert "trackfolio/resources/README.md" in artifact.namelist()
+          with tarfile.open(source) as artifact:
+              assert any(
+                  name.endswith("/src/trackfolio/resources/README.md")
+                  for name in artifact.getnames()
+              )
+          with tempfile.TemporaryDirectory(prefix="trackfolio-wheel-") as clean:
+              environment = Path(clean) / ".venv"
+              subprocess.run(
+                  [
+                      "uv", "venv", "--managed-python", "--python", "3.13.15",
+                      str(environment),
+                  ],
+                  check=True,
+              )
+              executable = environment / (
+                  "Scripts/python.exe" if os.name == "nt" else "bin/python"
+              )
+              # Las dependencias ya se han probado desde uv.lock; aquí se
+              # comprueba únicamente la instalación del paquete y sus recursos.
+              subprocess.run(
+                  [
+                      "uv", "pip", "install", "--no-deps", "--python",
+                      str(executable), str(wheel),
+                  ],
+                  check=True,
+              )
+              subprocess.run(
+                  [
+                      str(executable), "-c",
+                      "from importlib.resources import files; "
+                      "assert files('trackfolio.resources').joinpath('README.md')"
+                      ".read_text(encoding='utf-8'); "
+                      "print('Recurso del wheel instalado: correcto.')",
+                  ],
+                  cwd=clean,
+                  check=True,
+              )
+
+      - name: Verificar que las comprobaciones no cambian los archivos versionados
+        run: git diff --exit-code
