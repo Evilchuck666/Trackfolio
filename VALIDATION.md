@@ -36,9 +36,15 @@ El workflow comprueba instalación limpia del núcleo sin Qt, instalación GUI d
 
 | Runner | Arquitectura | Estado |
 | --- | --- | --- |
-| Ubuntu 24.04 | x86-64 | Pendiente de primera ejecución remota |
-| Windows Server 2022 | x86-64 | Pendiente de primera ejecución remota |
-| macOS 15 Intel | x86-64 | Pendiente de primera ejecución remota |
-| macOS 15 Apple Silicon | ARM64 | Pendiente de primera ejecución remota |
+| Ubuntu 24.04 | x86-64 | Correcto: núcleo, Qt offscreen/X11, pruebas y distribución |
+| Windows Server 2022 | x86-64 | Correcto: núcleo, Qt offscreen/nativo, pruebas y distribución |
+| macOS 15 Intel | x86-64 | Correcto: núcleo, Qt offscreen/nativo, pruebas y distribución |
+| macOS 15 Apple Silicon | ARM64 | Correcto: núcleo, Qt offscreen/nativo, pruebas y distribución |
 
-Los resultados de GitHub Actions se registrarán aquí cuando finalice la ejecución. Los runners no cubren todas las versiones mínimas anunciadas ni todos los escritorios. La apariencia del futuro producto, los controles reales y las decoraciones de ventana deberán validarse cuando exista la GUI de Trackfolio.
+Los cuatro jobs terminaron correctamente en la [ejecución 37457968238 de GitHub Actions](https://github.com/Evilchuck666/Trackfolio/actions/runs/37457968238), sobre la revisión `d201961976d20f78b07d80e6e30071bf28411b77`. Este registro posterior sólo actualiza documentación.
+
+Los runners no cubren todas las versiones mínimas anunciadas ni todos los escritorios. La apariencia del futuro producto, los controles reales y las decoraciones de ventana deberán validarse cuando exista la GUI de Trackfolio.
+
+## Repositorio
+
+Git inicializado con rama `main`, `origin` y seguimiento de `origin/main`. La infraestructura y documentación están subidas a [Evilchuck666/Trackfolio](https://github.com/Evilchuck666/Trackfolio), un repositorio privado. El workspace se abre mediante `code Trackfolio.code-workspace`; la preparación para otro PC está en [README.md](README.md).
