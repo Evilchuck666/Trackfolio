@@ -72,7 +72,7 @@ La ventana consulta SQLite en modo de sólo lectura, mediante `ListTrackSummarie
 | Comprobación local | Resultado |
 | --- | --- |
 | Suite completa, GUI con `offscreen` | 122 pruebas correctas |
-| Núcleo en entorno limpio sin PySide6 | 98 pruebas correctas; 2 módulos GUI omitidos |
+| Núcleo en entorno limpio sin PySide6 | 101 pruebas correctas; 2 módulos GUI omitidos |
 | Ruff, formato, mypy | Correctos; 33 archivos de código comprobados por mypy |
 | Ventana del producto, eventos y detalle en Wayland | Correctos |
 | Ventana del producto, eventos y detalle en X11 | Correctos |
@@ -88,7 +88,16 @@ La ventana consulta SQLite en modo de sólo lectura, mediante `ListTrackSummarie
 
 Los catálogos y las capturas con la portada de la muestra se conservan en `data/`, excluido de Git. La GUI permite consultar los datos aunque la música original no exista. El lanzador `trackfolio` se instala mediante `project.gui-scripts`.
 
-La matriz del producto se ejecutará sobre la rama `gui` y se registrará al finalizar. La revisión visual manual de Windows y macOS sigue pendiente. Las pruebas automáticas verifican los campos, las fuentes, los recursos y el arranque; no prueban identidad de píxeles entre pantallas. En Wayland, un compositor que rechace las operaciones de mover/redimensionar activa el marco nativo como alternativa.
+Los cuatro jobs de la GUI terminaron correctamente en la [ejecución 37659500266](https://github.com/Evilchuck666/Trackfolio/actions/runs/37659500266), sobre `63f822cbd3298e117a1a864ed24fe9eaadbfda05`, rama `gui`:
+
+| Runner | Resultado del producto |
+| --- | --- |
+| Ubuntu 24.04 x86-64 | Núcleo sin Qt, GUI offscreen/X11, 122 pruebas, tipos y wheel instalado correctos |
+| Windows Server 2022 x86-64 | Núcleo sin Qt, GUI offscreen/nativa, 122 pruebas, tipos y wheel instalado correctos |
+| macOS 15 Intel | Núcleo sin Qt, GUI offscreen/nativa, 122 pruebas, tipos y wheel instalado correctos |
+| macOS 15 Apple Silicon | Núcleo sin Qt, GUI offscreen/nativa, 122 pruebas, tipos y wheel instalado correctos |
+
+La revisión visual manual de Windows y macOS sigue pendiente. Las pruebas automáticas verifican los campos, las fuentes, los recursos y el arranque; no prueban identidad de píxeles entre pantallas. En Wayland, un compositor que rechace las operaciones de mover/redimensionar activa el marco nativo como alternativa.
 
 ## Repositorio
 

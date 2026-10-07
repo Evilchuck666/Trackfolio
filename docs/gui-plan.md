@@ -155,6 +155,9 @@ del plan. Referencias: [Fusion](https://doc.qt.io/qt-6.11/qstylefactory.html),
 - [ ] Registrar revisión visual e interacción en escritorios reales, incluido
   Wayland local. Separar resultados medidos y pendientes: `offscreen` no acredita
   apariencia ni comportamiento del marco en un escritorio.
+  Completado el arranque real local Wayland/X11 y las capturas a 100/150/200 %;
+  pendiente la comparación visual manual en Windows y macOS. La matriz automática
+  de las cuatro plataformas pasa en la ejecución 37659500266 de GitHub Actions.
 - [x] Actualizar README, entorno y VALIDATION con comandos de arranque,
   preparación de otro PC y resultados observados.
 
