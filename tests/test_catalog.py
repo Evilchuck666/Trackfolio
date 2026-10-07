@@ -3,10 +3,11 @@
 from dataclasses import replace
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import event, func, select
 from sqlalchemy.exc import IntegrityError
 
-from trackfolio.application.catalog import GetTrack, ImportAudio, ListTracks
+from trackfolio.application.catalog import GetTrack, ImportAudio, ListTracks, ListTrackSummaries
+from trackfolio.domain.catalog import CatalogSummary
 from trackfolio.domain.metadata import Artwork, RawTagValue, TrackMetadata
 from trackfolio.infrastructure import database as db
 from trackfolio.infrastructure.catalog import SqliteCatalogRepository
@@ -208,3 +209,56 @@ def test_application_rejects_file_outside_library_before_reading(repository, tmp
     with pytest.raises(ValueError, match="dentro"):
         ImportAudio(reader, repository).execute(source, library)
     assert count(repository, db.audio_files) == count(repository, db.libraries) == 0
+
+
+def test_summary_query_has_no_details_per_row_and_preserves_credits(
+    repository, tmp_path, monkeypatch
+):
+    first = repository.save(
+        TrackMetadata(
+            title="Song",
+            artists=("Second alphabetically", "First alphabetically"),
+            album="Album",
+            album_year=2021,
+            lyrics="Heavy field excluded from the list",
+            artwork=Artwork(b"excluded from the list", "image/png"),
+            raw_tags=(RawTagValue("CUSTOM", "excluded from the list", 0),),
+            audio_format="flac",
+        ),
+        tmp_path,
+        "Album/song.flac",
+    )
+    second = repository.save(TrackMetadata(audio_format="mp3"), tmp_path, "empty.mp3")
+    statements = []
+
+    def capture(_connection, _cursor, statement, _parameters, _context, _executemany):
+        statements.append(statement.lower())
+
+    def no_details(_file_id):
+        pytest.fail("Listing summaries must not retrieve each file's detail")
+
+    monkeypatch.setattr(repository, "get", no_details)
+    event.listen(repository.engine, "before_cursor_execute", capture)
+    try:
+        summaries = ListTrackSummaries(repository).execute()
+    finally:
+        event.remove(repository.engine, "before_cursor_execute", capture)
+    assert summaries == (
+        CatalogSummary(
+            first.file_id,
+            first.track_id,
+            "Song",
+            ("Second alphabetically", "First alphabetically"),
+            "Album",
+            2021,
+            "Album/song.flac",
+        ),
+        CatalogSummary(second.file_id, second.track_id, None, (), None, None, "empty.mp3"),
+    )
+    assert len(statements) == 1
+    for excluded in ("lyrics", "artworks", "raw_tags", "track_details"):
+        assert excluded not in statements[0]
+
+
+def test_summary_listing_returns_no_rows_for_an_empty_catalog(repository):
+    assert ListTrackSummaries(repository).execute() == ()

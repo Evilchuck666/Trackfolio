@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib
 import importlib.metadata
 import importlib.resources
@@ -32,33 +33,9 @@ QT_PROBE_PREFIX = "TRACKFOLIO_QT_PROBE="
 QT_PROBE = """
 import json
 import sys
-from PySide6.QtCore import QTimer, qVersion
-from PySide6.QtWidgets import QApplication, QLabel, QStyleFactory, QVBoxLayout, QWidget
+from trackfolio.interfaces.gui.probe import run_probe
 
-app = QApplication(["trackfolio-doctor", *sys.argv[1:]])
-if "Fusion" not in QStyleFactory.keys():
-    raise RuntimeError("El estilo Fusion no está disponible")
-app.setStyle("Fusion")
-window = QWidget()
-window.setWindowTitle("Trackfolio: comprobación del entorno")
-window.resize(320, 160)
-layout = QVBoxLayout(window)
-layout.addWidget(QLabel("Trackfolio · Qt 6 · Fusion"))
-window.show()
-state = {"events": False}
-def check_event_loop():
-    state["events"] = window.isVisible()
-QTimer.singleShot(0, check_event_loop)
-QTimer.singleShot(150, app.quit)
-exit_code = app.exec()
-if exit_code != 0 or not state["events"]:
-    raise RuntimeError("Qt no procesó eventos de una ventana visible")
-print("TRACKFOLIO_QT_PROBE=" + json.dumps({
-    "platform": app.platformName(),
-    "style": app.style().objectName(),
-    "qt_version": qVersion(),
-    "events": state["events"],
-}))
+print("TRACKFOLIO_QT_PROBE=" + json.dumps(run_probe(sys.argv[1:])))
 """
 
 
@@ -203,18 +180,39 @@ def check_sqlite() -> CheckResult:
 
 def check_resources() -> CheckResult:
     try:
-        resource = importlib.resources.files("trackfolio.resources").joinpath("README.md")
-        content = resource.read_text(encoding="utf-8")
-        if not content.strip():
-            raise ValueError("El recurso está vacío.")
+        resources = importlib.resources.files("trackfolio.resources")
+        manifest = json.loads(resources.joinpath("manifest.json").read_text(encoding="utf-8"))
+        assets = manifest["sha256"]
+        required = {
+            "stylesheet.qss",
+            "fonts/Inter-Regular.ttf",
+            "fonts/Inter-SemiBold.ttf",
+            "fonts/LICENSE.txt",
+            *(
+                f"icons/{name}.svg"
+                for name in ("app", "open", "refresh", "close", "minimize", "maximize", "restore")
+            ),
+        }
+        if not isinstance(assets, dict) or set(assets) != required:
+            raise ValueError("El manifiesto no enumera todos los recursos esperados.")
+        for name, digest in assets.items():
+            if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+                raise ValueError(f"SHA-256 inválido para {name}.")
+            content = resources.joinpath(*name.split("/")).read_bytes()
+            if not content or hashlib.sha256(content).hexdigest() != digest:
+                raise ValueError(f"El recurso {name} está vacío o su SHA-256 no coincide.")
     except Exception as exc:
         return CheckResult(
             "Recursos",
             False,
-            f"No se puede leer trackfolio.resources/README.md: {exc}. "
+            f"No se pueden validar los recursos empaquetados de trackfolio.resources: {exc}. "
             "Comprueba los recursos del paquete y repite uv sync --locked.",
         )
-    return CheckResult("Recursos", True, "Recurso empaquetado accesible con importlib.resources")
+    return CheckResult(
+        "Recursos",
+        True,
+        f"{len(required)} recursos accesibles; fuentes, licencia, SVG y QSS verificados",
+    )
 
 
 def version_tuple(value: str) -> tuple[int, ...]:

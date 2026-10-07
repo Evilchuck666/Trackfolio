@@ -9,7 +9,7 @@ from typing import Any
 
 from sqlalchemy import Connection, Engine, Table, delete, insert, select, update
 
-from trackfolio.domain.catalog import CatalogEntry
+from trackfolio.domain.catalog import CatalogEntry, CatalogSummary
 from trackfolio.domain.metadata import Artwork, RawTagValue, TrackMetadata
 from trackfolio.infrastructure.database import (
     album_artists,
@@ -398,3 +398,52 @@ class SqliteCatalogRepository:
             )
         entries = (self.get(int(file_id)) for file_id in file_ids)
         return tuple(entry for entry in entries if entry is not None)
+
+    def list_summaries(self) -> tuple[CatalogSummary, ...]:
+        """Leer todas las filas de la lista sin cargar el detalle de cada archivo."""
+        statement = (
+            select(
+                audio_files.c.id.label("file_id"),
+                audio_files.c.track_id,
+                audio_files.c.relative_path,
+                tracks.c.title,
+                albums.c.title.label("album_title"),
+                albums.c.year.label("album_year"),
+                artists.c.name.label("artist_name"),
+            )
+            .join(tracks, tracks.c.id == audio_files.c.track_id)
+            .outerjoin(albums, albums.c.id == tracks.c.album_id)
+            .outerjoin(track_artists, track_artists.c.track_id == tracks.c.id)
+            .outerjoin(artists, artists.c.id == track_artists.c.artist_id)
+            .order_by(audio_files.c.id, track_artists.c.position)
+        )
+        summaries: dict[int, CatalogSummary] = {}
+        credits: dict[int, list[str]] = {}
+        with self.engine.connect() as connection:
+            for row in connection.execute(statement).mappings():
+                file_id = int(row["file_id"])
+                if file_id not in summaries:
+                    summaries[file_id] = CatalogSummary(
+                        file_id=file_id,
+                        track_id=int(row["track_id"]),
+                        title=row["title"],
+                        artists=(),
+                        album=row["album_title"],
+                        album_year=row["album_year"],
+                        relative_path=row["relative_path"],
+                    )
+                    credits[file_id] = []
+                if row["artist_name"] is not None:
+                    credits[file_id].append(row["artist_name"])
+        return tuple(
+            CatalogSummary(
+                file_id=summary.file_id,
+                track_id=summary.track_id,
+                title=summary.title,
+                artists=tuple(credits[file_id]),
+                album=summary.album,
+                album_year=summary.album_year,
+                relative_path=summary.relative_path,
+            )
+            for file_id, summary in summaries.items()
+        )

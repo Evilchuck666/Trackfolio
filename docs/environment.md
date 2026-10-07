@@ -75,7 +75,7 @@ uv sync --locked --extra gui --group dev
 uv run --locked --extra gui python scripts/doctor.py --gui
 ```
 
-El diagnóstico comprueba el intérprete, SO/arquitectura, imports, versiones de dependencias, SQLite y recursos del paquete; la preparación comprueba además uv. Con `--gui` comprueba también los requisitos gráficos y abre una ventana mínima en un subproceso, para que un plugin de Qt que aborte no derribe el diagnóstico principal. `--qt-timeout` permite cambiar su límite de espera en segundos, cuyo valor predeterminado es 15.
+El diagnóstico comprueba el intérprete, SO/arquitectura, imports, versiones de dependencias, SQLite y los hashes de fuentes, licencia, iconos y estilos empaquetados; la preparación comprueba además uv. Con `--gui` verifica los requisitos gráficos y abre la ventana del producto con datos temporales en un subproceso. Comprueba selección, metadatos y portada sin necesitar música real, y aísla un posible aborto del plugin Qt del diagnóstico principal. `--qt-timeout` permite cambiar su límite de espera, cuyo valor predeterminado es 15 segundos.
 
 En Linux puedes elegir el backend de escritorio:
 
@@ -148,7 +148,7 @@ uv run --no-project --python 3.13.15 python scripts/bootstrap.py --gui
 code Trackfolio.code-workspace
 ```
 
-Puedes usar otra ruta de destino. Si transfieres las fuentes sin Git, incluye los archivos ocultos de configuración y el lock, y excluye `.venv`, caches, credenciales, música y bases de datos. Reconstruye el entorno en destino. Conserva y transfiere los datos de usuario por separado cuando la aplicación implemente su almacenamiento.
+Puedes usar otra ruta de destino. Si transfieres las fuentes sin Git, incluye los archivos ocultos de configuración y el lock, y excluye `.venv`, caches, credenciales, música y bases de datos. Reconstruye el entorno en destino. Conserva y transfiere los catálogos SQLite por separado. La GUI puede mostrarlos aunque las rutas de la música correspondan a otro PC; los metadatos y las portadas están en la base. Después de preparar el entorno, usa `uv run --locked --extra gui trackfolio --database "ruta/al/catalogo.sqlite3"`. La configuración del último catálogo abierto se guarda localmente mediante `platformdirs`.
 
 El workspace usa una carpeta relativa y tareas de tipo `process` con argumentos separados. Si VS Code recuerda un intérprete ajeno, selecciona `.venv` mediante **Python: Select Interpreter**. [Entornos Python en VS Code](https://code.visualstudio.com/docs/python/environments).
 

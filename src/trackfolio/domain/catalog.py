@@ -13,3 +13,16 @@ class CatalogEntry:
     library_root: Path
     relative_path: str
     metadata: TrackMetadata
+
+
+@dataclass(frozen=True, slots=True)
+class CatalogSummary:
+    """Datos ligeros de una canción para listas, sin portada ni líricas."""
+
+    file_id: int
+    track_id: int
+    title: str | None
+    artists: tuple[str, ...]
+    album: str | None
+    album_year: int | None
+    relative_path: str

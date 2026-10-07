@@ -1,6 +1,6 @@
-# Validación del entorno de Trackfolio
+# Validación de Trackfolio
 
-Fecha: 6 de octubre de 2026. Estas comprobaciones corresponden a la infraestructura inicial, no al editor musical ni a una GUI de producto, que todavía están pendientes de desarrollo.
+El registro conserva las comprobaciones de cada fase. La infraestructura inicial se validó el 6 de octubre de 2026; el catálogo y su primera GUI se implementaron el 7 de octubre. La edición de etiquetas queda para un incremento posterior.
 
 ## Comprobaciones locales
 
@@ -30,7 +30,7 @@ No fue necesario instalar bibliotecas gráficas del sistema en este PC. Las inst
 
 Versiones principales resueltas: SQLAlchemy 2.1.3, Alembic 1.20.0, Mutagen 1.48.1, platformdirs 4.12.3 y PySide6/Essentials/Addons/shiboken6 6.11.2. Las versiones completas y sus hashes están en `uv.lock`.
 
-## Matriz automatizada
+## Matriz automatizada de la infraestructura inicial
 
 El workflow comprueba instalación limpia del núcleo sin Qt, instalación GUI desde el lock, diagnósticos, 23 pruebas, Ruff, mypy, construcción y recursos del wheel. Linux añade X11 bajo Xvfb; Windows y macOS comprueban sus backends nativos además de `offscreen`.
 
@@ -43,7 +43,7 @@ El workflow comprueba instalación limpia del núcleo sin Qt, instalación GUI d
 
 Los cuatro jobs terminaron correctamente en la [ejecución 37457968238 de GitHub Actions](https://github.com/Evilchuck666/Trackfolio/actions/runs/37457968238), sobre la revisión `d201961976d20f78b07d80e6e30071bf28411b77`. Este registro posterior sólo actualiza documentación.
 
-Los runners no cubren todas las versiones mínimas anunciadas ni todos los escritorios. La apariencia del futuro producto, los controles reales y las decoraciones de ventana deberán validarse cuando exista la GUI de Trackfolio.
+Los runners no cubren todas las versiones mínimas anunciadas ni todos los escritorios. El registro de la GUI del producto figura más abajo.
 
 ## Catálogo inicial: comprobación local del 7 de octubre de 2026
 
@@ -63,7 +63,32 @@ La migración `001_initial` crea once tablas de catálogo, la tabla de revisión
 
 La base local `data/trackfolio.sqlite3` contiene “Run If You Can”, de Accept, álbum “Breaker”, año 1981, pista 3/10, disco 1/1 y género Heavy Metal. Sus once etiquetas textuales se conservan en `raw_tags`; las líricas y el artista de álbum están ausentes. La carátula JPEG incrustada de 500 × 500 y 385192 bytes se conserva en un BLOB y sus bytes coinciden con los del FLAC.
 
-La matriz de GitHub Actions anterior valida la infraestructura inicial; estos cambios del catálogo se han comprobado localmente. La base, la música y la carátula real están excluidas de Git. La [revisión con SQLiteBrowser](docs/database.md) y la posterior implementación de la GUI quedan pendientes de la validación del usuario.
+La matriz anterior corresponde a la infraestructura inicial. La base, la música y la carátula real están excluidas de Git. Tras la validación de esta fase por el usuario, se implementó el visor descrito a continuación.
+
+## GUI del catálogo: 7 de octubre de 2026
+
+La ventana consulta SQLite en modo de sólo lectura, mediante `ListTrackSummaries` y `GetTrack`. El listado no recupera portadas, líricas ni etiquetas originales; el detalle recupera esos datos sólo para la selección. Los widgets y el controlador no importan SQLAlchemy ni Mutagen. Se incluyen fuentes Inter 4.1, licencia, SVG propios y QSS, con un manifiesto de hashes.
+
+| Comprobación local | Resultado |
+| --- | --- |
+| Suite completa, GUI con `offscreen` | 122 pruebas correctas |
+| Núcleo en entorno limpio sin PySide6 | 98 pruebas correctas; 2 módulos GUI omitidos |
+| Ruff, formato, mypy | Correctos; 33 archivos de código comprobados por mypy |
+| Ventana del producto, eventos y detalle en Wayland | Correctos |
+| Ventana del producto, eventos y detalle en X11 | Correctos |
+| Diagnóstico `offscreen` | Correcto; no acredita escritorio real |
+| BD de ejemplo frente a campos de la ventana | Coinciden canción, artista, álbum, año, numeración, género, portada y líricas vacías |
+| Capturas a escalas 100 %, 150 % y 200 % | Generadas con los datos esperados; distribución y portada revisadas localmente |
+| Selección y actualización asíncronas | Descartan respuestas antiguas, preservan intención reciente y limpian detalle si desaparecen filas |
+| Catálogo vacío, desconocido, inexistente o inaccesible | Estados recuperables; no se crea ni migra una base al abrirla |
+| Widget tests | Selección, copia, campos vacíos, portada inválida/proporcional y controles de ventana |
+| Wheel y sdist | Construidos con fuentes, licencia, iconos, QSS y migraciones |
+| Wheel instalado fuera del checkout | Núcleo sin Qt y GUI con dependencias/hashes del lock; ventana y datos comprobados |
+| Workflow y VS Code | actionlint 1.7.12 y JSON válidos; tareas de inicio y depuración de GUI |
+
+Los catálogos y las capturas con la portada de la muestra se conservan en `data/`, excluido de Git. La GUI permite consultar los datos aunque la música original no exista. El lanzador `trackfolio` se instala mediante `project.gui-scripts`.
+
+La matriz del producto se ejecutará sobre la rama `gui` y se registrará al finalizar. La revisión visual manual de Windows y macOS sigue pendiente. Las pruebas automáticas verifican los campos, las fuentes, los recursos y el arranque; no prueban identidad de píxeles entre pantallas. En Wayland, un compositor que rechace las operaciones de mover/redimensionar activa el marco nativo como alternativa.
 
 ## Repositorio
 

@@ -3,10 +3,31 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import sys
 from pathlib import Path
 
 import pytest
+
+
+@pytest.fixture(scope="session")
+def qt_app():
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    pytest.importorskip("PySide6")
+    from PySide6.QtCore import QCoreApplication, QEvent
+    from PySide6.QtWidgets import QApplication
+
+    from trackfolio.interfaces.gui.theme import apply_theme
+
+    app = QApplication.instance() or QApplication(["Trackfolio-tests"])
+    app.setQuitOnLastWindowClosed(False)
+    apply_theme(app)
+    yield app
+    for window in app.topLevelWidgets():
+        window.close()
+        window.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    app.processEvents()
 
 
 def load_script(name):

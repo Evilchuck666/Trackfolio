@@ -62,6 +62,9 @@ jobs:
       - name: Diagnosticar el núcleo
         run: uv run --locked python scripts/doctor.py --core
 
+      - name: Ejecutar las pruebas del núcleo sin Qt
+        run: uv run --locked pytest
+
       # Son paquetes de ejecución de Qt y de Xvfb en el runner, sin SDK de Qt.
       # Se instalan después de comprobar que el núcleo no necesita escritorio.
       - name: Instalar bibliotecas gráficas del runner Linux
@@ -78,7 +81,7 @@ jobs:
       - name: Preparar la GUI desde el lock sin pantalla
         run: uv run --no-project --python 3.13.15 python scripts/bootstrap.py --gui --platform offscreen
 
-      - name: Diagnosticar Qt sin pantalla
+      - name: Diagnosticar la ventana del producto sin pantalla
         run: uv run --locked --extra gui python scripts/doctor.py --gui --platform offscreen
 
       - name: Comprobar el backend X11 bajo Xvfb
@@ -98,15 +101,18 @@ jobs:
       - name: Comprobar tipos
         run: uv run --locked --extra gui mypy
 
-      - name: Ejecutar pruebas de infraestructura
+      - name: Ejecutar pruebas del núcleo y de la GUI sin pantalla
+        env:
+          QT_QPA_PLATFORM: offscreen
         run: uv run --locked --extra gui pytest
 
       - name: Construir wheel y distribución de fuentes
         run: uv build --clear
 
-      - name: Verificar recursos y migraciones del wheel en un entorno aislado
+      - name: Verificar wheel instalado sin checkout, primero núcleo y después GUI
         shell: uv run --no-project --python 3.13.15 python {0}
         run: |
+          import json
           import os
           from pathlib import Path
           import subprocess
@@ -120,17 +126,29 @@ jobs:
           with ZipFile(wheel) as artifact:
               for member in (
                   "trackfolio/resources/README.md",
+                  "trackfolio/resources/manifest.json",
+                  "trackfolio/resources/stylesheet.qss",
+                  "trackfolio/resources/fonts/Inter-Regular.ttf",
+                  "trackfolio/resources/fonts/Inter-SemiBold.ttf",
+                  "trackfolio/resources/fonts/LICENSE.txt",
+                  "trackfolio/resources/icons/app.svg",
+                  "trackfolio/interfaces/gui/theme.py",
+                  "trackfolio/interfaces/gui/probe.py",
                   "trackfolio/infrastructure/migrations/env.py",
                   "trackfolio/infrastructure/migrations/initial_schema.py",
                   "trackfolio/infrastructure/migrations/versions/001_initial.py",
                   "trackfolio/infrastructure/migrations/script.py.mako",
               ):
                   assert member in artifact.namelist(), member
+              resource_names = json.loads(artifact.read("trackfolio/resources/manifest.json"))["sha256"]
+              for name in resource_names:
+                  assert "trackfolio/resources/" + name in artifact.namelist(), name
           with tarfile.open(source) as artifact:
-              assert any(
-                  name.endswith("/src/trackfolio/resources/README.md")
-                  for name in artifact.getnames()
-              )
+              for resource in (*resource_names, "README.md", "manifest.json"):
+                  assert any(
+                      name.endswith("/src/trackfolio/resources/" + resource)
+                      for name in artifact.getnames()
+                  ), resource
           with tempfile.TemporaryDirectory(prefix="trackfolio-wheel-") as clean:
               requirements = Path(clean) / "core-requirements.txt"
               subprocess.run(
@@ -203,6 +221,66 @@ jobs:
                       str(executable), "-c", verification,
                       str(Path(clean) / "packaged.sqlite3"), str(environment),
                   ],
+                  cwd=clean,
+                  check=True,
+              )
+              gui_requirements = Path(clean) / "gui-requirements.txt"
+              subprocess.run(
+                  [
+                      "uv", "export", "--locked", "--extra", "gui", "--no-dev",
+                      "--no-emit-project", "--output-file", str(gui_requirements),
+                  ],
+                  cwd=project_root,
+                  stdout=subprocess.DEVNULL,
+                  check=True,
+              )
+              gui_environment = Path(clean) / ".venv-gui"
+              subprocess.run(
+                  [
+                      "uv", "venv", "--managed-python", "--python", "3.13.15",
+                      str(gui_environment),
+                  ],
+                  cwd=clean,
+                  check=True,
+              )
+              gui_executable = gui_environment / (
+                  "Scripts/python.exe" if os.name == "nt" else "bin/python"
+              )
+              subprocess.run(
+                  [
+                      "uv", "pip", "install", "--require-hashes", "--no-deps",
+                      "--python", str(gui_executable), "--requirements", str(gui_requirements),
+                  ],
+                  cwd=clean,
+                  check=True,
+              )
+              subprocess.run(
+                  [
+                      "uv", "pip", "install", "--no-deps", "--python",
+                      str(gui_executable), str(wheel),
+                  ],
+                  cwd=clean,
+                  check=True,
+              )
+              gui_verification = """
+          from hashlib import sha256
+          from importlib.resources import files
+          import json
+          from pathlib import Path
+          import sys
+          from trackfolio.interfaces.gui import probe
+
+          assert Path(probe.__file__).resolve().is_relative_to(Path(sys.argv[1]).resolve())
+          resources = files("trackfolio.resources")
+          manifest = json.loads(resources.joinpath("manifest.json").read_text(encoding="utf-8"))
+          for name, digest in manifest["sha256"].items():
+              assert sha256(resources.joinpath(*name.split("/")).read_bytes()).hexdigest() == digest
+          report = probe.run_probe(["-platform", "offscreen"])
+          assert report["events"] is True and report["style"].lower() == "fusion", report
+          print("Wheel GUI instalado fuera del checkout:", report)
+          """
+              subprocess.run(
+                  [str(gui_executable), "-c", gui_verification, str(gui_environment)],
                   cwd=clean,
                   check=True,
               )

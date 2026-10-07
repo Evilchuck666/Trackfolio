@@ -2,6 +2,31 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "Trackfolio: iniciar GUI con la muestra",
+      "type": "process",
+      "command": "uv",
+      "args": ["run", "--locked", "--extra", "gui", "python", "-m", "trackfolio.interfaces.gui", "--database", "${workspaceFolder}/data/trackfolio.sqlite3"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Trackfolio: iniciar GUI",
+      "type": "process",
+      "command": "uv",
+      "args": ["run", "--locked", "--extra", "gui", "python", "-m", "trackfolio.interfaces.gui"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Trackfolio: ejecutar pruebas GUI sin pantalla",
+      "type": "process",
+      "command": "uv",
+      "args": ["run", "--locked", "--extra", "gui", "pytest"],
+      "options": { "cwd": "${workspaceFolder}", "env": { "QT_QPA_PLATFORM": "offscreen" } },
+      "problemMatcher": [],
+      "group": "test"
+    },
+    {
       "label": "Trackfolio: preparar núcleo",
       "type": "process",
       "command": "uv",
@@ -45,7 +70,7 @@
       "label": "Trackfolio: analizar código",
       "type": "process",
       "command": "uv",
-      "args": ["run", "--locked", "ruff", "check", "."],
+      "args": ["run", "--locked", "--extra", "gui", "ruff", "check", "."],
       "options": { "cwd": "${workspaceFolder}" },
       "problemMatcher": []
     },
@@ -53,7 +78,7 @@
       "label": "Trackfolio: comprobar formato",
       "type": "process",
       "command": "uv",
-      "args": ["run", "--locked", "ruff", "format", "--check", "."],
+      "args": ["run", "--locked", "--extra", "gui", "ruff", "format", "--check", "."],
       "options": { "cwd": "${workspaceFolder}" },
       "problemMatcher": []
     },
@@ -61,7 +86,7 @@
       "label": "Trackfolio: comprobar tipos",
       "type": "process",
       "command": "uv",
-      "args": ["run", "--locked", "mypy"],
+      "args": ["run", "--locked", "--extra", "gui", "mypy"],
       "options": { "cwd": "${workspaceFolder}" },
       "problemMatcher": []
     },
@@ -69,8 +94,8 @@
       "label": "Trackfolio: ejecutar pruebas",
       "type": "process",
       "command": "uv",
-      "args": ["run", "--locked", "pytest"],
-      "options": { "cwd": "${workspaceFolder}" },
+      "args": ["run", "--locked", "--extra", "gui", "pytest"],
+      "options": { "cwd": "${workspaceFolder}", "env": { "QT_QPA_PLATFORM": "offscreen" } },
       "problemMatcher": [],
       "group": "test"
     },

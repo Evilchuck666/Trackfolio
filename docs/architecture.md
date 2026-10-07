@@ -1,6 +1,6 @@
 # Arquitectura de Trackfolio
 
-Este documento define la separación que debe conservarse al implementar la aplicación. El núcleo ya importa y consulta metadatos de archivos FLAC/MP3 mediante contratos independientes de Qt. La GUI será la siguiente interfaz de producto, una vez validado el catálogo SQLite; las interfaces CLI/TUI y de servidor se mantienen como posibilidades futuras.
+El núcleo importa y consulta metadatos de archivos FLAC/MP3 mediante contratos independientes de Qt. La primera GUI muestra el catálogo mediante estos contratos; las interfaces CLI/TUI y de servidor se mantienen como posibilidades futuras.
 
 ## Dependencias entre capas
 
@@ -33,7 +33,7 @@ Los contratos públicos de dominio y aplicación no expondrán `QObject`, señal
 
 La GUI es una capa de presentación: recoge una solicitud, invoca un caso de uso y muestra su resultado o error. No decide las reglas de edición de etiquetas, no construye consultas SQL y no escribe directamente los archivos musicales. Los casos de uso también coordinan las operaciones que necesitan varios adaptadores.
 
-Las tareas largas requerirán una estrategia de ejecución y cancelación que mantenga receptiva la GUI. El contrato de esas tareas deberá ser independiente del bucle de eventos de Qt; su adaptador gráfico traducirá progreso y finalización a la presentación.
+El controlador gráfico ejecuta consultas mediante un pool de tareas Qt y sólo modifica widgets en el hilo gráfico. Usa identificadores de solicitud para descartar resultados de selecciones o catálogos anteriores. Las conexiones SQLite se obtienen por operación; el cierre espera a las consultas activas antes de liberar las sesiones y los objetos Qt. Los casos de uso permanecen independientes del bucle de eventos.
 
 Una futura CLI/TUI utilizará los mismos casos de uso. Para una biblioteca remota, el servidor ejecutará los casos de uso junto a su música y su almacenamiento; el frontend web consumirá su API. Autenticación, protocolo, concurrencia y despliegue se diseñarán cuando se implemente esa interfaz. Esta preparación no añade un servidor.
 
@@ -49,9 +49,9 @@ Se usan `pathlib`, una raíz de biblioteca configurable y rutas relativas para l
 
 ## Apariencia compartida
 
-La GUI prevista usará Qt Widgets con estilo **Fusion** seleccionado explícitamente, paleta, estilos, fuentes e iconos propios incluidos como recursos. Los diálogos que formen parte del diseño compartido deberán usar implementaciones Qt consistentes entre plataformas. [Estilos disponibles en Qt](https://doc.qt.io/qt-6/qstylefactory.html).
+La GUI usa Qt Widgets con **Fusion** explícito, paleta y estilos compartidos, Inter 4.1 empaquetada con su licencia e iconos SVG propios. Los recursos se cargan con `importlib.resources`; el diálogo de apertura es Qt sin modo nativo. [Estilos disponibles en Qt](https://doc.qt.io/qt-6.11/qstylefactory.html).
 
-La validación visual comparará controles, colores, tipografía, iconos y distribución. El rasterizado y el escalado DPI pueden variar entre sistemas. Fusion no controla el marco y la barra de título del sistema: si también deben ser idénticos, se necesitarán decoraciones propias y pruebas de manejo de ventanas y accesibilidad.
+La ventana incluye barra de título y controles Qt propios, con operaciones de movimiento y redimensionado del sistema y alternativas según backend. Si un compositor Wayland rechaza esas operaciones, se usa el marco nativo para mantener la ventana operativa. La validación visual compara controles, colores, tipografía, iconos y distribución; el rasterizado y el escalado DPI pueden variar entre sistemas.
 
 ## Estrategia de comprobación
 

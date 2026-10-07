@@ -3,22 +3,40 @@
 from pathlib import Path
 from typing import Protocol
 
-from trackfolio.domain.catalog import CatalogEntry
+from trackfolio.domain.catalog import CatalogEntry, CatalogSummary
 from trackfolio.domain.metadata import TrackMetadata
+
+
+class CatalogAccessError(Exception):
+    """Un catálogo no está accesible; el mensaje puede presentarse en cualquier interfaz."""
 
 
 class MetadataReader(Protocol):
     def __call__(self, path: Path) -> TrackMetadata: ...
 
 
-class CatalogRepository(Protocol):
+class TrackLookup(Protocol):
+    def get(self, file_id: int) -> CatalogEntry | None: ...
+
+
+class SummaryListing(Protocol):
+    def list_summaries(self) -> tuple[CatalogSummary, ...]: ...
+
+
+class CatalogRepository(TrackLookup, SummaryListing, Protocol):
     def save(
         self, metadata: TrackMetadata, library_root: Path, relative_path: str
     ) -> CatalogEntry: ...
 
-    def get(self, file_id: int) -> CatalogEntry | None: ...
-
     def list_entries(self) -> tuple[CatalogEntry, ...]: ...
+
+
+class CatalogSession(TrackLookup, SummaryListing, Protocol):
+    """Catálogo abierto para lectura; la interfaz no conoce su motor de BD."""
+
+    database_path: Path
+
+    def close(self) -> None: ...
 
 
 class ImportAudio:
@@ -40,7 +58,7 @@ class ImportAudio:
 
 
 class GetTrack:
-    def __init__(self, repository: CatalogRepository) -> None:
+    def __init__(self, repository: TrackLookup) -> None:
         self.repository = repository
 
     def execute(self, file_id: int) -> CatalogEntry | None:
@@ -53,3 +71,11 @@ class ListTracks:
 
     def execute(self) -> tuple[CatalogEntry, ...]:
         return self.repository.list_entries()
+
+
+class ListTrackSummaries:
+    def __init__(self, repository: SummaryListing) -> None:
+        self.repository = repository
+
+    def execute(self) -> tuple[CatalogSummary, ...]:
+        return self.repository.list_summaries()

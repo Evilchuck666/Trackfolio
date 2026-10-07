@@ -1,8 +1,8 @@
 # Trackfolio
 
-Trackfolio será una aplicación multiplataforma para administrar metadatos de bibliotecas FLAC y MP3. Usará Python, Qt 6 mediante PySide6 y SQLite mediante SQLAlchemy. El dominio y los casos de uso serán independientes de la GUI, para poder añadir interfaces CLI/TUI o un servidor con frontend web.
+Trackfolio es una aplicación multiplataforma para consultar metadatos de bibliotecas FLAC y MP3. Usa Python, Qt 6 mediante PySide6 y SQLite mediante SQLAlchemy. El dominio y los casos de uso son independientes de la GUI, para poder añadir interfaces CLI/TUI o un servidor con frontend web.
 
-Este repositorio contiene el entorno reproducible, las migraciones SQLite y la importación y consulta de metadatos FLAC/MP3. El catálogo conserva los campos ausentes en blanco y las carátulas incrustadas o procedentes de `album.jpg`. La GUI será la siguiente interfaz de producto, después de revisar esta primera base de datos; la edición de etiquetas sigue pendiente.
+La GUI muestra canciones, artistas, álbum, año, numeración, géneros, líricas y portada desde el catálogo. Los campos ausentes quedan vacíos. El importador conserva las carátulas incrustadas o procedentes de `album.jpg` sin modificar la música. La edición de etiquetas y la importación gráfica se abordarán en los siguientes incrementos.
 
 ## Preparar un PC
 
@@ -32,13 +32,13 @@ Desde la raíz del proyecto:
 
 ```sh
 uv run --locked --extra gui python scripts/doctor.py --gui
-uv run --locked ruff check .
-uv run --locked ruff format --check .
-uv run --locked mypy
-uv run --locked pytest
+uv run --locked --extra gui ruff check .
+uv run --locked --extra gui ruff format --check .
+uv run --locked --extra gui mypy
+uv run --locked --extra gui pytest
 ```
 
-La comprobación GUI abre una ventana mínima de diagnóstico y procesa eventos. En Linux puedes elegir explícitamente X11 con `--platform xcb` o Wayland con `--platform wayland`. Para una máquina sin escritorio usa `--platform offscreen`; esa comprobación no valida un escritorio real.
+La comprobación GUI abre la ventana del producto con una base temporal y verifica sus campos y portada. En Linux puedes elegir X11 con `--platform xcb` o Wayland con `--platform wayland`. Para una máquina sin escritorio usa `--platform offscreen`; esa comprobación no valida un escritorio real. La tarea de VS Code **Trackfolio: ejecutar pruebas GUI sin pantalla** ejecuta la suite con ese backend.
 
 Para comprobar únicamente el núcleo:
 
@@ -57,6 +57,22 @@ code Trackfolio.code-workspace
 
 Acepta las extensiones recomendadas. Si el editor utiliza otro intérprete, ejecuta **Python: Select Interpreter** y selecciona el de `.venv`. Las tareas del workspace preparan y diagnostican el entorno, y ejecutan las comprobaciones de desarrollo mediante `uv`.
 
+## Iniciar la GUI
+
+Desde la raíz, después de preparar el entorno:
+
+```sh
+uv run --locked --extra gui trackfolio --database data/trackfolio.sqlite3
+```
+
+También funciona `uv run --locked --extra gui python -m trackfolio.interfaces.gui --database data/trackfolio.sqlite3`. La base de ejemplo es local y está excluida de Git; un clon nuevo necesita importar un archivo o abrir un catálogo existente.
+
+Sin `--database`, se restaura el último catálogo abierto cuando sigue disponible. Para empezar sin restaurarlo, usa `--no-restore`. Puedes abrir otra base con **Abrir catálogo…** y recargar sus registros con **Actualizar**. Selecciona una canción para consultar su detalle; los textos permiten copiar datos y las líricas se muestran como texto plano.
+
+La GUI abre SQLite en modo de sólo lectura. Mostrar los registros no requiere acceder al FLAC/MP3 original: también las imágenes están guardadas en el catálogo. Las fuentes, iconos y estilos se incluyen en el paquete y se cargan sin descargas durante el uso.
+
+En VS Code, ejecuta la tarea **Trackfolio: iniciar GUI con la muestra** o la configuración de depuración **Trackfolio: GUI con catálogo de ejemplo**. Consulta el [plan y su estado](docs/gui-plan.md) y los [resultados comprobados](VALIDATION.md).
+
 ## Revisar el catálogo
 
 Desde la raíz del proyecto, importa un archivo sin modificarlo:
@@ -69,7 +85,7 @@ Abre `data/trackfolio.sqlite3` en SQLiteBrowser y consulta la vista `track_detai
 
 ## Compatibilidad prevista
 
-El siguiente incremento está definido en el [plan de la GUI Qt6](docs/gui-plan.md): lista de canciones, detalle de metadatos, recursos visuales compartidos y validación multiplataforma.
+La GUI usa Fusion, una paleta, fuentes e iconos empaquetados y controles de ventana propios. El escalado y el rasterizado pueden variar según la pantalla. Si un compositor Wayland rechaza mover o redimensionar la ventana, se habilita su marco nativo para conservar esas operaciones.
 
 | Plataforma GUI | Base inicial |
 | --- | --- |

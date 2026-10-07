@@ -14,6 +14,9 @@ dependencies = [
 [project.optional-dependencies]
 gui = ["pyside6==6.11.2"]
 
+[project.gui-scripts]
+trackfolio = "trackfolio.launcher:main"
+
 [dependency-groups]
 dev = [
     "mypy>=1.15,<2",
