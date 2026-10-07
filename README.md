@@ -69,6 +69,8 @@ Abre `data/trackfolio.sqlite3` en SQLiteBrowser y consulta la vista `track_detai
 
 ## Compatibilidad prevista
 
+El siguiente incremento está definido en el [plan de la GUI Qt6](docs/gui-plan.md): lista de canciones, detalle de metadatos, recursos visuales compartidos y validación multiplataforma.
+
 | Plataforma GUI | Base inicial |
 | --- | --- |
 | Windows | Windows 10 1809+ o Windows 11, x86-64 |
