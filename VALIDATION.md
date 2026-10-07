@@ -45,6 +45,26 @@ Los cuatro jobs terminaron correctamente en la [ejecución 37457968238 de GitHub
 
 Los runners no cubren todas las versiones mínimas anunciadas ni todos los escritorios. La apariencia del futuro producto, los controles reales y las decoraciones de ventana deberán validarse cuando exista la GUI de Trackfolio.
 
+## Catálogo inicial: comprobación local del 7 de octubre de 2026
+
+La migración `001_initial` crea once tablas de catálogo, la tabla de revisión Alembic y la vista `track_details`. Su exportación [migrations/001_initial.sql](migrations/001_initial.sql) coincide con el esquema aplicado en línea. El catálogo usa contratos Python sin Qt, un lector Mutagen y un repositorio SQLAlchemy.
+
+| Comprobación | Resultado |
+| --- | --- |
+| Suite completa local | 73 pruebas correctas: entorno, lector, migraciones y catálogo |
+| Ruff, formato y mypy estricto | Correctos; 21 archivos de código comprobados por mypy |
+| SQL inicial frente a migración Alembic | Mismas tablas, restricciones, índices y vista |
+| Wheel instalado con dependencias y hashes del lock, fuera del checkout | Migración empaquetada ejecutada correctamente; FK activadas y revisión `001_initial` |
+| Metadatos ausentes en FLAC/MP3 sintéticos y en el catálogo | Campos `NULL`, colecciones vacías; importación y consulta sin excepciones |
+| Carátula incrustada, preferencia frontal y alternativa `album.jpg` | Cubiertas por pruebas sintéticas |
+| Importación repetida del FLAC proporcionado | Un solo archivo y una sola pista; identificadores conservados |
+| Integridad del catálogo local | `integrity_check=ok`; `foreign_key_check` sin filas |
+| FLAC original | SHA-256 idéntico antes y después; ninguna escritura |
+
+La base local `data/trackfolio.sqlite3` contiene “Run If You Can”, de Accept, álbum “Breaker”, año 1981, pista 3/10, disco 1/1 y género Heavy Metal. Sus once etiquetas textuales se conservan en `raw_tags`; las líricas y el artista de álbum están ausentes. La carátula JPEG incrustada de 500 × 500 y 385192 bytes se conserva en un BLOB y sus bytes coinciden con los del FLAC.
+
+La matriz de GitHub Actions anterior valida la infraestructura inicial; estos cambios del catálogo se han comprobado localmente. La base, la música y la carátula real están excluidas de Git. La [revisión con SQLiteBrowser](docs/database.md) y la posterior implementación de la GUI quedan pendientes de la validación del usuario.
+
 ## Repositorio
 
 Git inicializado con rama `main`, `origin` y seguimiento de `origin/main`. La infraestructura y documentación están subidas a [Evilchuck666/Trackfolio](https://github.com/Evilchuck666/Trackfolio), un repositorio privado. El workspace se abre mediante `code Trackfolio.code-workspace`; la preparación para otro PC está en [README.md](README.md).

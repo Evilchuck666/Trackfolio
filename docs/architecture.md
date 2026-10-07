@@ -1,6 +1,6 @@
-# Arquitectura prevista de Trackfolio
+# Arquitectura de Trackfolio
 
-Este documento define la separación que debe conservarse al implementar la aplicación. El repositorio contiene los paquetes reservados y la infraestructura de desarrollo; todavía no implementa operaciones sobre una biblioteca musical.
+Este documento define la separación que debe conservarse al implementar la aplicación. El núcleo ya importa y consulta metadatos de archivos FLAC/MP3 mediante contratos independientes de Qt. La GUI será la siguiente interfaz de producto, una vez validado el catálogo SQLite; las interfaces CLI/TUI y de servidor se mantienen como posibilidades futuras.
 
 ## Dependencias entre capas
 
@@ -39,11 +39,13 @@ Una futura CLI/TUI utilizará los mismos casos de uso. Para una biblioteca remot
 
 ## Persistencia y rutas
 
-SQLAlchemy será el adaptador de persistencia para SQLite y Alembic gestionará la evolución de su esquema. El esquema y las migraciones se crearán cuando exista el modelo del catálogo. La transacción de la base de datos no cubre automáticamente la edición de archivos musicales: los futuros casos de uso deberán definir cómo detectar, comunicar y recuperar fallos parciales.
+SQLAlchemy implementa el repositorio SQLite y Alembic gestiona su esquema. La migración inicial y su exportación SQL comparten una única definición empaquetada. `ImportAudio`, `GetTrack` y `ListTracks` usan contratos de repositorio y dataclasses de dominio; el lector Mutagen y el repositorio SQLAlchemy son adaptadores intercambiables. El script de importación conecta estos componentes para preparar la revisión en SQLiteBrowser. Consulta el [modelo y sus reglas de importación](database.md).
 
-Se usarán `pathlib` y una raíz de biblioteca configurable. Una pista se identificará mediante su biblioteca y una ruta relativa a esa raíz, evitando fijar `/home/...`, letras de unidad o montajes personales. Cada equipo podrá asociar la biblioteca a una ubicación distinta.
+La importación guarda cada archivo en una transacción y no modifica la música. La transacción de la base de datos no cubre automáticamente la edición de archivos musicales: los futuros casos de uso deberán definir cómo detectar, comunicar y recuperar fallos parciales.
 
-`platformdirs` ubicará la configuración, caché y base de datos en directorios del usuario adecuados a cada sistema. La música y los datos locales no se guardarán en el repositorio. Trasladar el código mediante Git y trasladar una biblioteca musical serán operaciones distintas.
+Se usan `pathlib`, una raíz de biblioteca configurable y rutas relativas para los archivos. La ruta identifica la ubicación importada, no la identidad musical de una grabación. El esquema separa pistas y archivos, pero el importador inicial crea una pista por cada archivo nuevo; la identificación entre ediciones y la reasignación de raíces al mover una biblioteca quedan pendientes.
+
+`platformdirs` ubicará la configuración, caché y base de datos en directorios del usuario adecuados a cada sistema. Durante la revisión se utiliza explícitamente `data/trackfolio.sqlite3`, excluido de Git. La música y los datos locales no se guardan en el repositorio. Trasladar el código mediante Git y trasladar una biblioteca musical son operaciones distintas.
 
 ## Apariencia compartida
 
@@ -55,4 +57,4 @@ La validación visual comparará controles, colores, tipografía, iconos y distr
 
 Las reglas del dominio y los casos de uso se probarán sin Qt ni SQLite, usando adaptadores de prueba para sus contratos. Las pruebas de infraestructura usarán bases de datos temporales y archivos de prueba controlados. Las pruebas de GUI comprobarán la presentación y la integración con esos casos de uso.
 
-Durante la preparación, las comprobaciones cubren reconstrucción del entorno, límites entre paquetes, disponibilidad de dependencias, funcionamiento de SQLite y arranque mínimo de Qt. La prueba `offscreen` se registra por separado de las pruebas de escritorio real.
+Las comprobaciones cubren reconstrucción del entorno, límites entre paquetes, disponibilidad de dependencias, migraciones, lectura de contenedores FLAC/MP3 sintéticos, importación y consulta mediante SQLite, y arranque mínimo de Qt. La prueba `offscreen` se registra por separado de las pruebas de escritorio real.

@@ -104,7 +104,7 @@ jobs:
       - name: Construir wheel y distribución de fuentes
         run: uv build --clear
 
-      - name: Verificar recursos e importar el wheel en un entorno aislado
+      - name: Verificar recursos y migraciones del wheel en un entorno aislado
         shell: uv run --no-project --python 3.13.15 python {0}
         run: |
           import os
@@ -114,43 +114,94 @@ jobs:
           import tempfile
           from zipfile import ZipFile
 
-          wheel = next(Path("dist").resolve().glob("*.whl"))
-          source = next(Path("dist").resolve().glob("*.tar.gz"))
+          project_root = Path.cwd()
+          wheel = next((project_root / "dist").glob("*.whl"))
+          source = next((project_root / "dist").glob("*.tar.gz"))
           with ZipFile(wheel) as artifact:
-              assert "trackfolio/resources/README.md" in artifact.namelist()
+              for member in (
+                  "trackfolio/resources/README.md",
+                  "trackfolio/infrastructure/migrations/env.py",
+                  "trackfolio/infrastructure/migrations/initial_schema.py",
+                  "trackfolio/infrastructure/migrations/versions/001_initial.py",
+                  "trackfolio/infrastructure/migrations/script.py.mako",
+              ):
+                  assert member in artifact.namelist(), member
           with tarfile.open(source) as artifact:
               assert any(
                   name.endswith("/src/trackfolio/resources/README.md")
                   for name in artifact.getnames()
               )
           with tempfile.TemporaryDirectory(prefix="trackfolio-wheel-") as clean:
+              requirements = Path(clean) / "core-requirements.txt"
+              subprocess.run(
+                  [
+                      "uv", "export", "--locked", "--no-dev", "--no-emit-project",
+                      "--output-file", str(requirements),
+                  ],
+                  cwd=project_root,
+                  stdout=subprocess.DEVNULL,
+                  check=True,
+              )
               environment = Path(clean) / ".venv"
               subprocess.run(
                   [
                       "uv", "venv", "--managed-python", "--python", "3.13.15",
                       str(environment),
                   ],
+                  cwd=clean,
                   check=True,
               )
               executable = environment / (
                   "Scripts/python.exe" if os.name == "nt" else "bin/python"
               )
-              # Las dependencias ya se han probado desde uv.lock; aquí se
-              # comprueba únicamente la instalación del paquete y sus recursos.
+              # Instalar sólo las dependencias core fijadas y sus hashes del lock.
+              # El wheel se instala sin resolver dependencias adicionales.
+              subprocess.run(
+                  [
+                      "uv", "pip", "install", "--require-hashes", "--no-deps",
+                      "--python", str(executable), "--requirements", str(requirements),
+                  ],
+                  cwd=clean,
+                  check=True,
+              )
               subprocess.run(
                   [
                       "uv", "pip", "install", "--no-deps", "--python",
                       str(executable), str(wheel),
                   ],
+                  cwd=clean,
                   check=True,
               )
+              verification = """
+          from importlib.resources import files
+          from importlib.util import find_spec
+          from pathlib import Path
+          import sys
+          from sqlalchemy import inspect
+          from trackfolio.infrastructure import database
+
+          assert Path(database.__file__).resolve().is_relative_to(Path(sys.argv[2]).resolve())
+          assert find_spec("PySide6") is None
+          assert files("trackfolio.resources").joinpath("README.md").read_text(encoding="utf-8")
+          assert files("trackfolio.infrastructure.migrations").joinpath("script.py.mako").is_file()
+          target = Path(sys.argv[1])
+          database.migrate_database(target)
+          engine = database.create_engine(target)
+          try:
+              with engine.connect() as connection:
+                  assert "track_details" in inspect(connection).get_view_names()
+                  assert connection.exec_driver_sql("PRAGMA foreign_keys").scalar_one() == 1
+                  assert connection.exec_driver_sql(
+                      "SELECT version_num FROM alembic_version"
+                  ).scalar_one() == "001_initial"
+          finally:
+              engine.dispose()
+          print("Wheel instalado: recursos y migraciones correctos sin checkout ni Qt.")
+          """
               subprocess.run(
                   [
-                      str(executable), "-c",
-                      "from importlib.resources import files; "
-                      "assert files('trackfolio.resources').joinpath('README.md')"
-                      ".read_text(encoding='utf-8'); "
-                      "print('Recurso del wheel instalado: correcto.')",
+                      str(executable), "-c", verification,
+                      str(Path(clean) / "packaged.sqlite3"), str(environment),
                   ],
                   cwd=clean,
                   check=True,

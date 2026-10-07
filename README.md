@@ -2,7 +2,7 @@
 
 Trackfolio será una aplicación multiplataforma para administrar metadatos de bibliotecas FLAC y MP3. Usará Python, Qt 6 mediante PySide6 y SQLite mediante SQLAlchemy. El dominio y los casos de uso serán independientes de la GUI, para poder añadir interfaces CLI/TUI o un servidor con frontend web.
 
-Este repositorio contiene la preparación del entorno, el paquete base y los diagnósticos. El catálogo musical, el editor de etiquetas y la aplicación gráfica todavía no están implementados.
+Este repositorio contiene el entorno reproducible, las migraciones SQLite y la importación y consulta de metadatos FLAC/MP3. El catálogo conserva los campos ausentes en blanco y las carátulas incrustadas o procedentes de `album.jpg`. La GUI será la siguiente interfaz de producto, después de revisar esta primera base de datos; la edición de etiquetas sigue pendiente.
 
 ## Preparar un PC
 
@@ -57,6 +57,16 @@ code Trackfolio.code-workspace
 
 Acepta las extensiones recomendadas. Si el editor utiliza otro intérprete, ejecuta **Python: Select Interpreter** y selecciona el de `.venv`. Las tareas del workspace preparan y diagnostican el entorno, y ejecutan las comprobaciones de desarrollo mediante `uv`.
 
+## Revisar el catálogo
+
+Desde la raíz del proyecto, importa un archivo sin modificarlo:
+
+```sh
+uv run --locked python scripts/import_audio.py "ruta/a/cancion.flac" --database data/trackfolio.sqlite3
+```
+
+Abre `data/trackfolio.sqlite3` en SQLiteBrowser y consulta la vista `track_details`. La [guía de la base de datos](docs/database.md) explica las tablas, los campos ausentes y la revisión de carátulas. El SQL inicial está en [migrations/001_initial.sql](migrations/001_initial.sql); la base local y la música están excluidas de Git.
+
 ## Compatibilidad prevista
 
 | Plataforma GUI | Base inicial |
@@ -67,4 +77,4 @@ Acepta las extensiones recomendadas. Si el editor utiliza otro intérprete, ejec
 
 La disponibilidad de un wheel compatible no demuestra que la GUI funcione en cada escritorio. Las comprobaciones ejecutadas y las pendientes se registran en [VALIDATION.md](VALIDATION.md). Alpine/musl, Windows ARM64 y Linux ARM64 quedan fuera de esta primera matriz.
 
-Consulta [el entorno portable](docs/environment.md), [la arquitectura prevista](docs/architecture.md), [la guía de contribución](CONTRIBUTING.md) y [el plan original](PLAN.md).
+Consulta [el entorno portable](docs/environment.md), [la arquitectura](docs/architecture.md), [la guía de contribución](CONTRIBUTING.md) y [el plan original](PLAN.md).
