@@ -43,6 +43,7 @@ def test_linux_distribution_detection(setup, monkeypatch, release, expected):
 def test_package_installation_commands_are_explicit_and_do_not_upgrade_system(
     setup, monkeypatch, family, manager
 ):
+    monkeypatch.setattr(setup, "sys", SimpleNamespace(platform="linux"))
     monkeypatch.setattr(setup, "linux_family", lambda: family)
     monkeypatch.setattr(setup.os, "geteuid", lambda: 1000, raising=False)
     monkeypatch.setattr(setup.shutil, "which", lambda name: f"/tools/{name}")
@@ -53,6 +54,19 @@ def test_package_installation_commands_are_explicit_and_do_not_upgrade_system(
     assert not any(
         "upgrade" in argument or "-Syu" in argument for command in commands for argument in command
     )
+
+
+@pytest.mark.parametrize("platform", ["win32", "darwin"])
+def test_package_installation_rejects_non_linux_before_checking_system(
+    setup, monkeypatch, platform
+):
+    monkeypatch.setattr(setup, "sys", SimpleNamespace(platform=platform))
+    monkeypatch.setattr(setup, "os", SimpleNamespace())
+    monkeypatch.setattr(
+        setup, "linux_family", lambda: pytest.fail("Linux-only checks must not run")
+    )
+    with pytest.raises(setup.SetupError, match="solo se admite en Linux"):
+        setup.package_commands(["git"])
 
 
 def test_noninteractive_does_not_authorize_system_changes(setup, monkeypatch):

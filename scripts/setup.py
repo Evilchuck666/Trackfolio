@@ -100,6 +100,8 @@ def linux_family() -> str | None:
 
 
 def package_commands(packages: list[str]) -> list[list[str]]:
+    if sys.platform != "linux":
+        raise SetupError("La instalación de paquetes del sistema solo se admite en Linux.")
     family = linux_family()
     manager = {"debian": "apt-get", "arch": "pacman", "fedora": "dnf"}.get(family or "")
     if manager is None or shutil.which(manager) is None:
