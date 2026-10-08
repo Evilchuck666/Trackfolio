@@ -141,6 +141,23 @@ def test_missing_uv_provides_minimum_version_install_instructions(bootstrap, mon
     assert "install.ps1" in str(failure.value)
 
 
+def test_explicit_uv_is_used_without_searching_path(bootstrap, monkeypatch):
+    def forbidden(_):
+        pytest.fail("An explicitly selected uv must not be replaced by PATH")
+
+    monkeypatch.setattr(bootstrap.shutil, "which", forbidden)
+    calls = []
+
+    def run(command, **kwargs):
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, "uv 0.12.23\n", "")
+
+    monkeypatch.setattr(bootstrap.subprocess, "run", run)
+    executable = "local tools/uv"
+    assert bootstrap.check_uv(">=0.12.10,<0.13", executable=executable) == executable
+    assert calls == [[executable, "--version"]]
+
+
 def test_outdated_lock_error_is_propagated_and_doctor_is_not_started(
     bootstrap, configured_root, monkeypatch, capsys
 ):

@@ -118,6 +118,33 @@ Máquina de esta comprobación: Artix Linux x86-64, glibc 2.44, sesión X11. El 
 
 La matriz de GitHub Actions queda configurada para uv 0.12.10 y 0.12.23 en las cuatro plataformas existentes. Estos ocho jobs todavía no se han ejecutado en GitHub Actions con los cambios del intervalo; los resultados multiplataforma anteriores corresponden a las revisiones enlazadas en sus secciones.
 
+## Preparación desde un clon o ZIP: 8 de octubre de 2026
+
+`setup.sh` y `setup.ps1` inician la preparación sin exigir Python ni uv en `PATH`. Reutilizan un uv compatible o descargan la versión mínima en `.tools/uv`, sin sustituir la instalación del sistema ni editar perfiles del shell. `scripts/setup.py` comprueba las bibliotecas gráficas, delega el entorno Python en `bootstrap.py` y propone preparar Git y VS Code. Las instalaciones del sistema requieren confirmación. Las tareas de VS Code utilizan los mismos lanzadores.
+
+Las comprobaciones locales se realizaron en el mismo Artix Linux x86-64 de la sección anterior. Para probar el lanzador PowerShell se utilizó PowerShell 7.6.6 descargado en `/tmp/opencode`, con el SHA-256 contrastado con el publicado por GitHub; no se instaló en el sistema.
+
+| Comprobación local | Resultado |
+| --- | --- |
+| Suite completa con uv 0.12.10 | 210 pruebas correctas, incluidas las pruebas de PowerShell |
+| Suite completa con uv 0.12.23 | 210 pruebas correctas, incluidas las pruebas de PowerShell |
+| Pruebas de bootstrap, preparación y lanzadores | 98 correctas; selección de uv, consentimiento, argumentos, rutas Unicode, extracción segura y errores |
+| Núcleo en copia limpia sin PySide6 | 189 pruebas correctas; 2 módulos GUI omitidos |
+| Lanzador Bash con el uv del sistema | Preparación GUI correcta con `offscreen` y X11 (`xcb`) |
+| Lanzador PowerShell 7.6.6 con uv del sistema, sobre Linux | Preparación GUI `offscreen` correcta; no acredita Windows |
+| Copia sin uv ni Python en `PATH`, ruta con espacios y Unicode | Descarga real de uv 0.12.10 en `.tools/uv`, creación de `.venv` y diagnóstico GUI `offscreen` correctos |
+| Preparación repetida en esa copia | Correcta dos veces; mismo lock, perfil y binario uv del sistema; sin recibo ni instalación uv de usuario |
+| Intérprete y paquetes de esa copia | CPython administrado y caché de paquetes preexistentes reutilizados; no se acredita una descarga desde cachés vacías |
+| Música y catálogo marcadores durante la preparación del núcleo | Bytes conservados; sin modificaciones del lock |
+| Descarga y extracción reales de VS Code oficial para Linux | Correctas; CLI 1.141.0 ejecutada desde una carpeta temporal, sin modificar el editor ni sus extensiones del sistema |
+| Extensiones recomendadas | Instalación y avisos por extensiones no disponibles cubiertos por pruebas con CLI simulada |
+| Ruff, formato y mypy estricto | Correctos; 35 archivos de código comprobados por mypy |
+| Sintaxis Bash y ShellCheck | Correctos |
+| Wheel y distribución de fuentes | Construidos correctamente |
+| Workflow | YAML válido y actionlint 1.7.12 correcto |
+
+La CI queda configurada para usar los lanzadores en los ocho jobs; Windows utiliza Windows PowerShell 5.1. Linux y Windows con uv 0.12.10 añaden una preparación inicial del núcleo sin uv ni Python en `PATH`, repetida dos veces. **Estos cambios todavía no se han ejecutado en GitHub Actions.** Quedan pendientes la comprobación real de Windows/macOS, sus descargas del editor y la revisión manual de su integración con VS Code. No se han instalado paquetes del sistema durante las comprobaciones locales: la propuesta y la autorización de esas instalaciones se prueban con simulaciones.
+
 ## Repositorio
 
 Git inicializado con rama `main`, `origin` y seguimiento de `origin/main`. La infraestructura y documentación están subidas a [Evilchuck666/Trackfolio](https://github.com/Evilchuck666/Trackfolio), un repositorio privado. El workspace se abre mediante `code Trackfolio.code-workspace`; la preparación para otro PC está en [README.md](README.md).
