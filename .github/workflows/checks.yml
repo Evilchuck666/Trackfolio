@@ -50,8 +50,14 @@ jobs:
       - name: Instalar Python administrado desde .python-version
         run: uv python install --managed-python
 
-      - name: Preparar el núcleo desde el lock
-        run: uv run --no-project --python 3.13.15 python scripts/bootstrap.py --core
+      - name: Preparar el núcleo con el lanzador Unix
+        if: runner.os != 'Windows'
+        run: bash setup.sh --core --skip-editor --non-interactive
+
+      - name: Preparar el núcleo con Windows PowerShell
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\setup.ps1 --core --skip-editor --non-interactive
 
       - name: Verificar que el núcleo no instala Qt
         shell: uv run --locked python {0}
@@ -80,8 +86,14 @@ jobs:
             libxcb-randr0 libxcb-shape0 libxcb-sync1 libxcb-xfixes0 \
             libxcb-xkb1 libxcb-util1
 
-      - name: Preparar la GUI desde el lock sin pantalla
-        run: uv run --no-project --python 3.13.15 python scripts/bootstrap.py --gui --platform offscreen
+      - name: Preparar la GUI con el lanzador Unix sin pantalla
+        if: runner.os != 'Windows'
+        run: bash setup.sh --gui --skip-editor --non-interactive --platform offscreen
+
+      - name: Preparar la GUI con Windows PowerShell sin pantalla
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\setup.ps1 --gui --skip-editor --non-interactive --platform offscreen
 
       - name: Diagnosticar la ventana del producto sin pantalla
         run: uv run --locked --extra gui python scripts/doctor.py --gui --platform offscreen
@@ -107,6 +119,64 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: uv run --locked --extra gui pytest
+
+      - name: Preparar una copia sin uv ni Python en PATH
+        if: matrix.uv == '0.12.10' && runner.os != 'macOS'
+        shell: uv run --no-project --python 3.13.15 python {0}
+        run: |
+          import hashlib
+          import os
+          from pathlib import Path
+          import shutil
+          import subprocess
+          import tempfile
+
+          original = Path.cwd()
+          system_uv = Path(shutil.which("uv"))
+          uv_digest = hashlib.sha256(system_uv.read_bytes()).hexdigest()
+          ignored = shutil.ignore_patterns(
+              ".git", ".venv", ".tools", "__pycache__", ".pytest_cache",
+              ".mypy_cache", ".ruff_cache", "dist", "build", "data", "music",
+          )
+          with tempfile.TemporaryDirectory(prefix="trackfolio-first-setup-") as temporary:
+              root = Path(temporary) / "project with spaces ñ"
+              shutil.copytree(original, root, ignore=ignored)
+              environment = dict(os.environ)
+              if os.name == "nt":
+                  launcher = [
+                      shutil.which("powershell"), "-NoProfile", "-ExecutionPolicy",
+                      "Bypass", "-File", str(root / "setup.ps1"),
+                  ]
+                  environment["PATH"] = os.pathsep.join(
+                      entry for entry in environment["PATH"].split(os.pathsep)
+                      if not any(
+                          (Path(entry) / name).is_file()
+                          for name in ("uv.exe", "uv.cmd", "python.exe")
+                      )
+                  )
+              else:
+                  launcher = [shutil.which("bash"), str(root / "setup.sh")]
+                  binaries = Path(temporary) / "bin"
+                  binaries.mkdir()
+                  for folder in ("/usr/bin", "/bin", "/usr/sbin", "/sbin"):
+                      for executable in Path(folder).iterdir():
+                          name = executable.name
+                          if name in ("uv", "uvx", "code") or name.startswith("python"):
+                              continue
+                          target = binaries / name
+                          if executable.is_file() and not target.exists():
+                              target.symlink_to(executable)
+                  environment["PATH"] = str(binaries)
+              command = [*launcher, "--core", "--skip-editor", "--non-interactive"]
+              before = (root / "uv.lock").read_bytes()
+              for _ in range(2):
+                  subprocess.run(command, cwd=temporary, env=environment, check=True)
+              local_uv = root / ".tools/uv" / ("uv.exe" if os.name == "nt" else "uv")
+              assert local_uv.is_file()
+              assert (root / ".venv").is_dir()
+              assert (root / "uv.lock").read_bytes() == before
+              assert hashlib.sha256(system_uv.read_bytes()).hexdigest() == uv_digest
+              print("Preparación inicial repetible, sin sustituir el uv del sistema.")
 
       - name: Construir wheel y distribución de fuentes
         run: uv build --clear

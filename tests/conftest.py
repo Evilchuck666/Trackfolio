@@ -52,6 +52,12 @@ def doctor():
 
 
 @pytest.fixture
+def setup(monkeypatch):
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1]))
+    return load_script("setup")
+
+
+@pytest.fixture
 def configured_root(tmp_path):
     root = tmp_path / "project with spaces"
     root.mkdir()

@@ -81,10 +81,10 @@ def uv_install_help(version: str) -> str:
     )
 
 
-def check_uv(required_version: str) -> str:
+def check_uv(required_version: str, executable: str | None = None) -> str:
     """Require a stable uv release within the configured half-open range."""
     minimum, maximum = uv_version_range(required_version)
-    executable = shutil.which("uv")
+    executable = executable or shutil.which("uv")
     if executable is None:
         raise BootstrapError(
             f"No se encuentra uv en PATH. Se requiere uv {required_version}.\n"
@@ -137,11 +137,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return args
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, *, executable: str | None = None) -> int:
     args = parse_args(argv)
     try:
         required_uv, python_version = configuration(PROJECT_ROOT)
-        executable = check_uv(required_uv)
+        executable = (
+            check_uv(required_uv, executable=executable)
+            if executable is not None
+            else check_uv(required_uv)
+        )
     except BootstrapError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1

@@ -23,6 +23,8 @@ SQLite se usa a través del módulo `sqlite3` de CPython. El diagnóstico verifi
 
 ## Instalar las herramientas iniciales
 
+La ruta recomendada es ejecutar el lanzador después de descargar el repositorio; los pasos manuales de esta sección siguen disponibles como alternativa.
+
 1. Instala Git desde las [instrucciones oficiales](https://git-scm.com/install/) y comprueba `git --version`.
 2. Instala **uv >=0.12.10 y <0.13** y comprueba `uv --version` después de abrir una terminal nueva. Si ya tienes una versión compatible, como 0.12.23, puedes conservarla. Los comandos siguientes instalan 0.12.10, la versión mínima admitida.
 3. Si vas a usar VS Code, descárgalo desde [su web oficial](https://code.visualstudio.com/download). Es opcional para ejecutar los comandos de desarrollo.
@@ -43,6 +45,56 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/0.12.10/install.
 Estos instaladores permiten elegir una versión concreta en la URL. No necesitas volver a 0.12.10 si el uv instalado está dentro de `>=0.12.10,<0.13`. Si está fuera del rango, instala una versión compatible y comprueba qué ejecutable encuentra tu terminal. Cuando coexistan una instalación de sistema y otra de usuario, el orden de `PATH` determina cuál se utiliza; reinicia el editor si conserva un entorno anterior. Antes de usar uv 0.13 o posterior hay que ampliar y validar el contrato del proyecto. [Instalación oficial de uv](https://docs.astral.sh/uv/getting-started/installation/).
 
 El requisito del ejecutable uv es independiente de `uv_build==0.12.10`: el backend de construcción sigue fijado para mantener reproducible el empaquetado. Las versiones de Python, PySide6 y las dependencias de `uv.lock` tampoco cambian al usar otro parche compatible de uv.
+
+## Preparación en un solo comando
+
+Descarga la rama `gui` del repositorio de GitHub, mediante Git o un ZIP, y entra en su raíz:
+
+```sh
+# Linux y macOS; no hace falta instalar Python ni uv antes.
+bash setup.sh
+```
+
+```powershell
+# Windows PowerShell 5.1 o posterior.
+powershell -NoProfile -ExecutionPolicy Bypass -File .\setup.ps1
+```
+
+Los dos lanzadores leen el mínimo de uv desde `pyproject.toml` y el intérprete desde `.python-version`. Seleccionan primero un uv compatible en `PATH` y después la copia de `.tools/uv`. uv comprueba el requisito del proyecto sin descargar Python durante esa selección. Si ninguna copia sirve, descargan el instalador oficial de la versión mínima mediante HTTPS, y lo ejecutan con `UV_UNMANAGED_INSTALL` y `UV_NO_MODIFY_PATH`: esa instalación de uv no escribe en `~/.local/bin`, no edita perfiles y no habilita actualizaciones automáticas. Incluso para iniciar la preparación, se exige Python administrado mediante `--managed-python`. Las dependencias y el diagnóstico se delegan en `scripts/bootstrap.py`.
+
+Linux y macOS necesitan Bash y las utilidades básicas del sistema. Si no hay curl ni wget, el lanzador ofrece instalar curl con apt-get, pacman o dnf, con confirmación y permisos de administrador. macOS incluye curl. Windows utiliza PowerShell e `Invoke-WebRequest`; no necesita Git Bash ni Python del sistema.
+
+| Argumento | Comportamiento |
+| --- | --- |
+| Sin argumentos / `--gui` | Python, `.venv`, GUI, herramientas de desarrollo, diagnóstico y preparación del editor disponible |
+| `--core` | Núcleo y herramientas de desarrollo, sin instalar Qt |
+| `--skip-editor` | No descarga VS Code ni instala extensiones; Git sigue siendo opcional |
+| `--platform xcb` / `wayland` / `offscreen` | Selecciona el backend del diagnóstico GUI |
+| `--qt-timeout SEGUNDOS` | Límite de espera del diagnóstico Qt, entre 0 y 300 segundos |
+| `--non-interactive` | No realiza preguntas del script; rechaza las instalaciones propuestas salvo con `--yes` |
+| `--yes` | Autoriza explícitamente las instalaciones propuestas, incluso sin terminal interactiva |
+| `--open-code` | Abre el workspace al terminar; no se combina con `--skip-editor` |
+| `--run-uv COMANDO ...` | Sólo selecciona uv y ejecuta el comando; no descarga herramientas ni repite la preparación |
+| `--help` | Muestra ayuda sin descargar ni preparar nada |
+
+En Linux, sin sesión de escritorio el diagnóstico elige `offscreen` e informa de esa limitación. Con sesión elige X11 o Wayland. Compara las bibliotecas necesarias con las disponibles y, si faltan, muestra los comandos antes de pedir permiso para instalarlas. La instalación automática de bibliotecas admite Debian/Ubuntu (apt-get), Arch/Artix (pacman) y Fedora/derivados (dnf). Otras distribuciones reciben los nombres de las bibliotecas que deben instalarse manualmente. No se actualiza el sistema completo ni se cambian repositorios de paquetes.
+
+Git se reutiliza cuando está disponible. Si falta, se ofrece instalarlo con esos gestores, Homebrew ya instalado en macOS, o winget ya disponible en Windows. Sin gestor compatible, o si se rechaza, se avisa: Git no es necesario para ejecutar la app. El script no instala Homebrew, configura credenciales ni acepta licencias por su cuenta; aceptar la propuesta o usar `--yes` autoriza el comando mostrado, incluidos sus acuerdos de instalación.
+
+No ejecutes toda la preparación con `sudo`: sólo los comandos del gestor de paquetes elevan permisos cuando hace falta. Incluso con `--yes`, sudo puede pedir la contraseña; la autorización del script no sustituye los permisos del sistema.
+
+VS Code también se reutiliza, incluido el instalado en las ubicaciones habituales de Windows/macOS. Si falta y se acepta la propuesta, se descarga la distribución oficial estable de Microsoft en `.tools/vscode`; se necesita espacio para la descarga y extracción. Esta instalación no crea asociaciones de archivos ni accesos del sistema. Se abre con `--open-code`. Las extensiones se leen de `.vscode/extensions.json`; el intérprete local se indica en `Trackfolio.code-workspace`. Una descarga o instalación del editor fallida devuelve un error. Una extensión que no pueda instalarse genera un aviso, sin invalidar el entorno Python: algunas variantes como Code OSS utilizan otro catálogo y no ofrecen Pylance. Puedes reintentar la extensión o utilizar VS Code oficial. `--skip-editor` omite la preparación del editor y sus extensiones. No se sobrescribe una carpeta del editor que no se reconozca.
+
+Las tareas de VS Code pasan por `setup.sh` o `setup.ps1`, y las terminales integradas añaden `.tools/uv` al `PATH` de esa terminal. Por tanto, puedes programar sin que el uv descargado esté instalado globalmente. Fuera del editor, también puedes usarlo así:
+
+```sh
+bash setup.sh --run-uv run --locked --extra gui trackfolio
+bash setup.sh --run-uv run --locked --extra gui pytest
+```
+
+En Windows sustituye `bash setup.sh` por `powershell -NoProfile -ExecutionPolicy Bypass -File .\setup.ps1`. `--run-uv` conserva los argumentos y el código de salida del comando. Si ya tienes uv compatible en `PATH`, los comandos directos de las demás secciones siguen funcionando.
+
+Puedes repetir la preparación: se reutilizan uv, Python, los paquetes del lock y el editor disponible. `.tools` y `.venv` están excluidas de Git; cada equipo debe reconstruirlas. No se modifica `uv.lock`, no se instala nada en el Python global y no se tocan música ni bases de datos. Para consultar canciones hay que abrir un catálogo existente o importar música por separado. Si el editor conserva otro intérprete, selecciona `.venv` con **Python: Select Interpreter**.
 
 No necesitas instalar globalmente CPython 3.13.15. uv descarga su distribución administrada y la mantiene separada del Python del sistema. Desde la raíz, la instalación explícita es:
 
@@ -113,6 +165,8 @@ Los extras son explícitos. Un comando que sincronice sin `--extra gui` puede re
 
 La matriz combina los [requisitos de Qt](https://doc.qt.io/qtforpython-6/overviews/qtdoc-supported-platforms.html) con los [wheels de PySide6 6.11.2](https://pypi.org/project/PySide6/6.11.2/). No incluye Alpine/musl, Linux ARM64 ni Windows ARM64. Los resultados medidos se registran en [VALIDATION.md](../VALIDATION.md); esta tabla no afirma que todas las combinaciones hayan sido comprobadas.
 
+Esta matriz corresponde a Trackfolio, no al editor: VS Code estable tiene [sus propios requisitos de sistema](https://code.visualstudio.com/docs/supporting/requirements). Un escritorio Linux mínimo puede necesitar también bibliotecas de Electron para abrirlo.
+
 ### Bibliotecas gráficas ausentes en GNU/Linux
 
 uv instala paquetes Python y Qt, pero las dependencias nativas del backend siguen perteneciendo a la distribución. Qt documenta las bibliotecas necesarias para X11 en [sus requisitos Linux](https://doc.qt.io/qt-6.11/linux-requirements.html). Instala el paquete que corresponda al error detectado y repite el diagnóstico.
@@ -141,16 +195,15 @@ Estos paquetes resuelven esas bibliotecas concretas; no garantizan que todo escr
 
 ## Migrar a otro PC
 
-Sube los cambios de fuentes y configuración a Git. En el equipo nuevo instala Git y uv dentro de `>=0.12.10,<0.13`, autentícate si el repositorio sigue privado y ejecuta:
+Sube los cambios de fuentes y configuración a Git. En el equipo nuevo descarga la rama `gui` como ZIP o clónala si ya tienes Git y acceso al repositorio privado:
 
 ```sh
-git clone https://github.com/Evilchuck666/Trackfolio.git
+git clone --branch gui https://github.com/Evilchuck666/Trackfolio.git
 cd Trackfolio
-uv run --no-project --python 3.13.15 python scripts/bootstrap.py --gui
-code Trackfolio.code-workspace
+bash setup.sh --open-code
 ```
 
-Puedes usar otra ruta de destino. Si transfieres las fuentes sin Git, incluye los archivos ocultos de configuración y el lock, y excluye `.venv`, caches, credenciales, música y bases de datos. Reconstruye el entorno en destino. Conserva y transfiere los catálogos SQLite por separado. La GUI puede mostrarlos aunque las rutas de la música correspondan a otro PC; los metadatos y las portadas están en la base. Después de preparar el entorno, usa `uv run --locked --extra gui trackfolio --database "ruta/al/catalogo.sqlite3"`. La configuración del último catálogo abierto se guarda localmente mediante `platformdirs`.
+En Windows usa el comando PowerShell con `--open-code`. Puedes usar otra ruta de destino. Si transfieres las fuentes sin Git, incluye los archivos ocultos de configuración y el lock, y excluye `.venv`, `.tools`, caches, credenciales, música y bases de datos. Reconstruye el entorno en destino. Conserva y transfiere los catálogos SQLite por separado. La GUI puede mostrarlos aunque las rutas de la música correspondan a otro PC; los metadatos y las portadas están en la base. Después de preparar el entorno, usa el lanzador con `--run-uv run --locked --extra gui trackfolio --database "ruta/al/catalogo.sqlite3"`. La configuración del último catálogo abierto se guarda localmente mediante `platformdirs`.
 
 El workspace usa una carpeta relativa y tareas de tipo `process` con argumentos separados. Si VS Code recuerda un intérprete ajeno, selecciona `.venv` mediante **Python: Select Interpreter**. [Entornos Python en VS Code](https://code.visualstudio.com/docs/python/environments).
 
@@ -158,8 +211,8 @@ El workspace usa una carpeta relativa y tareas de tipo `process` con argumentos 
 
 | Fallo | Acción |
 | --- | --- |
-| No se encuentra `uv`, `git` o `code` | Instala la herramienta correspondiente y reabre la terminal; `code` es opcional |
-| Versión de uv fuera de `>=0.12.10,<0.13` | Instala una versión compatible y comprueba el ejecutable encontrado en `PATH`; no necesitas sustituir una versión que ya cumpla el rango |
+| No se encuentra `uv`, `git` o `code` | Ejecuta el lanzador; puede descargar uv localmente y propone preparar Git y VS Code. `--run-uv` y `--open-code` permiten usar las copias locales |
+| Versión de uv fuera de `>=0.12.10,<0.13` | Ejecuta el lanzador para usar una copia compatible sin sustituir la instalación del sistema; con comandos directos, comprueba qué uv encuentra `PATH` |
 | Descarga de Python o paquetes fallida | Comprueba conexión, proxy y certificados de tu red; repite la preparación |
 | Lock desactualizado | Trae los archivos de una misma revisión de Git; para un cambio deliberado actualiza el lock siguiendo `CONTRIBUTING.md` |
 | Entorno copiado o intérprete incorrecto | Elimina únicamente la `.venv` local del proyecto y vuelve a prepararlo |
@@ -169,4 +222,4 @@ El workspace usa una carpeta relativa y tareas de tipo `process` con argumentos 
 
 ## Validación continua
 
-GitHub Actions recrea el entorno en Windows x86-64, GNU/Linux x86-64 y macOS Intel/ARM con uv 0.12.10 (mínimo) y 0.12.23 (parche posterior), ocho combinaciones en total. Sus pruebas diferencian núcleo, Qt sin pantalla y backend de escritorio. Las comprobaciones automáticas no sustituyen las pruebas manuales de apariencia y comportamiento de ventanas en las plataformas objetivo. Consulta los resultados concretos y las limitaciones en [VALIDATION.md](../VALIDATION.md).
+GitHub Actions recrea el entorno mediante los lanzadores en Windows x86-64, GNU/Linux x86-64 y macOS Intel/ARM con uv 0.12.10 (mínimo) y 0.12.23 (parche posterior), ocho combinaciones en total. Windows comprueba también Windows PowerShell 5.1. Los jobs de Linux y Windows con uv 0.12.10 añaden una copia sin uv ni Python en `PATH` para verificar la descarga local y repetir la preparación del núcleo. Sus pruebas diferencian núcleo, Qt sin pantalla y backend de escritorio. Las comprobaciones automáticas no sustituyen las pruebas manuales de apariencia y comportamiento de ventanas en las plataformas objetivo. Consulta los resultados concretos y las limitaciones en [VALIDATION.md](../VALIDATION.md).
