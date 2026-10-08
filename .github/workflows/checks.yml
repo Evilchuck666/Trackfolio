@@ -14,12 +14,14 @@ concurrency:
 
 jobs:
   environment:
-    name: ${{ matrix.name }} / CPython 3.13.15
+    name: ${{ matrix.name }} / uv ${{ matrix.uv }} / CPython 3.13.15
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
+        uv: ["0.12.10", "0.12.23"]
+        runner: [ubuntu-24.04, windows-2022, macos-15-intel, macos-15]
         include:
           - name: GNU/Linux x86-64
             runner: ubuntu-24.04
@@ -38,10 +40,10 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Instalar uv fijado
+      - name: Instalar uv de la matriz
         uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
-          version: "0.12.10"
+          version: ${{ matrix.uv }}
           enable-cache: true
           cache-dependency-glob: uv.lock
 

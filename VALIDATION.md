@@ -99,6 +99,25 @@ Los cuatro jobs de la GUI terminaron correctamente en la [ejecución 37659500266
 
 La revisión visual manual de Windows y macOS sigue pendiente. Las pruebas automáticas verifican los campos, las fuentes, los recursos y el arranque; no prueban identidad de píxeles entre pantallas. En Wayland, un compositor que rechace las operaciones de mover/redimensionar activa el marco nativo como alternativa.
 
+## Intervalo compatible de uv: 8 de octubre de 2026
+
+El manifiesto y la preparación admiten `>=0.12.10,<0.13`. La comparación de versiones es numérica y comprueba ambos límites antes de ejecutar los pasos de instalación y sincronización. Se mantienen CPython 3.13.15, PySide6 6.11.2, `uv_build==0.12.10` y el contenido de `uv.lock`.
+
+Máquina de esta comprobación: Artix Linux x86-64, glibc 2.44, sesión X11. El uv del sistema es 0.12.23; las comprobaciones con 0.12.10 usan `uv tool run --from uv==0.12.10` sin sustituirlo.
+
+| Comprobación local | Resultado |
+| --- | --- |
+| Preparación GUI con uv 0.12.10 y 0.12.23 | Correcta con `offscreen`, desde el mismo lock |
+| Suite completa con uv 0.12.10 | 152 pruebas correctas |
+| Suite completa con uv 0.12.23 | 152 pruebas correctas |
+| Pruebas de preparación | 40 correctas; incluyen límites, parches posteriores, comparación numérica, rangos inválidos y mensajes de instalación |
+| Ruff, formato y mypy estricto | Correctos; 33 archivos de código comprobados por mypy |
+| Ventana del producto y eventos en X11 con uv 0.12.23 | Correctos; diagnóstico GUI sin errores |
+| Wheel y distribución de fuentes con uv 0.12.23 | Construidos correctamente con el backend fijado |
+| Workflow | actionlint 1.7.12 correcto; YAML y ocho combinaciones únicas comprobados |
+
+La matriz de GitHub Actions queda configurada para uv 0.12.10 y 0.12.23 en las cuatro plataformas existentes. Estos ocho jobs todavía no se han ejecutado en GitHub Actions con los cambios del intervalo; los resultados multiplataforma anteriores corresponden a las revisiones enlazadas en sus secciones.
+
 ## Repositorio
 
 Git inicializado con rama `main`, `origin` y seguimiento de `origin/main`. La infraestructura y documentación están subidas a [Evilchuck666/Trackfolio](https://github.com/Evilchuck666/Trackfolio), un repositorio privado. El workspace se abre mediante `code Trackfolio.code-workspace`; la preparación para otro PC está en [README.md](README.md).

@@ -24,8 +24,30 @@ class BootstrapError(Exception):
     """A prerequisite cannot be satisfied using the checked-in configuration."""
 
 
+def version_tuple(version: str) -> tuple[int, ...]:
+    """Compare stable versions numerically, treating X.Y as X.Y.0."""
+    parts = tuple(int(part) for part in version.split("."))
+    return parts + (0,) * (3 - len(parts))
+
+
+def uv_version_range(requirement: str) -> tuple[str, str]:
+    """Read the inclusive minimum and exclusive maximum without extra dependencies."""
+    match = re.fullmatch(
+        r">=\s*([0-9]+\.[0-9]+\.[0-9]+)\s*,\s*<\s*([0-9]+\.[0-9]+(?:\.[0-9]+)?)",
+        requirement.strip(),
+    )
+    if match is None:
+        raise BootstrapError("tool.uv.required-version debe definir un rango como >=0.12.10,<0.13.")
+    minimum, maximum = match.groups()
+    if version_tuple(minimum) >= version_tuple(maximum):
+        raise BootstrapError(
+            "tool.uv.required-version debe tener un mínimo inferior al máximo exclusivo."
+        )
+    return minimum, maximum
+
+
 def configuration(root: Path) -> tuple[str, str]:
-    """Read exact tool/interpreter pins and require the committed lock file."""
+    """Read the uv range and exact interpreter pin; require the committed lock file."""
     try:
         manifest = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
         python_version = (root / ".python-version").read_text(encoding="utf-8").strip()
@@ -38,19 +60,21 @@ def configuration(root: Path) -> tuple[str, str]:
     tool = manifest.get("tool", {})
     uv_settings = tool.get("uv", {}) if isinstance(tool, dict) else {}
     required_uv = uv_settings.get("required-version", "") if isinstance(uv_settings, dict) else ""
-    if not isinstance(required_uv, str) or not re.fullmatch(r"==\d+\.\d+\.\d+", required_uv):
-        raise BootstrapError("tool.uv.required-version debe fijar una versión exacta (==X.Y.Z).")
+    if not isinstance(required_uv, str):
+        raise BootstrapError("tool.uv.required-version debe definir un rango como >=0.12.10,<0.13.")
+    uv_version_range(required_uv)
     if not re.fullmatch(r"\d+\.\d+\.\d+", python_version):
         raise BootstrapError(".python-version debe fijar una versión CPython exacta (X.Y.Z).")
     if not isinstance(lock.get("package"), list) or not lock["package"]:
         raise BootstrapError("uv.lock no contiene paquetes. Recupera el lock del repositorio.")
-    return required_uv[2:], python_version
+    return required_uv, python_version
 
 
 def uv_install_help(version: str) -> str:
-    """Provide instructions without executing a remote installation script."""
+    """Suggest the minimum supported version without executing a remote installer."""
     return (
-        f"Instala uv {version} y vuelve a abrir la terminal.\n"
+        f"Instala uv {version} (versión mínima admitida) o una versión compatible "
+        "y vuelve a abrir la terminal.\n"
         f"Linux/macOS: curl -LsSf https://astral.sh/uv/{version}/install.sh | sh\n"
         "Windows PowerShell: powershell -ExecutionPolicy ByPass -c "
         f'"irm https://astral.sh/uv/{version}/install.ps1 | iex"'
@@ -58,9 +82,14 @@ def uv_install_help(version: str) -> str:
 
 
 def check_uv(required_version: str) -> str:
+    """Require a stable uv release within the configured half-open range."""
+    minimum, maximum = uv_version_range(required_version)
     executable = shutil.which("uv")
     if executable is None:
-        raise BootstrapError(f"No se encuentra uv en PATH.\n{uv_install_help(required_version)}")
+        raise BootstrapError(
+            f"No se encuentra uv en PATH. Se requiere uv {required_version}.\n"
+            f"{uv_install_help(minimum)}"
+        )
     try:
         result = subprocess.run(
             [executable, "--version"],
@@ -80,10 +109,10 @@ def check_uv(required_version: str) -> str:
             f"{result.stderr.strip() or result.stdout.strip()}"
         )
     actual_version = match.group(1)
-    if actual_version != required_version:
+    if not version_tuple(minimum) <= version_tuple(actual_version) < version_tuple(maximum):
         raise BootstrapError(
             f"El proyecto requiere uv {required_version}; se encontró {actual_version}.\n"
-            f"{uv_install_help(required_version)}"
+            f"{uv_install_help(minimum)}"
         )
     return executable
 

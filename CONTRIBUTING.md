@@ -2,7 +2,7 @@
 
 ## Incorporación
 
-Instala **uv 0.12.10** y Git siguiendo [docs/environment.md](docs/environment.md), clona el repositorio y prepara el entorno desde la raíz:
+Instala **uv >=0.12.10 y <0.13** y Git siguiendo [docs/environment.md](docs/environment.md), clona el repositorio y prepara el entorno desde la raíz. Una versión compatible ya instalada, como 0.12.23, no necesita sustituirse:
 
 ```sh
 uv run --no-project --python 3.13.15 python scripts/bootstrap.py --gui
@@ -49,7 +49,7 @@ uv sync --locked --extra gui --group dev
 uv run --locked --extra gui python scripts/doctor.py --gui
 ```
 
-Revisa el diff del manifiesto y del lock, ejecuta las comprobaciones y sube ambos archivos cuando cambien. Las actualizaciones de CPython, uv, el backend de construcción o PySide6 requieren modificar sus versiones fijadas, los scripts y documentación pertinentes, y verificar nuevamente la matriz. No amplíes `requires-python` sin validar el nuevo intérprete.
+Revisa el diff del manifiesto y del lock, ejecuta las comprobaciones y sube ambos archivos cuando cambien. Las actualizaciones de parche de uv dentro de `>=0.12.10,<0.13` no requieren editar el requisito; verifica la preparación y las pruebas con la versión elegida. Ampliar ese rango o actualizar CPython, el backend de construcción o PySide6 requiere revisar la configuración, los scripts y la documentación pertinentes, y verificar nuevamente la matriz. `uv_build==0.12.10` es el backend de construcción, no una exigencia sobre el ejecutable uv instalado. No amplíes `requires-python` sin validar el nuevo intérprete.
 
 ## Git y datos locales
 

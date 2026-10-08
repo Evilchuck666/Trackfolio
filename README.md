@@ -6,7 +6,7 @@ La GUI muestra canciones, artistas, álbum, año, numeración, géneros, lírica
 
 ## Preparar un PC
 
-Se necesitan Git, acceso a Internet durante la primera preparación y **uv 0.12.10**. El proyecto obtiene **CPython 3.13.15 administrado por uv**; el Python del sistema no necesita coincidir. Consulta las [instrucciones de instalación y requisitos del sistema](docs/environment.md) si falta alguna herramienta.
+Se necesitan Git, acceso a Internet durante la primera preparación y **uv de la serie 0.12 desde 0.12.10** (`>=0.12.10,<0.13`; por ejemplo, 0.12.23). El proyecto obtiene **CPython 3.13.15 administrado por uv**; el Python del sistema no necesita coincidir. Consulta las [instrucciones de instalación y requisitos del sistema](docs/environment.md) si falta alguna herramienta.
 
 Clona el repositorio y entra en su raíz. En Windows puedes usar `%USERPROFILE%\projects\Trackfolio`; la ubicación no está fijada en la configuración.
 

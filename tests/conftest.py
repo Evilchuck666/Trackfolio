@@ -56,7 +56,7 @@ def configured_root(tmp_path):
     root = tmp_path / "project with spaces"
     root.mkdir()
     (root / "pyproject.toml").write_text(
-        '[tool.uv]\nrequired-version = "==0.12.10"\n', encoding="utf-8"
+        '[tool.uv]\nrequired-version = ">=0.12.10,<0.13"\n', encoding="utf-8"
     )
     (root / ".python-version").write_text("3.13.15\n", encoding="utf-8")
     (root / "uv.lock").write_text(
