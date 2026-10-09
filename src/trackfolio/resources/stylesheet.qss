@@ -125,6 +125,27 @@ QGroupBox {
     font-weight: 600;
 }
 QGroupBox::title { subcontrol-origin: margin; left: 12px; padding: 0 5px; color: #a5abff; }
+QRadioButton { spacing: 8px; padding: 3px 0; }
+QRadioButton::indicator { width: 15px; height: 15px; }
+QRadioButton::indicator:unchecked {
+    border: 1px solid #596589;
+    background-color: #181c29;
+    border-radius: 8px;
+}
+QRadioButton::indicator:checked {
+    border: 1px solid #a5abff;
+    background-color: #8e94ff;
+    border-radius: 8px;
+}
+QRadioButton::indicator:disabled { background-color: #1b1f2d; border-color: #303750; }
+QProgressBar {
+    background-color: #181c29;
+    border: 1px solid #303750;
+    border-radius: 6px;
+    text-align: center;
+    min-height: 24px;
+}
+QProgressBar::chunk { background-color: #505c8d; border-radius: 5px; }
 QStatusBar { background-color: #151824; color: #a1aac4; border-top: 1px solid #272d40; }
 QStatusBar::item { border: none; }
 QMenuBar { background-color: #151824; color: #d8ddf0; }

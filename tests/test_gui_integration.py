@@ -34,7 +34,7 @@ def wait_until(app, predicate, timeout=4):
 
 @pytest.fixture
 def catalog(tmp_path):
-    database = tmp_path / "DB con espacios % #.sqlite3"
+    database = tmp_path / "DB con espacios % #.tfo"
     migrate_database(database)
     engine = create_engine(database)
     try:

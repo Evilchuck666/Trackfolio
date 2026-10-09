@@ -1,4 +1,4 @@
-"""Composition root: bind read-only infrastructure to interface-independent use cases."""
+"""Compose independent catalog queries and import operations for the GUI."""
 
 from __future__ import annotations
 
@@ -13,12 +13,28 @@ if TYPE_CHECKING:
 def create_window(
     preferences: CatalogPreferences | None = None,
 ) -> tuple[MainWindow, CatalogController]:
+    from platformdirs import user_data_path
+
+    from trackfolio.application.import_catalog import ImportCatalog
+    from trackfolio.infrastructure.audio_scan import FileSystemAudioScanner
+    from trackfolio.infrastructure.import_target import SqliteImportTargetFactory
+    from trackfolio.infrastructure.metadata import read_metadata
     from trackfolio.infrastructure.session import open_catalog
     from trackfolio.interfaces.gui.controller import CatalogController
     from trackfolio.interfaces.gui.window import MainWindow
 
     window = MainWindow()
+    previous = preferences.last_catalog() if preferences is not None else None
+    directory = (
+        previous.parent if previous is not None else user_data_path("Trackfolio", appauthor=False)
+    )
     controller = CatalogController(
-        window, open_catalog, preferences.remember if preferences is not None else None
+        window,
+        open_catalog,
+        preferences.remember if preferences is not None else None,
+        importer=ImportCatalog(
+            FileSystemAudioScanner(), read_metadata, SqliteImportTargetFactory()
+        ),
+        import_directory=directory,
     )
     return window, controller

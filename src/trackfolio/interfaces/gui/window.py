@@ -7,6 +7,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QEvent, QModelIndex, QPoint, QRect, QSignalBlocker, Qt, Signal
 from PySide6.QtGui import (
+    QAction,
     QCloseEvent,
     QGuiApplication,
     QKeySequence,
@@ -217,9 +218,10 @@ class ResizeHandle(QWidget):
 
 
 class MainWindow(QMainWindow):
-    """The first GUI is a read-only catalog viewer with no persistence knowledge."""
+    """Show catalog data and emit user intentions without persistence knowledge."""
 
     open_requested = Signal()
+    import_requested = Signal()
     refresh_requested = Signal()
     track_selected = Signal(int)
     closing = Signal()
@@ -236,6 +238,8 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(960, 640)
         self._catalog_path: Path | None = None
         self._busy = False
+        self._importing = False
+        self.close_guard: Callable[[], bool] | None = None
         self._current_file_id: int | None = None
         self._system_frame = False
         self.fields: dict[str, QLineEdit] = {}
@@ -273,7 +277,7 @@ class MainWindow(QMainWindow):
         content_layout.addWidget(self.splitter, 1)
 
         footer = QHBoxLayout()
-        self.status_label = QLabel("Abre un catálogo para comenzar.", content)
+        self.status_label = QLabel("Abre un catálogo o importa música para comenzar.", content)
         self.status_label.setObjectName("StatusLabel")
         self.status_label.setTextFormat(Qt.TextFormat.PlainText)
         self.status_label.setWordWrap(True)
@@ -303,11 +307,20 @@ class MainWindow(QMainWindow):
         self.open_button.setShortcut("Ctrl+O")
         self.open_button.setToolTip("Abrir catálogo SQLite (Ctrl+O)")
         self.open_button.clicked.connect(self.open_requested.emit)
+        self.import_action = QAction(icon("import"), "Importar música…", self)
+        self.import_action.setShortcut("Ctrl+I")
+        self.import_action.triggered.connect(self.import_requested.emit)
+        self.addAction(self.import_action)
+        self.import_button = QPushButton(icon("import"), "Importar música…", self)
+        self.import_button.setToolTip("Importar música y generar el catálogo (Ctrl+I)")
+        self.import_button.setAccessibleName("Importar música")
+        self.import_button.clicked.connect(self.import_action.trigger)
         self.refresh_button = QPushButton(icon("refresh"), "Actualizar", self)
         self.refresh_button.setShortcut("Ctrl+R")
         self.refresh_button.setToolTip("Actualizar catálogo (Ctrl+R)")
         self.refresh_button.clicked.connect(self.refresh_requested.emit)
         toolbar.addWidget(self.open_button)
+        toolbar.addWidget(self.import_button)
         toolbar.addWidget(self.refresh_button)
         layout.addLayout(toolbar)
 
@@ -351,7 +364,7 @@ class MainWindow(QMainWindow):
         self.table.setAccessibleName("Canciones del catálogo")
         self.table.selectionModel().currentRowChanged.connect(self._selection_changed)
         layout.addWidget(self.table, 1)
-        self.empty_label = QLabel("Abre un catálogo SQLite para ver tu música.", panel)
+        self.empty_label = QLabel("Abre un catálogo o importa una carpeta de música.", panel)
         self.empty_label.setObjectName("EmptyCatalog")
         self.empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.empty_label.setWordWrap(True)
@@ -510,7 +523,7 @@ class MainWindow(QMainWindow):
         self.empty_label.setText(
             "Este catálogo todavía no contiene canciones."
             if path is not None
-            else "Abre un catálogo SQLite para ver tu música."
+            else "Abre un catálogo o importa una carpeta de música."
         )
         self.catalog_label.setText(path.name if path is not None else "Sin catálogo")
         self.catalog_label.setToolTip(str(path) if path is not None else "")
@@ -519,6 +532,8 @@ class MainWindow(QMainWindow):
             self.track_selected.emit(self._current_file_id)
 
     def _selection_changed(self, current: QModelIndex, previous: QModelIndex) -> None:
+        if self._importing:
+            return
         file_id = self.model.file_id_at(current.row()) if current.isValid() else None
         if file_id == self._current_file_id:
             return
@@ -564,7 +579,21 @@ class MainWindow(QMainWindow):
 
     def set_busy(self, busy: bool) -> None:
         self._busy = busy
-        self.refresh_button.setEnabled(self._catalog_path is not None and not busy)
+        self._update_actions()
+
+    def set_importing(self, importing: bool) -> None:
+        """Keep import ownership separate from asynchronous read-query activity."""
+        self._importing = importing
+        self._update_actions()
+
+    def _update_actions(self) -> None:
+        self.open_button.setEnabled(not self._importing)
+        self.import_button.setEnabled(not self._importing)
+        self.import_action.setEnabled(not self._importing)
+        self.refresh_button.setEnabled(
+            self._catalog_path is not None and not self._busy and not self._importing
+        )
+        self.table.setEnabled(not self._importing)
 
     def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)
@@ -577,5 +606,8 @@ class MainWindow(QMainWindow):
             self._place_resize_handles()
 
     def closeEvent(self, event: QCloseEvent) -> None:
+        if self.close_guard is not None and not self.close_guard():
+            event.ignore()
+            return
         self.closing.emit()
         event.accept()

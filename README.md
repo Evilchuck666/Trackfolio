@@ -2,7 +2,7 @@
 
 Trackfolio es una aplicación multiplataforma para consultar metadatos de bibliotecas FLAC y MP3. Usa Python, Qt 6 mediante PySide6 y SQLite mediante SQLAlchemy. El dominio y los casos de uso son independientes de la GUI, para poder añadir interfaces CLI/TUI o un servidor con frontend web.
 
-La GUI muestra canciones, artistas, álbum, año, numeración, géneros, líricas y portada desde el catálogo. Los campos ausentes quedan vacíos. El importador conserva las carátulas incrustadas o procedentes de `album.jpg` sin modificar la música. La edición de etiquetas y la importación gráfica se abordarán en los siguientes incrementos.
+La GUI importa carpetas FLAC/MP3 y muestra canciones, artistas, álbum, año, numeración, géneros, líricas y portada desde el catálogo. Los campos ausentes quedan vacíos. El importador conserva las carátulas incrustadas o procedentes de `album.jpg` sin modificar la música. La edición de etiquetas se abordará en un siguiente incremento.
 
 ## Preparar un PC
 
@@ -79,23 +79,43 @@ Desde la raíz, después de preparar el entorno:
 bash setup.sh --run-uv run --locked --extra gui trackfolio
 ```
 
-Para abrir una base concreta añade `--database "ruta/al/catalogo.sqlite3"`. La base de ejemplo es local y está excluida de Git: **la preparación deja la aplicación lista, pero no inventa canciones ni crea un catálogo con tu música**. Un clon nuevo necesita importar un archivo o abrir un catálogo existente.
+Para abrir una base concreta añade `--database "ruta/al/catalogo.tfo"`. La base de ejemplo es local y está excluida de Git: la preparación deja la aplicación lista. En un clon nuevo puedes usar **Importar música…** para generar tu catálogo o **Abrir catálogo…** para consultar uno existente.
 
 Sin `--database`, se restaura el último catálogo abierto cuando sigue disponible. Para empezar sin restaurarlo, usa `--no-restore`. Puedes abrir otra base con **Abrir catálogo…** y recargar sus registros con **Actualizar**. Selecciona una canción para consultar su detalle; los textos permiten copiar datos y las líricas se muestran como texto plano.
 
-La GUI abre SQLite en modo de sólo lectura. Mostrar los registros no requiere acceder al FLAC/MP3 original: también las imágenes están guardadas en el catálogo. Las fuentes, iconos y estilos se incluyen en el paquete y se cargan sin descargas durante el uso.
+La consulta abre SQLite en modo de sólo lectura; la importación utiliza un escritor separado. Mostrar los registros no requiere acceder al FLAC/MP3 original: también las imágenes están guardadas en el catálogo. Las fuentes, iconos y estilos se incluyen en el paquete y se cargan sin descargas durante el uso.
 
 En VS Code, ejecuta la tarea **Trackfolio: iniciar GUI con la muestra** o la configuración de depuración **Trackfolio: GUI con catálogo de ejemplo**. Consulta el [plan y su estado](docs/gui-plan.md) y los [resultados comprobados](VALIDATION.md).
 
-## Revisar el catálogo
+## Importar música
+
+1. Pulsa **Importar música…** (`Ctrl+I`).
+2. Elige una carpeta: se incluirán sus subcarpetas y los archivos `.flac`/`.mp3`.
+3. Crea un catálogo nuevo `.tfo` o usa el catálogo abierto para añadir y actualizar canciones.
+4. Pulsa **Importar**. La ventana muestra progreso, contadores e incidencias, y abre el resultado.
+
+Puedes cancelar o cerrar la aplicación durante la importación. Se conservan los archivos ya guardados y se espera a que termine la operación actual antes de cerrar. Reimportar la misma raíz y ruta actualiza los metadatos sin duplicar registros; otra raíz o un renombrado se consideran ubicaciones nuevas. Los archivos desaparecidos no se borran del catálogo. Los enlaces simbólicos y puntos de unión no se recorren.
+
+Consulta el [plan de importación y sus criterios](docs/import-plan.md). Para revisar un archivo individual mediante el script existente:
 
 Desde la raíz del proyecto, importa un archivo sin modificarlo:
 
 ```sh
-bash setup.sh --run-uv run --locked --extra gui python scripts/import_audio.py "ruta/a/cancion.flac" --database data/trackfolio.sqlite3
+bash setup.sh --run-uv run --locked --extra gui python scripts/import_audio.py "ruta/a/cancion.flac" --database data/database.tfo
 ```
 
-Abre `data/trackfolio.sqlite3` en SQLiteBrowser y consulta la vista `track_details`. La [guía de la base de datos](docs/database.md) explica las tablas, los campos ausentes y la revisión de carátulas. El SQL inicial está en [migrations/001_initial.sql](migrations/001_initial.sql); la base local y la música están excluidas de Git.
+Los artistas se comparten por nombre exacto en todo el catálogo. Para consolidar las
+filas repetidas de un catálogo anterior sin importar música:
+
+```sh
+bash setup.sh --run-uv run --locked python -m trackfolio.infrastructure.database --upgrade data/database.tfo
+```
+
+Se crea un respaldo junto al archivo y se aplica `002_unique_artists`, conservando las
+relaciones de canciones y álbumes. Importar sobre un catálogo anterior también realiza
+esa actualización; abrirlo para consultar mantiene sus datos intactos.
+
+Abre `data/database.tfo` en SQLiteBrowser y consulta la vista `track_details`. La [guía de la base de datos](docs/database.md) explica las tablas, los campos ausentes, los respaldos y la revisión de carátulas. El SQL vigente para una base nueva está en [migrations/002_current.sql](migrations/002_current.sql); el [SQL inicial histórico](migrations/001_initial.sql) se conserva. La base local y la música están excluidas de Git.
 
 ## Compatibilidad prevista
 

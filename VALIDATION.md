@@ -145,6 +145,137 @@ Las comprobaciones locales se realizaron en el mismo Artix Linux x86-64 de la se
 
 La CI queda configurada para usar los lanzadores en los ocho jobs; Windows utiliza Windows PowerShell 5.1. Linux y Windows con uv 0.12.10 añaden una preparación inicial del núcleo sin uv ni Python en `PATH`, repetida dos veces. **Estos cambios todavía no se han ejecutado en GitHub Actions.** Quedan pendientes la comprobación real de Windows/macOS, sus descargas del editor y la revisión manual de su integración con VS Code. No se han instalado paquetes del sistema durante las comprobaciones locales: la propuesta y la autorización de esas instalaciones se prueban con simulaciones.
 
+## Importación gráfica y generación de catálogo: 9 de octubre de 2026
+
+Implementado el [plan de importación](docs/import-plan.md): botón **Importar música…**
+y atajo `Ctrl+I`, carpeta recursiva FLAC/MP3, creación de `.tfo` o actualización del
+catálogo abierto, progreso, cancelación e informe de incidencias. El núcleo permanece
+independiente de Qt. No se cambiaron el esquema, las dependencias ni `uv.lock`.
+
+Comprobaciones locales en Linux x86-64, glibc 2.44, sesión Wayland, uv 0.12.10,
+CPython 3.13.15 y PySide6 6.11.2:
+
+| Comprobación | Resultado observado |
+| --- | --- |
+| Suite completa con GUI | **291 passed, 4 skipped**; los cuatro omitidos necesitan PowerShell, ausente en esta máquina. |
+| Ruff y formato | Correctos; 68 archivos con formato comprobado. |
+| mypy estricto | Correcto sobre 39 archivos de código. |
+| Núcleo desde wheel instalado fuera del checkout, sin PySide6 | **247 passed, 8 skipped**; cuatro módulos GUI omitidos por ausencia de Qt y cuatro pruebas por ausencia de PowerShell. |
+| Lotes con audio temporal controlado y lector Mutagen real | Creación, reimportación, IDs estables, campos eliminados, portadas y archivos corruptos comprobados. |
+| Errores y cancelación | Vacío/sin audio válido, permisos, bloqueo SQLite real, rollback, destino desconocido, reserva exclusiva y limpieza propia comprobados. |
+| GUI y ciclo de vida | Lecturas previas terminan antes del escritor; segunda importación bloqueada; selección conservada; cancelación parcial, disposición y salida directa de QApplication verificadas con eventos/temporizadores controlados. |
+| Diagnóstico del producto | Correcto en `offscreen`, Wayland y `xcb` disponible en la sesión local; importa un FLAC temporal, retira el audio y consulta el resultado. |
+| Generación desde el botón en escritorio Wayland con música real | Importada una copia temporal de **To War! / Abbath / Abbath / 2016**, pista **1/10**, disco **1/1**, género **Black Metal**, portada **500 × 500**; original intacto por SHA-256. |
+| Revisión visual local | Inspeccionadas capturas del formulario, resultado y catálogo en Wayland; renders Qt `offscreen` de tamaño mínimo con Unicode e incidencias largas sin recortes en los diálogos. |
+| Wheel y distribución de fuentes | Construidos; contienen módulos nuevos, diálogo, icono, estilos y migraciones. Comprobados 12 hashes de recursos y 54 hashes RECORD. |
+| Probe del wheel con GUI desde un directorio ajeno | `offscreen`, Fusion, eventos e importación correctos (`imported=true`). |
+
+La comprobación de música real utilizó una copia en un directorio temporal y un catálogo
+nuevo. No modificó el archivo original ni los catálogos de trabajo. Las capturas y bases
+de validación permanecen fuera del repositorio.
+
+La instalación aislada utilizó requisitos exportados con `uv export --locked`, hashes y
+`--no-deps`; el wheel se instaló también con `--no-deps`. El entorno temporal se eliminó.
+Las comprobaciones del checkout utilizaron `uv run --locked --extra gui`.
+
+La matriz existente de GitHub Actions incorpora estas pruebas y verifica los módulos y
+la importación desde el wheel. Sus resultados multiplataforma, tras corregir las pruebas,
+se registran en la sección de corrección del 9 de octubre. Quedan pendientes la revisión
+visual manual y la interacción real de Windows/macOS.
+Los resultados `offscreen` no acreditan un escritorio; los backends Wayland/`xcb`
+comprobados aquí corresponden únicamente a esta máquina Linux.
+
+## Artistas únicos y consolidación: 9 de octubre de 2026
+
+Implementado el [plan de identidad de artistas](docs/artist-identity-plan.md). La revisión
+`002_unique_artists` comparte cada nombre exacto en todo el catálogo y consolida sus filas
+anteriores conservando el menor ID y todas las relaciones. El snapshot y SQL históricos
+de `001` permanecen intactos. Las dependencias y `uv.lock` no cambiaron.
+
+Comprobaciones locales con uv 0.12.10, CPython 3.13.15, SQLite 3.53.1 y PySide6 6.11.2:
+
+| Comprobación | Resultado observado |
+| --- | --- |
+| Suite completa del checkout, GUI `offscreen` | **335 passed, 4 skipped**; los cuatro omitidos requieren PowerShell, ausente. |
+| Ruff, formato y mypy estricto | Correctos; 73 archivos con formato comprobado y 42 archivos de código en mypy. |
+| Identidad global y corrección Abbath → Accept | Reutiliza el artista entre álbumes, carpetas, bibliotecas y pistas sin álbum; conserva IDs y deja otros créditos intactos. |
+| Esquema y migración poblada | Igualdad exacta, créditos de pista/álbum, roles, posiciones, `external_id`, artistas sin referencias, BLOBs y etiquetas originales comprobados. |
+| Fallos y compatibilidad | Rollback de datos/índice/revisión, respaldo fallido, SQLite WAL, actualización concurrente, índices debilitados y revisiones desconocidas comprobados. |
+| Apertura y formulario | Lectura `001`/`002` sin cambios; validación y lote vacío no migran. La integración GUI actualiza al abrir el escritor y reabre con selección conservada. |
+| SQL histórico y vigente | Ambos coinciden con su revisión aplicada en línea; `002_current.sql` se genera desde la cadena empaquetada. |
+| Consolidación de una copia del catálogo real | **13 → 2 artistas**, Abbath ID 1 y Accept ID 3; todas las demás filas y valores de la vista conservados. Respaldo válido y repetición sin cambios de bytes ni otra copia. |
+| Catálogo de trabajo actualizado | `data/database.tfo` en `002_unique_artists`; **139 pistas, 139 archivos, 13 álbumes y 139 créditos de pista** conservados. `foreign_key_check` vacío e `integrity_check=ok`. |
+| Respaldo del catálogo de trabajo | `data/database.tfo.001_initial.99fd2fa0fa7442d1b84d67ad03bc0364.bak`, validado contra los datos consolidados. |
+| Prueba de volumen temporal | Actualización completa con respaldo de 10.000 artistas y 10.000 créditos en 0,052 s en esta máquina; el índice auxiliar se elimina tras la migración. |
+| Wheel y sdist | Construidos y verificados fuera del checkout, con esquema vigente y migración `002`. |
+| Núcleo contra wheel instalado, sin PySide6 | **290 passed, 8 skipped**; cuatro módulos GUI omitidos y cuatro pruebas PowerShell. |
+| Bloque de verificación de CI del wheel ejecutado localmente | Generación, importación, reimportación y actualización de `001` con respaldo e idempotencia correctos. Dependencias del lock con hashes. |
+| Diagnóstico gráfico | Producto correcto en `offscreen` y Wayland; wheel GUI correcto en `offscreen`, Fusion, eventos e importación confirmados. |
+
+La comparación del catálogo real cubrió todas las tablas y la vista, incluidas carátulas
+y `raw_tags`; sólo cambiaron las filas duplicadas de artistas, sus referencias y la revisión.
+La migración no relee ni escribe música. Catálogo y respaldo permanecen excluidos de Git.
+La edición de créditos desde la GUI sigue pendiente; se comprobó la corrección mediante
+reimportación de metadatos corregidos.
+
+La matriz multiplataforma incorpora los módulos nuevos y la verificación del wheel.
+Los resultados de Windows/macOS constan en la sección siguiente. Su revisión visual manual
+sigue pendiente; Wayland acredita únicamente esta máquina.
+
+## Corrección de pruebas multiplataforma: 9 de octubre de 2026
+
+La [ejecución 37916069251](https://github.com/Evilchuck666/Trackfolio/actions/runs/37916069251),
+sobre `8a755c8`, pasó en Linux y macOS Intel con ambas versiones de uv. Windows falló en
+una prueba del núcleo, y macOS Apple Silicon tuvo esperas agotadas en la integración GUI.
+
+En Windows, la preparación de `test_existing_migration_target_disappearing_is_not_recreated`
+dejaba abierta su conexión SQLite: el contexto de conexión confirma o revierte la
+transacción, pero no cierra el archivo. Se añadió cierre explícito a las conexiones de
+`test_database.py`, manteniendo commit/rollback, y una regresión que retiene una referencia
+a la conexión para comprobar que se cerró también en Linux.
+
+En Apple Silicon, los fallos aparecían al iniciar otra importación tras consultas previas.
+El mismo timeout se reprodujo localmente con `sys.setswitchinterval(0.1)`: la espera que
+alternaba `processEvents()` y `QTest.qWait(5)` impedía avanzar a los trabajadores con esa
+planificación. Las esperas usan ahora `QEventLoop` y temporizadores Qt, con el mismo límite
+de cinco segundos. La prueba de importación reentrante cubre los intervalos de 0,005 y
+0,1 segundos y restaura el valor anterior. No se modificó el código del producto, el
+catálogo ni el entorno bloqueado.
+
+| Comprobación local | Resultado |
+| --- | --- |
+| Pruebas de base e integración de importación | **34 passed**. |
+| Suite completa, GUI `offscreen` | **337 passed, 4 skipped**; PowerShell ausente. |
+| Ruff, formato y mypy | Correctos; 73 archivos con formato y 42 archivos de código en mypy. |
+
+La [ejecución 37919647833](https://github.com/Evilchuck666/Trackfolio/actions/runs/37919647833)
+confirmó la corrección `1b68511` en las seis combinaciones de Linux y macOS. Windows superó
+la prueba del núcleo y llegó a dos errores de GUI que antes no se habían ejecutado:
+
+- El selector Qt devuelve rutas con `/`, mientras `str(WindowsPath)` usa `\\`. La prueba
+  compara ahora objetos `Path`, manteniendo la comprobación de ruta y Unicode.
+- El catálogo antiguo del test almacenaba la raíz con `str(music)`, en lugar de
+  `music.as_posix()`, que usa el repositorio. El fixture utiliza la representación real;
+  se mantienen las expectativas de IDs, artistas y una canción creada y otra actualizada.
+  Sus conexiones SQLite también se cierran explícitamente.
+
+Estos cambios se publicaron en `5850021`, rama `generate-db`. Sus **25 pruebas afectadas**,
+Ruff, formato y mypy pasan localmente. La [ejecución 37920075123](https://github.com/Evilchuck666/Trackfolio/actions/runs/37920075123),
+sobre `58500218e7b11e22836f7036f593eed3a20a242e`, terminó con **los ocho jobs correctos**:
+
+| Plataforma, con uv 0.12.10 y 0.12.23 | Núcleo sin Qt | Suite con GUI |
+| --- | --- | --- |
+| Linux x86-64 | 295 passed, 4 skipped | 341 passed |
+| Windows x86-64 | 283 passed, 16 skipped | 329 passed, 12 skipped |
+| macOS Intel | 295 passed, 4 skipped | 341 passed |
+| macOS Apple Silicon | 295 passed, 4 skipped | 341 passed |
+
+Los módulos Qt se omiten en las suites del núcleo. En Windows también se omiten los
+lanzadores Unix y el caso de un nombre de archivo con `?`, no admitido por ese sistema.
+No se omitieron las pruebas corregidas. Ruff, formato, mypy, los diagnósticos gráficos
+`offscreen`/nativos y la verificación del wheel instalado fuera del checkout pasaron.
+La revisión visual manual de Windows/macOS sigue pendiente.
+
 ## Repositorio
 
 Git inicializado con rama `main`, `origin` y seguimiento de `origin/main`. La infraestructura y documentación están subidas a [Evilchuck666/Trackfolio](https://github.com/Evilchuck666/Trackfolio), un repositorio privado. El workspace se abre mediante `code Trackfolio.code-workspace`; la preparación para otro PC está en [README.md](README.md).

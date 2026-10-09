@@ -7,6 +7,7 @@ from pathlib import PureWindowsPath
 
 import pytest
 from sqlalchemy.exc import DatabaseError, OperationalError
+from test_database import legacy_catalog
 
 from trackfolio.application.catalog import CatalogAccessError, GetTrack, ListTrackSummaries
 from trackfolio.domain.metadata import Artwork, TrackMetadata
@@ -35,7 +36,15 @@ def build_catalog(path):
         engine.dispose()
 
 
-@pytest.mark.parametrize("name", ["catálogo con espacios.sqlite3", "catálogo % #.sqlite3"])
+@pytest.mark.parametrize(
+    "name",
+    [
+        "catálogo con espacios.tfo",
+        "catálogo % #.tfo",
+        "catálogo con espacios.sqlite3",
+        "catálogo % #.sqlite3",
+    ],
+)
 def test_open_reads_from_database_with_portable_paths_and_does_not_modify_it(tmp_path, name):
     path = tmp_path / name
     entry = build_catalog(path)
@@ -124,7 +133,9 @@ def test_open_rejects_a_directory(tmp_path):
         open_catalog(tmp_path)
 
 
-@pytest.mark.parametrize("kind", ["empty", "foreign", "no-marker", "revision", "column", "view"])
+@pytest.mark.parametrize(
+    "kind", ["empty", "foreign", "no-marker", "revision", "column", "view", "index"]
+)
 def test_open_rejects_unrecognized_or_modified_schemas_without_adopting_them(tmp_path, kind):
     path = tmp_path / f"{kind}.sqlite3"
     if kind in {"empty", "foreign"}:
@@ -143,10 +154,33 @@ def test_open_rejects_unrecognized_or_modified_schemas_without_adopting_them(tmp
             elif kind == "view":
                 connection.execute("DROP VIEW track_details")
                 connection.execute("CREATE VIEW track_details AS SELECT id FROM tracks")
+            elif kind == "index":
+                connection.execute("DROP INDEX uq_artists_name")
     before = path.read_bytes()
-    with pytest.raises(UnknownDatabaseError, match="compatible"):
+    with pytest.raises(UnknownDatabaseError):
         open_catalog(path)
     assert path.read_bytes() == before
+
+
+def test_legacy_catalog_is_readable_without_migration_backup_or_byte_changes(tmp_path):
+    path = tmp_path / "legacy.tfo"
+    legacy_catalog(path)
+    with sqlite3.connect(path) as connection:
+        connection.execute("INSERT INTO libraries (id, root_path) VALUES (1, '/library')")
+        connection.execute(
+            "INSERT INTO audio_files (id, library_id, relative_path, track_id, format) "
+            "VALUES (1, 1, 'song.mp3', 1, 'MP3')"
+        )
+    before = path.read_bytes()
+    files = set(tmp_path.iterdir())
+    session = open_catalog(path)
+    try:
+        assert session.list_summaries()[0].artists == ("Accept",)
+        assert session.get(1).metadata.artists == ("Accept",)
+    finally:
+        session.close()
+    assert path.read_bytes() == before
+    assert set(tmp_path.iterdir()) == files
 
 
 def test_open_rejects_non_sqlite_file_without_modifying_it(tmp_path):

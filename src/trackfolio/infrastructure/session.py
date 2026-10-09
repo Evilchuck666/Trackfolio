@@ -3,33 +3,17 @@
 from __future__ import annotations
 
 import sqlite3
-from pathlib import Path, PurePath
-from urllib.parse import urlsplit
+from pathlib import Path
 
-from sqlalchemy import URL, Engine, create_engine, inspect
+from sqlalchemy import URL, Engine, create_engine
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.pool import NullPool
 
 from trackfolio.application.catalog import CatalogAccessError, CatalogSession
 from trackfolio.domain.catalog import CatalogEntry, CatalogSummary
 from trackfolio.infrastructure.catalog import SqliteCatalogRepository
-from trackfolio.infrastructure.database import UnknownDatabaseError, metadata
-from trackfolio.infrastructure.migrations.initial_schema import (
-    APPLICATION_ID,
-    REVISION,
-    TRACK_DETAILS_SQL,
-)
-
-
-def _file_uri(path: PurePath) -> str:
-    """Codificar nombres especiales y las rutas Windows, incluidas las UNC."""
-    uri = path.as_uri()
-    parsed = urlsplit(uri)
-    if parsed.netloc:
-        # SQLite no admite una autoridad remota con su compilación habitual.
-        # Conservar la ruta UNC en la ruta del URI y dejar vacía su autoridad.
-        uri = f"file:////{parsed.netloc}{parsed.path}"
-    return uri
+from trackfolio.infrastructure.database import _file_uri as _file_uri
+from trackfolio.infrastructure.schema_validation import validate_catalog_connection
 
 
 def _access_error(error: SQLAlchemyError, message: str) -> CatalogAccessError:
@@ -46,42 +30,9 @@ def _access_error(error: SQLAlchemyError, message: str) -> CatalogAccessError:
     return CatalogAccessError(message)
 
 
-def _validate_catalog(engine: Engine) -> None:
+def _validate_catalog(engine: Engine, *, require_current: bool = False) -> None:
     with engine.connect() as connection:
-        inspector = inspect(connection)
-        if (
-            connection.exec_driver_sql("PRAGMA application_id").scalar_one() != APPLICATION_ID
-            or set(inspector.get_table_names()) != set(metadata.tables) | {"alembic_version"}
-            or set(inspector.get_view_names()) != {"track_details"}
-        ):
-            raise UnknownDatabaseError("El archivo no contiene un catálogo Trackfolio compatible.")
-        revisions: tuple[object, ...] = tuple(
-            connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalars()
-        )
-        if revisions != (REVISION,):
-            raise UnknownDatabaseError("La revisión del catálogo Trackfolio no es compatible.")
-        for table in metadata.sorted_tables:
-            expected_columns = {column.name for column in table.columns}
-            actual_columns = {
-                column["name"]: column for column in inspector.get_columns(table.name)
-            }
-            if set(actual_columns) != expected_columns:
-                raise UnknownDatabaseError("El esquema del catálogo Trackfolio no es compatible.")
-            primary_key = inspector.get_pk_constraint(table.name)["constrained_columns"]
-            if primary_key != [column.name for column in table.primary_key.columns]:
-                raise UnknownDatabaseError("El esquema del catálogo Trackfolio no es compatible.")
-            for column in table.columns:
-                actual = actual_columns[column.name]
-                if (
-                    str(actual["type"]) != str(column.type.compile(dialect=engine.dialect))
-                    or actual["nullable"] != column.nullable
-                ):
-                    raise UnknownDatabaseError(
-                        "El esquema del catálogo Trackfolio no es compatible."
-                    )
-        view_sql = inspector.get_view_definition("track_details") or ""
-        if " ".join(view_sql.split()) != " ".join(TRACK_DETAILS_SQL.split()):
-            raise UnknownDatabaseError("La vista del catálogo Trackfolio no es compatible.")
+        validate_catalog_connection(connection, require_current=require_current)
 
 
 class _SqliteCatalogSession:

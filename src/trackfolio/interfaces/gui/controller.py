@@ -5,13 +5,22 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from threading import Event
+from time import monotonic
 from typing import Literal, cast
 
-from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, Signal, Slot
+from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, QTimer, Signal, Slot
 from PySide6.QtWidgets import QFileDialog
 
 from trackfolio.application.catalog import CatalogSession, GetTrack, ListTrackSummaries
+from trackfolio.application.import_catalog import (
+    ImportCatalog,
+    ImportProgress,
+    ImportReport,
+    ImportRequest,
+)
 from trackfolio.domain.catalog import CatalogEntry, CatalogSummary
+from trackfolio.interfaces.gui.import_dialog import ImportDialog, ImportProgressDialog
 from trackfolio.interfaces.gui.window import MainWindow
 
 
@@ -42,6 +51,65 @@ class _Task(QRunnable):
 class _Opened:
     session: CatalogSession
     summaries: tuple[CatalogSummary, ...]
+    selected_id: int | None = None
+
+
+class _ImportSignals(QObject):
+    progress = Signal(int, object)
+    completed = Signal(int)
+
+
+class _ImportTask(QRunnable):
+    def __init__(
+        self,
+        identifier: int,
+        importer: ImportCatalog,
+        request: ImportRequest,
+        cancellation: Event,
+        parent: QObject,
+    ) -> None:
+        super().__init__()
+        self.identifier = identifier
+        self.importer = importer
+        self.request = request
+        self.cancellation = cancellation
+        self.signals = _ImportSignals(parent)
+        self.result: ImportReport | None = None
+        self._last_progress = ImportProgress("preparing", 0, None, 0, 0, 0)
+        self._last_emitted = 0.0
+        self._last_phase = ""
+
+    def _progress(self, progress: ImportProgress) -> None:
+        self._last_progress = progress
+        now = monotonic()
+        if progress.phase != self._last_phase or now - self._last_emitted >= 0.1:
+            self._last_phase = progress.phase
+            self._last_emitted = now
+            self.signals.progress.emit(self.identifier, progress)
+
+    def run(self) -> None:
+        try:
+            self.result = self.importer.execute(
+                self.request,
+                is_cancelled=self.cancellation.is_set,
+                on_progress=self._progress,
+            )
+        except Exception:
+            # Keep the UI recoverable even for an unexpected adapter/programming failure.
+            progress = self._last_progress
+            self.result = ImportReport(
+                self.request.database_path,
+                "failed",
+                progress.discovered,
+                progress.total,
+                progress.created,
+                progress.updated,
+                progress.failed,
+                (),
+                "La importación terminó inesperadamente. Comprueba el catálogo antes de repetirla.",
+            )
+        finally:
+            self.signals.completed.emit(self.identifier)
 
 
 @dataclass(slots=True)
@@ -57,17 +125,30 @@ class _Job:
 class CatalogController(QObject):
     catalog_loaded = Signal()
     detail_loaded = Signal(int)
+    import_finished = Signal(object)
 
     def __init__(
         self,
         window: MainWindow,
         opener: Callable[[Path], CatalogSession],
         remember: Callable[[Path], None] | None = None,
+        importer: ImportCatalog | None = None,
+        import_directory: Path | None = None,
     ) -> None:
         super().__init__(window)
         self.window = window
         self._opener = opener
         self._remember = remember
+        self._importer = importer
+        self._import_directory = import_directory or Path.home()
+        self._pending_import: ImportRequest | None = None
+        self._import_task: _ImportTask | None = None
+        self._cancellation = Event()
+        self._progress_dialog: ImportProgressDialog | None = None
+        self._previous_database: Path | None = None
+        self._previous_selection: int | None = None
+        self._close_pending = False
+        self._open_error_prefix = ""
         self._pool = QThreadPool(self)
         self._pool.setMaxThreadCount(2)
         self._session: CatalogSession | None = None
@@ -83,6 +164,148 @@ class CatalogController(QObject):
         window.refresh_requested.connect(self.refresh)
         window.track_selected.connect(self.select_track)
         window.closing.connect(self.shutdown)
+        window.import_requested.connect(self.choose_import)
+        window.close_guard = self.request_close
+
+    @property
+    def importing(self) -> bool:
+        return self._pending_import is not None or self._import_task is not None
+
+    @Slot()
+    def choose_import(self) -> None:
+        if self._closed or self._close_pending or self.importing or self._importer is None:
+            return
+        current = self._session.database_path if self._session is not None else None
+        dialog = ImportDialog(self.window, current, self._import_directory)
+        try:
+            if dialog.exec() == QFileDialog.DialogCode.Accepted:
+                request = dialog.request()
+                if request is not None:
+                    self.start_import(request)
+        finally:
+            dialog.deleteLater()
+
+    def start_import(self, request: ImportRequest) -> None:
+        if self._closed or self._close_pending or self.importing or self._importer is None:
+            return
+        self._pending_import = request
+        self._cancellation = Event()
+        self._previous_database = self._session.database_path if self._session is not None else None
+        self._previous_selection = self.window.current_file_id()
+        self._catalog_token += 1
+        self._list_token += 1
+        self._detail_token += 1
+        if self._session is not None:
+            self._retired.append(self._session)
+            self._session = None
+        self.window.set_importing(True)
+        self.window.set_error("")
+        self.window.set_status("Preparando importación…")
+        if self._progress_dialog is not None:
+            self._progress_dialog.close()
+            self._progress_dialog.deleteLater()
+        self._progress_dialog = ImportProgressDialog(self.window)
+        self._progress_dialog.cancel_requested.connect(self.cancel_import)
+        self._progress_dialog.show()
+        self._begin_import_when_idle()
+
+    def _begin_import_when_idle(self) -> None:
+        if self._closed or self._pending_import is None or self._import_task is not None:
+            return
+        if self._jobs:
+            return
+        # A completion signal can arrive just before QRunnable.run returns.
+        if self._pool.activeThreadCount():
+            QTimer.singleShot(10, self._begin_import_when_idle)
+            return
+        self._collect_retired()
+        request = self._pending_import
+        if self._cancellation.is_set():
+            self._finish_import(
+                ImportReport(request.database_path, "cancelled", 0, None, 0, 0, 0, ())
+            )
+            return
+        assert self._importer is not None
+        self._next_identifier += 1
+        task = _ImportTask(self._next_identifier, self._importer, request, self._cancellation, self)
+        self._import_task = task
+        task.signals.progress.connect(self._import_progress, Qt.ConnectionType.QueuedConnection)
+        task.signals.completed.connect(self._import_completed, Qt.ConnectionType.QueuedConnection)
+        self._pool.start(task)
+
+    @Slot()
+    def cancel_import(self) -> None:
+        if not self.importing:
+            return
+        self._cancellation.set()
+        if self._progress_dialog is not None:
+            self._progress_dialog.set_cancelling()
+        self.window.set_status("Cancelando importación…")
+
+    @Slot(int, object)
+    def _import_progress(self, identifier: int, progress: ImportProgress) -> None:
+        if self._closed or self._import_task is None:
+            return
+        if (
+            identifier == self._import_task.identifier
+            and not self._cancellation.is_set()
+            and self._progress_dialog is not None
+        ):
+            self._progress_dialog.set_progress(progress)
+
+    @Slot(int)
+    def _import_completed(self, identifier: int) -> None:
+        task = self._import_task
+        if self._closed or task is None or identifier != task.identifier:
+            return
+        assert task.result is not None
+        task.signals.deleteLater()
+        self._finish_import(task.result)
+
+    def _finish_import(self, report: ImportReport) -> None:
+        self._pending_import = None
+        self._import_task = None
+        self.window.set_importing(False)
+        if self._progress_dialog is not None:
+            self._progress_dialog.set_report(report)
+        if self._close_pending:
+            self._close_when_idle()
+            self.import_finished.emit(report)
+            return
+        destination = report.database_path if report.saved else self._previous_database
+        if destination is not None:
+            selected = self._previous_selection if destination == self._previous_database else None
+            self.open_database(
+                destination,
+                selected_id=selected,
+                error_prefix=(
+                    "La música se guardó, pero no se pudo abrir el catálogo resultante. "
+                    if report.saved
+                    else ""
+                ),
+            )
+        else:
+            self.window.set_status("No se guardaron canciones. Puedes volver a importar música.")
+            self.window.set_error(report.fatal_error or "")
+        self._update_busy()
+        # Observers can synchronously start another operation or close the window.
+        # Emit only after restoring a consistent controller/view state.
+        self.import_finished.emit(report)
+
+    def request_close(self) -> bool:
+        if self._closed or not self.importing:
+            return True
+        self._close_pending = True
+        self.cancel_import()
+        return False
+
+    def _close_when_idle(self) -> None:
+        if self._closed:
+            return
+        if self._pool.activeThreadCount() or self._jobs or self.importing:
+            QTimer.singleShot(10, self._close_when_idle)
+        else:
+            self.window.close()
 
     def _submit(
         self,
@@ -102,13 +325,13 @@ class CatalogController(QObject):
 
     @Slot()
     def choose_catalog(self) -> None:
-        if self._closed:
+        if self._closed or self._close_pending or self.importing:
             return
         dialog = QFileDialog(self.window, "Abrir catálogo de Trackfolio")
         dialog.setOption(QFileDialog.Option.DontUseNativeDialog, True)
         dialog.setFileMode(QFileDialog.FileMode.ExistingFile)
         dialog.setNameFilters(
-            ["Catálogos SQLite (*.sqlite3 *.sqlite *.db)", "Todos los archivos (*)"]
+            ["Catálogos de Trackfolio (*.tfo *.sqlite3 *.sqlite *.db)", "Todos los archivos (*)"]
         )
         if self._session is not None:
             dialog.setDirectory(str(self._session.database_path.parent))
@@ -117,9 +340,12 @@ class CatalogController(QObject):
             if selected:
                 self.open_database(Path(selected[0]))
 
-    def open_database(self, path: Path) -> None:
-        if self._closed:
+    def open_database(
+        self, path: Path, *, selected_id: int | None = None, error_prefix: str = ""
+    ) -> None:
+        if self._closed or self._close_pending or self.importing:
             return
+        self._open_error_prefix = error_prefix
         self._catalog_token += 1
         self._list_token += 1
         self._detail_token += 1
@@ -140,13 +366,13 @@ class CatalogController(QObject):
             except Exception:
                 session.close()
                 raise
-            return _Opened(session, summaries)
+            return _Opened(session, summaries, selected_id)
 
         self._submit(load, "open", self._catalog_token)
 
     @Slot()
     def refresh(self) -> None:
-        if self._closed or self._session is None:
+        if self._closed or self.importing or self._session is None:
             return
         self._list_token += 1
         session = self._session
@@ -156,7 +382,7 @@ class CatalogController(QObject):
 
     @Slot(int)
     def select_track(self, file_id: int) -> None:
-        if self._closed or self._session is None:
+        if self._closed or self.importing or self._session is None:
             return
         self._detail_token += 1
         session = self._session
@@ -193,7 +419,9 @@ class CatalogController(QObject):
             if isinstance(result, _Opened):
                 result.session.close()
         elif job.task.error is not None:
-            self.window.set_error(job.task.error)
+            self.window.set_error(
+                (self._open_error_prefix if job.kind == "open" else "") + job.task.error
+            )
             self.window.set_status(
                 "No se pudo cargar el catálogo."
                 if job.kind == "open"
@@ -203,7 +431,9 @@ class CatalogController(QObject):
             self._session = result.session
             self._count = len(result.summaries)
             self.window.set_status(self._status())
-            self.window.set_catalog(result.session.database_path, result.summaries)
+            self.window.set_catalog(
+                result.session.database_path, result.summaries, result.selected_id
+            )
             if self._remember is not None:
                 try:
                     self._remember(result.session.database_path)
@@ -232,6 +462,7 @@ class CatalogController(QObject):
         job.task.signals.deleteLater()
         self._collect_retired()
         self._update_busy()
+        self._begin_import_when_idle()
 
     def _status(self) -> str:
         if self._session is None:
@@ -257,9 +488,16 @@ class CatalogController(QObject):
         if self._closed:
             return
         self._closed = True
+        self._cancellation.set()
+        # This synchronous drain is for final teardown after the event loop has stopped.
+        # Normal window closure during import uses request_close and keeps events flowing.
         self._pool.clear()
         # Queries have a bounded SQLite timeout. Keep QObject owners alive until work ends.
         self._pool.waitForDone()
+        if self._import_task is not None:
+            self._import_task.signals.deleteLater()
+        self._import_task = None
+        self._pending_import = None
         for job in self._jobs.values():
             if isinstance(job.task.result, _Opened):
                 job.task.result.session.close()

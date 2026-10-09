@@ -190,7 +190,16 @@ def check_resources() -> CheckResult:
             "fonts/LICENSE.txt",
             *(
                 f"icons/{name}.svg"
-                for name in ("app", "open", "refresh", "close", "minimize", "maximize", "restore")
+                for name in (
+                    "app",
+                    "open",
+                    "import",
+                    "refresh",
+                    "close",
+                    "minimize",
+                    "maximize",
+                    "restore",
+                )
             ),
         }
         if not isinstance(assets, dict) or set(assets) != required:

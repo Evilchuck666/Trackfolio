@@ -203,7 +203,7 @@ cd Trackfolio
 bash setup.sh --open-code
 ```
 
-En Windows usa el comando PowerShell con `--open-code`. Puedes usar otra ruta de destino. Si transfieres las fuentes sin Git, incluye los archivos ocultos de configuración y el lock, y excluye `.venv`, `.tools`, caches, credenciales, música y bases de datos. Reconstruye el entorno en destino. Conserva y transfiere los catálogos SQLite por separado. La GUI puede mostrarlos aunque las rutas de la música correspondan a otro PC; los metadatos y las portadas están en la base. Después de preparar el entorno, usa el lanzador con `--run-uv run --locked --extra gui trackfolio --database "ruta/al/catalogo.sqlite3"`. La configuración del último catálogo abierto se guarda localmente mediante `platformdirs`.
+En Windows usa el comando PowerShell con `--open-code`. Puedes usar otra ruta de destino. Si transfieres las fuentes sin Git, incluye los archivos ocultos de configuración y el lock, y excluye `.venv`, `.tools`, caches, credenciales, música y bases de datos. Reconstruye el entorno en destino. Conserva y transfiere los catálogos SQLite por separado. La GUI puede mostrarlos aunque las rutas de la música correspondan a otro PC; los metadatos y las portadas están en la base. Después de preparar el entorno, usa el lanzador con `--run-uv run --locked --extra gui trackfolio --database "ruta/al/catalogo.tfo"`. La configuración del último catálogo abierto se guarda localmente mediante `platformdirs`.
 
 El workspace usa una carpeta relativa y tareas de tipo `process` con argumentos separados. Si VS Code recuerda un intérprete ajeno, selecciona `.venv` mediante **Python: Select Interpreter**. [Entornos Python en VS Code](https://code.visualstudio.com/docs/python/environments).
 

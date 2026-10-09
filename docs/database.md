@@ -1,9 +1,13 @@
 # Catálogo SQLite y revisión en SQLiteBrowser
 
-Esta fase permite importar y consultar metadatos FLAC/MP3 sin Qt y sin modificar los
-archivos musicales. La GUI queda pendiente de validar primero el esquema y los datos
-con SQLiteBrowser. `scripts/import_audio.py` es una herramienta de preparación y
-revisión, no la interfaz CLI completa de Trackfolio.
+El catálogo permite importar y consultar metadatos FLAC/MP3 sin modificar los archivos
+musicales. La GUI genera catálogos desde carpetas mediante **Importar música…**; el núcleo
+también funciona sin Qt. `scripts/import_audio.py` sigue siendo una herramienta individual
+de preparación y revisión, no la interfaz CLI completa de Trackfolio.
+
+La extensión predeterminada de los catálogos nuevos es `.tfo`, de Trackfolio. Siguen
+siendo bases SQLite que se pueden consultar con SQLiteBrowser. También se pueden
+seguir abriendo los catálogos existentes con extensión `.sqlite3`, `.sqlite` o `.db`.
 
 ## Tablas y relaciones
 
@@ -15,7 +19,7 @@ no sustituye las tablas normalizadas ni contiene otra copia de los metadatos.
 | `libraries` | Raíz local de cada biblioteca. |
 | `albums` | Agrupaciones provisionales de álbum: biblioteca, directorio, título, año, fecha y total de discos. |
 | `tracks` | Título de pista, numeración, referencia opcional al álbum y letras cuando existen. |
-| `artists` | Nombres acreditados e identificador externo opcional; el nombre no es único. |
+| `artists` | Artistas compartidos por nombre exacto único e identificador externo opcional. |
 | `genres` | Géneros, reutilizados cuando coincide exactamente el texto de su nombre. |
 | `track_artists` | Créditos de artistas de pista, con rol y posición. |
 | `album_artists` | Créditos de artistas de álbum, con rol y posición. |
@@ -44,15 +48,21 @@ otro archivo; la ruta no demuestra que dos grabaciones sean iguales.
 Los álbumes se agrupan provisionalmente por biblioteca, directorio y metadatos de álbum,
 incluidos fecha, año, total de discos y artistas de álbum. Dos títulos iguales no bastan
 para fusionarlos. Si falta el título pero existen otros datos de álbum, se conserva una
-agrupación con título `NULL` para mantener esos datos y créditos. Un artista se reutiliza
-por nombre exacto dentro del mismo contexto de álbum, o de biblioteca/directorio para
-pistas sin álbum. Pueden existir entidades con
-el mismo nombre en otros contextos: fusionarlas requiere una decisión posterior basada
-en identificadores o revisión del usuario.
+agrupación con título `NULL` para mantener esos datos y créditos.
+
+Cada nombre exacto identifica un único artista en todo el catálogo. Sus pistas y álbumes
+comparten `artist_id` entre carpetas y bibliotecas; el índice `uq_artists_name` impide
+duplicados. No se normalizan espacios ni mayúsculas: `Accept` y `ACCEPT` son nombres
+distintos. `external_id` sigue siendo opcional y no determina la identidad.
+
+Corregir el artista de una canción de Abbath a Accept significa reasignar su crédito al
+ID de Accept, conservando Abbath y sus otros créditos. La reimportación de ese archivo
+ya permite aplicar una etiqueta corregida; la edición desde la GUI queda pendiente.
+Consulta el [plan implementado de identidad de artistas](artist-identity-plan.md).
 
 Un campo escalar ausente se guarda como `NULL`. Los artistas o géneros ausentes no
 generan relaciones: en los contratos Python se representan con una tupla vacía y en
-la vista agregada aparecen como `NULL`. La futura GUI deberá mostrarlos en blanco.
+la vista agregada aparecen como `NULL`. La GUI los muestra en blanco.
 No se rellenan usando el nombre del archivo, otras pistas o información externa.
 
 El año puede extraerse de una fecha presente: `DATE=1981` produce `album_date='1981'`
@@ -80,12 +90,29 @@ aunque después cambie el archivo externo. Esta fase no descarga ni genera cará
 
 ## Importar para revisar
 
+Desde la GUI, **Importar música…** permite elegir una carpeta raíz y crear un `.tfo`
+nuevo o actualizar el catálogo abierto. La exploración es recursiva y selecciona
+extensiones FLAC/MP3 sin distinguir mayúsculas; el lector comprueba su contenido real.
+Se ignoran otros archivos y no se atraviesan enlaces simbólicos ni puntos de unión.
+
+Cada archivo se guarda en su propia transacción. Un archivo ilegible produce una
+incidencia y permite continuar; un fallo del destino detiene la operación. Cancelar
+conserva los commits anteriores y el informe muestra los pendientes. Una carpeta vacía
+o sin audio válido no genera un catálogo nuevo. Si se creó uno y falló antes de guardar
+ningún archivo, se intenta eliminarlo; cualquier fallo de limpieza aparece en el informe.
+Un catálogo existente nunca se elimina ni se sobrescribe al elegir crear uno nuevo.
+
+Actualizar relee todos los candidatos: conserva IDs para la misma raíz/ruta y reemplaza
+los metadatos anteriores, incluidos los campos que ahora faltan. No elimina registros
+de audio desaparecido, no identifica grabaciones duplicadas y no reasigna raíces al
+mover la biblioteca. Consulta el [plan implementado](import-plan.md).
+
 Desde la raíz del proyecto, con el entorno preparado, sustituir las rutas de ejemplo
 por un archivo y una biblioteca reales:
 
 ```sh
 uv sync --locked --group dev
-uv run --locked python scripts/import_audio.py "/ruta/a/biblioteca/cancion.flac" --database data/trackfolio.sqlite3 --library-root "/ruta/a/biblioteca"
+uv run --locked python scripts/import_audio.py "/ruta/a/biblioteca/cancion.flac" --database data/database.tfo --library-root "/ruta/a/biblioteca"
 ```
 
 Los mismos argumentos funcionan en Windows usando sus rutas. El archivo debe estar
@@ -93,13 +120,50 @@ dentro de la raíz indicada. Si se omite `--library-root`, se utiliza el directo
 archivo. El script prepara o reconoce el esquema antes de guardar el catálogo; una
 base de datos ajena o de revisión desconocida se rechaza.
 
-La base local de revisión es `data/trackfolio.sqlite3`. Los archivos SQLite y la música
+Si se omite `--database`, se crea o actualiza `data/database.tfo`. Una ruta indicada
+explícitamente se respeta, incluida su extensión.
+
+La base local de revisión es `data/database.tfo`. Los archivos SQLite y la música
 están excluidos de Git. La raíz de biblioteca es una ubicación local: mover el proyecto
 no mueve la música ni adapta automáticamente la raíz guardada en una base existente.
 
+## Actualizar un catálogo anterior
+
+La revisión vigente es `002_unique_artists`. La GUI puede consultar catálogos `001_initial`
+sin modificarlos. Al importar sobre uno anterior, el escritor crea un respaldo consistente
+de SQLite y aplica la migración antes de guardar audio. Validar el formulario o importar
+una carpeta sin audio válido no inicia esa actualización.
+
+Para consolidar los artistas sin releer música, cierra otras aplicaciones que estén
+escribiendo el catálogo y ejecuta:
+
+```sh
+uv run --locked python -m trackfolio.infrastructure.database --upgrade data/database.tfo
+```
+
+El comando imprime la ruta de la copia anterior, junto al catálogo, con el patrón
+`database.tfo.001_initial.<identificador>.bak`. No sobrescribe copias existentes. Si falla
+el respaldo, no empieza la migración; si falla la actualización, revierte sus cambios.
+Repetir el comando sobre `002` no cambia datos ni crea otro respaldo.
+
+La consolidación conserva el menor ID de cada nombre exacto y redirige tanto los créditos
+de pista como los de álbum. Conserva sus filas, roles y posiciones, y los IDs y datos de
+pistas, archivos y álbumes. Si el `external_id` canónico está vacío, toma el primer valor
+no nulo por ID del grupo. El downgrade sólo retira el índice: para recuperar las filas
+duplicadas originales hay que restaurar la copia de respaldo con la aplicación cerrada.
+
+El SQL histórico [001_initial.sql](../migrations/001_initial.sql) permanece intacto.
+[002_current.sql](../migrations/002_current.sql) crea una base nueva hasta la revisión
+vigente; no se ejecuta sobre un catálogo poblado. Ambos se generan desde Alembic:
+
+```sh
+uv run --locked python -m trackfolio.infrastructure.database --export-sql migrations/001_initial.sql
+uv run --locked python -m trackfolio.infrastructure.database --export-current-sql migrations/002_current.sql
+```
+
 ## Comprobar en SQLiteBrowser
 
-1. Abrir `data/trackfolio.sqlite3` con **Abrir base de datos**.
+1. Abrir `data/database.tfo` con **Abrir base de datos**.
 2. En **Estructura de base de datos**, revisar las tablas anteriores y `track_details`.
 3. En **Examinar datos**, seleccionar la vista `track_details` para ver los metadatos
    reunidos, o una tabla para comprobar sus relaciones.
@@ -123,12 +187,14 @@ SELECT id, mime, width, height, length(data) AS bytes
 FROM artworks;
 
 SELECT version_num FROM alembic_version;
+SELECT name, count(*) FROM artists GROUP BY name HAVING count(*) > 1;
 PRAGMA foreign_key_check;
 PRAGMA integrity_check;
 ```
 
-La revisión aplicada debe ser `001_initial`, `foreign_key_check` no debe devolver
-filas e `integrity_check` debe devolver `ok`. En `artworks`, SQLiteBrowser permite
+La revisión de un catálogo actualizado debe ser `002_unique_artists`; la consulta de
+nombres repetidos y `foreign_key_check` no deben devolver filas, e `integrity_check` debe
+devolver `ok`. En `artworks`, SQLiteBrowser permite
 examinar el BLOB de la imagen; la consulta anterior comprueba sus propiedades sin
 mostrar el contenido binario.
 
@@ -145,9 +211,9 @@ En la muestra de validación, el resultado esperado es:
 | Carátula | `embedded`, `image/jpeg`, 500 × 500, 385192 bytes |
 | Letras | `NULL` |
 
-La ausencia de artista de álbum es intencionada: el archivo sólo acredita al artista
-de pista. Antes de iniciar la GUI se revisarán estos resultados y las relaciones del
-esquema con el usuario.
+La ausencia de artista de álbum en esta muestra es intencionada: el archivo sólo
+acredita al artista de pista. La GUI conserva esa ausencia; importar no completa
+metadatos mediante suposiciones.
 
 ## Migración canónica y SQL reproducible
 
@@ -170,6 +236,6 @@ No contiene la música ni los datos de la muestra y no se ejecuta sobre un catá
 existente. Esta ruta permite revisar el mismo esquema que usa la migración en línea.
 
 En desarrollo, `uv run --locked alembic upgrade head` aplica la migración sobre la
-base configurada en `alembic.ini`, por defecto `data/trackfolio.sqlite3`. Las siguientes
+base configurada en `alembic.ini`, por defecto `data/database.tfo`. Las siguientes
 modificaciones del esquema deberán convertirse en nuevas revisiones; el SQL inicial
 no sustituye las migraciones de catálogos existentes.
