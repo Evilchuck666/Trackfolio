@@ -1,12 +1,14 @@
 """Persistence checks against actual SQLite databases and the exported migration."""
 
 import sqlite3
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Barrier, local
 
 import pytest
 from alembic import command
 from sqlalchemy import inspect, select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
 
 from trackfolio.infrastructure import database as db
 
@@ -26,10 +28,23 @@ def schema_rows(connection):
     return [(kind, name, " ".join(sql.split()) if sql else None) for kind, name, sql in rows]
 
 
-def test_export_matches_migrated_schema_and_committed_artifact(tmp_path):
-    engine = catalogue(tmp_path)
-    exported = db.initial_schema_sql()
-    assert exported == (Path(__file__).parents[1] / "migrations/001_initial.sql").read_text(
+@pytest.mark.parametrize(
+    "revision,exporter,artifact",
+    [
+        (db.LEGACY_REVISION, db.initial_schema_sql, "001_initial.sql"),
+        (db.REVISION, db.current_schema_sql, "002_current.sql"),
+    ],
+)
+def test_exports_match_their_revision_and_committed_artifact(
+    tmp_path, revision, exporter, artifact
+):
+    engine = db.create_engine(tmp_path / "online.sqlite3")
+    with engine.begin() as connection:
+        config = db.migration_config()
+        config.attributes["connection"] = connection
+        command.upgrade(config, revision)
+    exported = exporter()
+    assert exported == (Path(__file__).parents[1] / "migrations" / artifact).read_text(
         encoding="utf-8"
     )
     offline_path = tmp_path / "offline.sqlite3"
@@ -38,7 +53,7 @@ def test_export_matches_migrated_schema_and_committed_artifact(tmp_path):
             offline.executescript(exported)
             assert offline.execute("PRAGMA foreign_keys").fetchone()[0] == 1
             assert offline.execute("SELECT version_num FROM alembic_version").fetchone() == (
-                "001_initial",
+                revision,
             )
         offline_engine = db.create_engine(offline_path)
         try:
@@ -52,6 +67,179 @@ def test_export_matches_migrated_schema_and_committed_artifact(tmp_path):
         db.migrate_database(offline_path)
     finally:
         engine.dispose()
+
+
+def legacy_catalog(path):
+    with sqlite3.connect(path) as connection:
+        connection.executescript(db.initial_schema_sql())
+        connection.execute("INSERT INTO artists (id, name) VALUES (1, 'Accept'), (2, 'Accept')")
+        connection.execute("INSERT INTO tracks (id, title) VALUES (1, 'Preserved')")
+        connection.execute(
+            "INSERT INTO track_artists (track_id, position, artist_id) VALUES (1, 0, 2)"
+        )
+
+
+def test_upgrade_backs_up_legacy_data_and_is_idempotent(tmp_path):
+    path = tmp_path / "catálogo %.tfo"
+    legacy_catalog(path)
+    backup = db.upgrade_database(path)
+    assert backup is not None and backup.parent == path.parent
+    assert backup.name.startswith(f"{path.name}.{db.LEGACY_REVISION}.")
+    with sqlite3.connect(backup) as saved:
+        assert saved.execute("SELECT version_num FROM alembic_version").fetchone() == (
+            db.LEGACY_REVISION,
+        )
+        assert saved.execute("SELECT id, name FROM artists ORDER BY id").fetchall() == [
+            (1, "Accept"),
+            (2, "Accept"),
+        ]
+        assert saved.execute("SELECT artist_id FROM track_artists").fetchone() == (2,)
+    with sqlite3.connect(path) as current:
+        assert current.execute("SELECT version_num FROM alembic_version").fetchone() == (
+            db.REVISION,
+        )
+        assert current.execute("SELECT id, name FROM artists").fetchall() == [(1, "Accept")]
+        assert current.execute("SELECT artist_id FROM track_artists").fetchone() == (1,)
+    before = path.read_bytes()
+    assert db.upgrade_database(path) is None
+    assert db.migrate_database(path) is None
+    assert path.read_bytes() == before
+    assert list(tmp_path.glob("*.bak")) == [backup]
+
+
+def test_backup_includes_committed_wal_pages(tmp_path):
+    path = tmp_path / "wal.tfo"
+    legacy_catalog(path)
+    writer = sqlite3.connect(path, autocommit=True)
+    try:
+        assert writer.execute("PRAGMA journal_mode=WAL").fetchone() == ("wal",)
+        writer.execute("INSERT INTO artists (id, name) VALUES (3, 'In WAL')")
+        assert path.with_name(path.name + "-wal").exists()
+        backup = db.upgrade_database(path)
+        assert backup is not None
+        with sqlite3.connect(backup) as saved:
+            assert saved.execute("SELECT name FROM artists WHERE id=3").fetchone() == ("In WAL",)
+            assert saved.execute("PRAGMA integrity_check").fetchone() == ("ok",)
+    finally:
+        writer.close()
+
+
+def test_simultaneous_upgrades_share_one_backup_and_recheck_after_writer_lock(
+    tmp_path, monkeypatch
+):
+    path = tmp_path / "parallel.tfo"
+    legacy_catalog(path)
+    check = db._check_database
+    rendezvous = Barrier(2)
+    worker = local()
+
+    def synchronized_check(connection):
+        revision = check(connection)
+        if not getattr(worker, "checked", False):
+            worker.checked = True
+            assert revision == db.LEGACY_REVISION
+            rendezvous.wait(timeout=5)
+        return revision
+
+    monkeypatch.setattr(db, "_check_database", synchronized_check)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [pool.submit(db.upgrade_database, path) for _ in range(2)]
+        backups = [future.result(timeout=10) for future in futures]
+    assert sum(backup is not None for backup in backups) == 1
+    assert len(list(tmp_path.glob("*.bak"))) == 1
+    with sqlite3.connect(path) as current:
+        assert current.execute("SELECT version_num FROM alembic_version").fetchone() == (
+            db.REVISION,
+        )
+        assert current.execute("SELECT id, name FROM artists").fetchall() == [(1, "Accept")]
+
+
+def test_backup_failure_leaves_legacy_catalog_unchanged(tmp_path, monkeypatch):
+    path = tmp_path / "backup-failure.tfo"
+    legacy_catalog(path)
+    before = path.read_bytes()
+
+    def fail_backup(_path):
+        raise OSError("simulated backup failure")
+
+    monkeypatch.setattr(db, "_backup_database", fail_backup)
+    with pytest.raises(OSError, match="backup failure"):
+        db.upgrade_database(path)
+    assert path.read_bytes() == before
+    assert not list(tmp_path.glob("*.bak"))
+
+
+def test_failed_backup_removes_only_its_reserved_output(tmp_path, monkeypatch):
+    path = tmp_path / "backup-failure.tfo"
+    legacy_catalog(path)
+    foreign_backup = tmp_path / "other.bak"
+    foreign_backup.write_bytes(b"preserve")
+    original_connect = sqlite3.connect
+    count = 0
+
+    def fail_destination(*args, **kwargs):
+        nonlocal count
+        count += 1
+        if count == 2:
+            raise OSError("simulated destination failure")
+        return original_connect(*args, **kwargs)
+
+    monkeypatch.setattr(db.sqlite3, "connect", fail_destination)
+    with pytest.raises(OSError, match="destination failure"):
+        db._backup_database(path)
+    assert list(tmp_path.glob("*.bak")) == [foreign_backup]
+    assert foreign_backup.read_bytes() == b"preserve"
+
+
+def test_failed_legacy_upgrade_keeps_valid_backup_and_rolls_back(tmp_path, monkeypatch):
+    path = tmp_path / "rollback.tfo"
+    legacy_catalog(path)
+    before = path.read_bytes()
+    upgrade = command.upgrade
+
+    def fail_after_upgrade(config, revision):
+        upgrade(config, revision)
+        raise RuntimeError("simulated upgrade failure")
+
+    monkeypatch.setattr(command, "upgrade", fail_after_upgrade)
+    with pytest.raises(RuntimeError, match="upgrade failure"):
+        db.upgrade_database(path)
+    assert path.read_bytes() == before
+    [backup] = tmp_path.glob("*.bak")
+    with sqlite3.connect(backup) as saved:
+        assert saved.execute("SELECT count(*) FROM artists").fetchone() == (2,)
+        assert saved.execute("SELECT version_num FROM alembic_version").fetchone() == (
+            db.LEGACY_REVISION,
+        )
+
+
+@pytest.mark.parametrize("kind", ["missing", "empty", "directory"])
+def test_explicit_upgrade_only_accepts_existing_catalogs(tmp_path, kind):
+    path = tmp_path / "new directory" / "catalog.tfo"
+    if kind == "empty":
+        path.parent.mkdir()
+        path.touch()
+    elif kind == "directory":
+        path.mkdir(parents=True)
+    before = set(tmp_path.rglob("*"))
+    with pytest.raises((FileNotFoundError, ValueError)):
+        db.upgrade_database(path)
+    assert set(tmp_path.rglob("*")) == before
+
+
+def test_existing_migration_target_disappearing_is_not_recreated(tmp_path, monkeypatch):
+    path = tmp_path / "disappeared.tfo"
+    legacy_catalog(path)
+    original = db.writable_engine
+
+    def vanished(database):
+        database.unlink()
+        return original(database)
+
+    monkeypatch.setattr(db, "writable_engine", vanished)
+    with pytest.raises(OperationalError, match="unable to open"):
+        db.migrate_database(path)
+    assert not path.exists()
 
 
 def test_missing_tags_remain_null_in_readable_view(tmp_path):

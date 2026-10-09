@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 from sqlalchemy import event
+from test_database import legacy_catalog
 from test_metadata import png, write_flac, write_mp3
 
 from trackfolio.application.import_catalog import (
@@ -14,6 +15,7 @@ from trackfolio.application.import_catalog import (
     ImportTargetError,
 )
 from trackfolio.domain.metadata import Artwork, RawTagValue, TrackMetadata
+from trackfolio.infrastructure import database as db
 from trackfolio.infrastructure import import_target
 from trackfolio.infrastructure.audio_scan import FileSystemAudioScanner
 from trackfolio.infrastructure.catalog import SqliteCatalogRepository
@@ -59,7 +61,9 @@ def test_creation_rejects_dangling_symlink(factory, tmp_path):
     assert not (tmp_path / "missing.tfo").exists()
 
 
-@pytest.mark.parametrize("kind", ["missing", "empty", "foreign", "revision", "column", "view"])
+@pytest.mark.parametrize(
+    "kind", ["missing", "empty", "foreign", "revision", "column", "view", "index"]
+)
 def test_update_requires_recognized_strict_catalog(factory, tmp_path, kind):
     destination = tmp_path / f"{kind}.tfo"
     if kind == "empty":
@@ -74,6 +78,8 @@ def test_update_requires_recognized_strict_catalog(factory, tmp_path, kind):
                 connection.execute("UPDATE alembic_version SET version_num = 'future'")
             elif kind == "column":
                 connection.execute("ALTER TABLE tracks ADD COLUMN unexpected TEXT")
+            elif kind == "index":
+                connection.execute("DROP INDEX uq_artists_name")
             else:
                 connection.execute("DROP VIEW track_details")
                 connection.execute("CREATE VIEW track_details AS SELECT id FROM tracks")
@@ -81,6 +87,51 @@ def test_update_requires_recognized_strict_catalog(factory, tmp_path, kind):
     with pytest.raises(ImportTargetError):
         factory.validate(destination, "update")
     assert (destination.read_bytes() if destination.exists() else None) == before
+
+
+def test_validate_legacy_is_readonly_and_writer_upgrades_before_import(factory, tmp_path):
+    destination = tmp_path / "legacy.tfo"
+    legacy_catalog(destination)
+    before = destination.read_bytes()
+    assert factory.validate(destination, "update") == destination
+    assert destination.read_bytes() == before
+    assert not list(tmp_path.glob("*.bak"))
+    target = factory.open(destination, "update")
+    try:
+        with sqlite3.connect(destination) as connection:
+            assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == (
+                db.REVISION,
+            )
+            assert connection.execute("SELECT id, name FROM artists").fetchall() == [(1, "Accept")]
+            assert connection.execute("SELECT artist_id FROM track_artists").fetchone() == (1,)
+        result = target.write(
+            TrackMetadata(artists=("Accept",), audio_format="mp3"), tmp_path, "new.mp3"
+        )
+        assert result.operation == "created"
+    finally:
+        target.close()
+    assert len(list(tmp_path.glob("*.bak"))) == 1
+    again = factory.open(destination, "update")
+    again.close()
+    assert len(list(tmp_path.glob("*.bak"))) == 1
+
+
+def test_update_backup_failure_preserves_legacy_and_reports_target_error(
+    factory, tmp_path, monkeypatch
+):
+    destination = tmp_path / "backup-failure.tfo"
+    legacy_catalog(destination)
+    before = destination.read_bytes()
+
+    def fail_backup(_path):
+        raise OSError("simulated backup failure")
+
+    monkeypatch.setattr(db, "_backup_database", fail_backup)
+    with pytest.raises(ImportTargetError, match="preparar") as captured:
+        factory.open(destination, "update")
+    assert captured.value.cleanup_issue is None
+    assert destination.read_bytes() == before
+    assert not list(tmp_path.glob("*.bak"))
 
 
 def test_writer_reports_commits_without_fetching_detail_and_clears_removed_metadata(
@@ -208,10 +259,10 @@ def test_open_failure_cleans_reserved_file_and_reports_cleanup_failure(
 ):
     destination = tmp_path / "failed.tfo"
 
-    def fail_upgrade(*_):
+    def fail_upgrade(*_, **__):
         raise RuntimeError("simulated migration error")
 
-    monkeypatch.setattr(import_target.command, "upgrade", fail_upgrade)
+    monkeypatch.setattr(import_target, "migrate_engine", fail_upgrade)
     with pytest.raises(ImportTargetError) as captured:
         factory.open(destination, "create")
     assert captured.value.cleanup_issue is None
@@ -326,6 +377,22 @@ def test_no_valid_audio_or_invalid_root_does_not_create_catalog(factory, tmp_pat
     report = importer.execute(ImportRequest(library, destination, "create"))
     assert report.saved == 0
     assert not destination.exists() and not destination.parent.exists()
+
+
+@pytest.mark.parametrize("kind", ["empty", "invalid"])
+def test_no_importable_audio_keeps_legacy_catalog_and_does_not_back_up(factory, tmp_path, kind):
+    destination = tmp_path / "legacy.tfo"
+    legacy_catalog(destination)
+    before = destination.read_bytes()
+    library = tmp_path / "library"
+    library.mkdir()
+    if kind == "invalid":
+        (library / "bad.mp3").write_bytes(b"bad")
+    importer = ImportCatalog(FileSystemAudioScanner(), read_metadata, factory)
+    report = importer.execute(ImportRequest(library, destination, "update"))
+    assert report.saved == 0
+    assert destination.read_bytes() == before
+    assert not list(tmp_path.glob("*.bak"))
 
 
 def test_legacy_script_rejects_outside_root_before_migration(tmp_path, capsys):

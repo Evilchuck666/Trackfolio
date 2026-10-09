@@ -5,8 +5,8 @@ from pathlib import Path
 from alembic import context
 from sqlalchemy.engine import Connection, make_url
 
-from trackfolio.infrastructure.database import _check_database, create_engine
-from trackfolio.infrastructure.migrations.initial_schema import metadata
+from trackfolio.infrastructure.database import _migration_engine, prepare_migration_connection
+from trackfolio.infrastructure.schema import metadata
 
 config = context.config
 
@@ -38,12 +38,10 @@ def run_online() -> None:
     url = make_url(config.get_main_option("sqlalchemy.url") or "sqlite:///data/database.tfo")
     if url.get_backend_name() != "sqlite" or not url.database or url.database == ":memory:":
         raise ValueError("Las migraciones necesitan una ruta de base de datos SQLite persistente.")
-    database = Path(url.database)
-    database.parent.mkdir(parents=True, exist_ok=True)
-    engine = create_engine(database)
+    database, engine = _migration_engine(Path(url.database))
     try:
         with engine.begin() as active:
-            _check_database(active)
+            prepare_migration_connection(active, database)
             run_with_connection(active)
     finally:
         engine.dispose()

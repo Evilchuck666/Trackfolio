@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import os
+import sqlite3
 import subprocess
 import sys
 import textwrap
@@ -21,6 +22,7 @@ from test_metadata import png, write_flac, write_mp3
 
 from trackfolio.application.import_catalog import ImportCatalog, ImportRequest
 from trackfolio.infrastructure.audio_scan import FileSystemAudioScanner
+from trackfolio.infrastructure.database import initial_schema_sql
 from trackfolio.infrastructure.import_target import SqliteImportTargetFactory
 from trackfolio.infrastructure.metadata import read_metadata
 from trackfolio.infrastructure.preferences import CatalogPreferences
@@ -78,6 +80,70 @@ def test_import_and_reimport_real_audio_then_read_without_music(qt_app, tmp_path
         wait_until(qt_app, lambda: not controller._jobs)
         assert window.model.rowCount() == 2
         assert all(field.text() == "" for field in window.fields.values())
+    finally:
+        controller.shutdown()
+        dispose_window(window)
+
+
+def test_update_legacy_catalog_migrates_only_when_writer_opens(qt_app, tmp_path):
+    music = tmp_path / "music"
+    music.mkdir()
+    write_flac(music / "a.flac", [("TITLE", "Actualizada"), ("ARTIST", "Accept")])
+    write_flac(music / "b.flac", [("TITLE", "Nueva"), ("ARTIST", "Accept")])
+    database = tmp_path / "legacy.tfo"
+    with sqlite3.connect(database) as connection:
+        connection.executescript(initial_schema_sql())
+        connection.execute("INSERT INTO libraries(id, root_path) VALUES (1, ?)", (str(music),))
+        connection.executemany(
+            "INSERT INTO artists(id, name) VALUES (?, ?)", [(1, "Accept"), (2, "Accept")]
+        )
+        connection.execute("INSERT INTO tracks(id, title) VALUES (1, 'Anterior')")
+        connection.execute(
+            "INSERT INTO audio_files(id, library_id, relative_path, track_id, format) "
+            "VALUES (1, 1, 'a.flac', 1, 'FLAC')"
+        )
+        connection.execute(
+            "INSERT INTO track_artists(track_id, position, artist_id) VALUES (1, 0, 2)"
+        )
+    original = database.read_bytes()
+    window, controller = create_window(CatalogPreferences(tmp_path / "settings.json"))
+    reports = []
+    controller.import_finished.connect(reports.append)
+    try:
+        controller.open_database(database)
+        wait_until(qt_app, lambda: window.fields["title"].text() == "Anterior")
+        assert window.fields["artists"].text() == "Accept"
+        selected = window.current_file_id()
+        empty = tmp_path / "empty"
+        empty.mkdir()
+        controller.start_import(ImportRequest(empty, database, "update"))
+        wait_until(qt_app, lambda: len(reports) == 1 and not controller._jobs)
+        assert reports[0].total == 0
+        assert database.read_bytes() == original
+        assert not list(tmp_path.glob("*.bak"))
+
+        controller.start_import(ImportRequest(music, database, "update"))
+        wait_until(qt_app, lambda: len(reports) == 2 and not controller._jobs)
+        assert (reports[1].created, reports[1].updated, reports[1].failed) == (1, 1, 0)
+        assert window.current_file_id() == selected
+        assert window.fields["title"].text() == "Actualizada"
+        assert window.model.rowCount() == 2
+        with sqlite3.connect(database) as connection:
+            assert connection.execute("SELECT id, name FROM artists").fetchall() == [(1, "Accept")]
+            assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == (
+                "002_unique_artists",
+            )
+            assert connection.execute("SELECT track_id FROM audio_files WHERE id=1").fetchone() == (
+                1,
+            )
+            assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
+        backups = list(tmp_path.glob("*.bak"))
+        assert len(backups) == 1
+        with sqlite3.connect(backups[0]) as connection:
+            assert connection.execute("SELECT count(*) FROM artists").fetchone() == (2,)
+            assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == (
+                "001_initial",
+            )
     finally:
         controller.shutdown()
         dispose_window(window)

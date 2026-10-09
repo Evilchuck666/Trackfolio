@@ -184,6 +184,43 @@ Actions**. Quedan pendientes Windows/macOS y su revisión visual e interacción 
 Los resultados `offscreen` no acreditan un escritorio; los backends Wayland/`xcb`
 comprobados aquí corresponden únicamente a esta máquina Linux.
 
+## Artistas únicos y consolidación: 9 de octubre de 2026
+
+Implementado el [plan de identidad de artistas](docs/artist-identity-plan.md). La revisión
+`002_unique_artists` comparte cada nombre exacto en todo el catálogo y consolida sus filas
+anteriores conservando el menor ID y todas las relaciones. El snapshot y SQL históricos
+de `001` permanecen intactos. Las dependencias y `uv.lock` no cambiaron.
+
+Comprobaciones locales con uv 0.12.10, CPython 3.13.15, SQLite 3.53.1 y PySide6 6.11.2:
+
+| Comprobación | Resultado observado |
+| --- | --- |
+| Suite completa del checkout, GUI `offscreen` | **335 passed, 4 skipped**; los cuatro omitidos requieren PowerShell, ausente. |
+| Ruff, formato y mypy estricto | Correctos; 73 archivos con formato comprobado y 42 archivos de código en mypy. |
+| Identidad global y corrección Abbath → Accept | Reutiliza el artista entre álbumes, carpetas, bibliotecas y pistas sin álbum; conserva IDs y deja otros créditos intactos. |
+| Esquema y migración poblada | Igualdad exacta, créditos de pista/álbum, roles, posiciones, `external_id`, artistas sin referencias, BLOBs y etiquetas originales comprobados. |
+| Fallos y compatibilidad | Rollback de datos/índice/revisión, respaldo fallido, SQLite WAL, actualización concurrente, índices debilitados y revisiones desconocidas comprobados. |
+| Apertura y formulario | Lectura `001`/`002` sin cambios; validación y lote vacío no migran. La integración GUI actualiza al abrir el escritor y reabre con selección conservada. |
+| SQL histórico y vigente | Ambos coinciden con su revisión aplicada en línea; `002_current.sql` se genera desde la cadena empaquetada. |
+| Consolidación de una copia del catálogo real | **13 → 2 artistas**, Abbath ID 1 y Accept ID 3; todas las demás filas y valores de la vista conservados. Respaldo válido y repetición sin cambios de bytes ni otra copia. |
+| Catálogo de trabajo actualizado | `data/database.tfo` en `002_unique_artists`; **139 pistas, 139 archivos, 13 álbumes y 139 créditos de pista** conservados. `foreign_key_check` vacío e `integrity_check=ok`. |
+| Respaldo del catálogo de trabajo | `data/database.tfo.001_initial.99fd2fa0fa7442d1b84d67ad03bc0364.bak`, validado contra los datos consolidados. |
+| Prueba de volumen temporal | Actualización completa con respaldo de 10.000 artistas y 10.000 créditos en 0,052 s en esta máquina; el índice auxiliar se elimina tras la migración. |
+| Wheel y sdist | Construidos y verificados fuera del checkout, con esquema vigente y migración `002`. |
+| Núcleo contra wheel instalado, sin PySide6 | **290 passed, 8 skipped**; cuatro módulos GUI omitidos y cuatro pruebas PowerShell. |
+| Bloque de verificación de CI del wheel ejecutado localmente | Generación, importación, reimportación y actualización de `001` con respaldo e idempotencia correctos. Dependencias del lock con hashes. |
+| Diagnóstico gráfico | Producto correcto en `offscreen` y Wayland; wheel GUI correcto en `offscreen`, Fusion, eventos e importación confirmados. |
+
+La comparación del catálogo real cubrió todas las tablas y la vista, incluidas carátulas
+y `raw_tags`; sólo cambiaron las filas duplicadas de artistas, sus referencias y la revisión.
+La migración no relee ni escribe música. Catálogo y respaldo permanecen excluidos de Git.
+La edición de créditos desde la GUI sigue pendiente; se comprobó la corrección mediante
+reimportación de metadatos corregidos.
+
+La matriz multiplataforma incorpora los módulos nuevos y la verificación del wheel.
+**Esta entrega aún no se ha ejecutado en GitHub Actions**. Quedan pendientes los resultados
+de Windows/macOS y su revisión visual manual; Wayland acredita únicamente esta máquina.
+
 ## Repositorio
 
 Git inicializado con rama `main`, `origin` y seguimiento de `origin/main`. La infraestructura y documentación están subidas a [Evilchuck666/Trackfolio](https://github.com/Evilchuck666/Trackfolio), un repositorio privado. El workspace se abre mediante `code Trackfolio.code-workspace`; la preparación para otro PC está en [README.md](README.md).

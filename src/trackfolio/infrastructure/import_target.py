@@ -7,10 +7,8 @@ import sqlite3
 import stat
 from pathlib import Path
 
-from alembic import command
-from sqlalchemy import URL, Engine, create_engine, event
+from sqlalchemy import Engine
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.pool import NullPool
 
 from trackfolio.application.catalog import CatalogAccessError
 from trackfolio.application.import_catalog import (
@@ -21,20 +19,9 @@ from trackfolio.application.import_catalog import (
 )
 from trackfolio.domain.metadata import TrackMetadata
 from trackfolio.infrastructure.catalog import SqliteCatalogRepository
-from trackfolio.infrastructure.database import _enable_foreign_keys, migration_config
-from trackfolio.infrastructure.session import _file_uri, _validate_catalog, open_catalog
-
-
-def _writable_engine(path: Path) -> Engine:
-    # mode=rw also protects every later connection if a file disappears. SQLite's
-    # ordinary path mode would silently create an empty replacement database.
-    engine = create_engine(
-        URL.create("sqlite", database=_file_uri(path), query={"mode": "rw", "uri": "true"}),
-        connect_args={"timeout": 2.0, "autocommit": False},
-        poolclass=NullPool,
-    )
-    event.listen(engine, "connect", _enable_foreign_keys)
-    return engine
+from trackfolio.infrastructure.database import migrate_engine
+from trackfolio.infrastructure.database import writable_engine as _writable_engine
+from trackfolio.infrastructure.session import _validate_catalog, open_catalog
 
 
 def _target_error(error: Exception, message: str) -> ImportTargetError:
@@ -173,12 +160,8 @@ class SqliteImportTargetFactory:
                 finally:
                     os.close(descriptor)
             engine = _writable_engine(database)
-            if mode == "create":
-                with engine.begin() as connection:
-                    config = migration_config()
-                    config.attributes["connection"] = connection
-                    command.upgrade(config, "head")
-            _validate_catalog(engine)
+            migrate_engine(engine, database, require_catalog=mode == "update")
+            _validate_catalog(engine, require_current=True)
             return SqliteImportTarget(database, engine, owned_identity)
         except Exception as exc:
             cleanup_issue = None

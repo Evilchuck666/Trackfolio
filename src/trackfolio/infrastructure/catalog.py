@@ -8,6 +8,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from sqlalchemy import Connection, Engine, Table, delete, insert, select, update
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from trackfolio.application.import_catalog import SaveOutcome
 from trackfolio.domain.catalog import CatalogEntry, CatalogSummary
@@ -25,6 +26,7 @@ from trackfolio.infrastructure.database import (
     track_genres,
     tracks,
 )
+from trackfolio.infrastructure.schema_validation import validate_catalog_connection
 
 
 def _insert_id(connection: Connection, table: Table, values: dict[str, Any]) -> int:
@@ -42,6 +44,20 @@ def _unique_labels(values: tuple[str, ...]) -> tuple[str, ...]:
 class SqliteCatalogRepository:
     def __init__(self, engine: Engine) -> None:
         self.engine = engine
+        self._write_schema: tuple[int, int, str] | None = None
+
+    def _validate_write_schema(self, connection: Connection) -> None:
+        """Exigir el esquema vigente y reutilizar su inspección mientras no cambie."""
+        schema_version = int(connection.exec_driver_sql("PRAGMA schema_version").scalar_one())
+        application_id = int(connection.exec_driver_sql("PRAGMA application_id").scalar_one())
+        if self._write_schema is not None:
+            actual_revision: object = connection.exec_driver_sql(
+                "SELECT version_num FROM alembic_version"
+            ).scalar_one_or_none()
+            if self._write_schema == (schema_version, application_id, actual_revision):
+                return
+        revision = validate_catalog_connection(connection, require_current=True)
+        self._write_schema = (schema_version, application_id, revision)
 
     def _album_id(
         self, connection: Connection, metadata: TrackMetadata, library_id: int, directory: str
@@ -85,51 +101,15 @@ class SqliteCatalogRepository:
             },
         )
 
-    def _artist_id(
-        self,
-        connection: Connection,
-        name: str,
-        album_id: int | None,
-        library_id: int,
-        directory: str,
-    ) -> int:
-        if album_id is not None:
-            existing = connection.execute(
-                select(artists.c.id)
-                .join(album_artists, album_artists.c.artist_id == artists.c.id)
-                .where(album_artists.c.album_id == album_id, artists.c.name == name)
-                .order_by(artists.c.id)
-                .limit(1)
-            ).scalar_one_or_none()
-            if existing is not None:
-                return int(existing)
-            existing = connection.execute(
-                select(artists.c.id)
-                .join(track_artists, track_artists.c.artist_id == artists.c.id)
-                .join(tracks, tracks.c.id == track_artists.c.track_id)
-                .where(tracks.c.album_id == album_id, artists.c.name == name)
-                .order_by(artists.c.id)
-                .limit(1)
-            ).scalar_one_or_none()
-            if existing is not None:
-                return int(existing)
-        else:
-            candidates = connection.execute(
-                select(artists.c.id, audio_files.c.relative_path)
-                .join(track_artists, track_artists.c.artist_id == artists.c.id)
-                .join(audio_files, audio_files.c.track_id == track_artists.c.track_id)
-                .join(tracks, tracks.c.id == audio_files.c.track_id)
-                .where(
-                    audio_files.c.library_id == library_id,
-                    tracks.c.album_id.is_(None),
-                    artists.c.name == name,
-                )
-                .order_by(artists.c.id)
-            )
-            for candidate in candidates:
-                if PurePosixPath(str(candidate.relative_path)).parent.as_posix() == directory:
-                    return int(candidate.id)
-        return _insert_id(connection, artists, {"name": name})
+    def _artist_id(self, connection: Connection, name: str) -> int:
+        connection.execute(
+            sqlite_insert(artists)
+            .values(name=name)
+            .on_conflict_do_nothing(index_elements=[artists.c.name])
+        )
+        return int(
+            connection.execute(select(artists.c.id).where(artists.c.name == name)).scalar_one()
+        )
 
     def save(self, metadata: TrackMetadata, library_root: Path, relative_path: str) -> CatalogEntry:
         outcome = self.write(metadata, library_root, relative_path)
@@ -145,6 +125,7 @@ class SqliteCatalogRepository:
             raise ValueError("La ruta del archivo debe ser relativa a la biblioteca.")
         directory = relative.parent.as_posix()
         with self.engine.begin() as connection:
+            self._validate_write_schema(connection)
             root_path = library_root.as_posix()
             existing_library = connection.execute(
                 select(libraries.c.id).where(libraries.c.root_path == root_path)
@@ -182,9 +163,7 @@ class SqliteCatalogRepository:
 
             def artist_id_for(name: str) -> int:
                 if name not in artist_cache:
-                    artist_cache[name] = self._artist_id(
-                        connection, name, album_id, library_id, directory
-                    )
+                    artist_cache[name] = self._artist_id(connection, name)
                 return artist_cache[name]
 
             track_artist_ids = [artist_id_for(name) for name in _unique_labels(metadata.artists)]

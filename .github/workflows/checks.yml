@@ -210,9 +210,12 @@ jobs:
                   "trackfolio/application/import_catalog.py",
                   "trackfolio/infrastructure/audio_scan.py",
                   "trackfolio/infrastructure/import_target.py",
+                  "trackfolio/infrastructure/schema.py",
+                  "trackfolio/infrastructure/schema_validation.py",
                   "trackfolio/infrastructure/migrations/env.py",
                   "trackfolio/infrastructure/migrations/initial_schema.py",
                   "trackfolio/infrastructure/migrations/versions/001_initial.py",
+                  "trackfolio/infrastructure/migrations/versions/002_unique_artists.py",
                   "trackfolio/infrastructure/migrations/script.py.mako",
               ):
                   assert member in artifact.namelist(), member
@@ -270,9 +273,13 @@ jobs:
           from importlib.resources import files
           from importlib.util import find_spec
           from pathlib import Path
+          import sqlite3
           import sys
           from sqlalchemy import inspect
+          from trackfolio.domain.metadata import TrackMetadata
           from trackfolio.infrastructure import database
+          from trackfolio.infrastructure.catalog import SqliteCatalogRepository
+          from trackfolio.infrastructure.schema import REVISION
 
           assert Path(database.__file__).resolve().is_relative_to(Path(sys.argv[2]).resolve())
           assert find_spec("PySide6") is None
@@ -287,10 +294,40 @@ jobs:
                   assert connection.exec_driver_sql("PRAGMA foreign_keys").scalar_one() == 1
                   assert connection.exec_driver_sql(
                       "SELECT version_num FROM alembic_version"
-                  ).scalar_one() == "001_initial"
+                  ).scalar_one() == REVISION
+                  assert any(
+                      index["name"] == "uq_artists_name" and index["unique"]
+                      for index in inspect(connection).get_indexes("artists")
+                  )
+              repository = SqliteCatalogRepository(engine)
+              music = target.parent / "music"
+              first = repository.write(TrackMetadata(
+                  artists=("Accept",), album="Breaker", audio_format="flac"
+              ), music, "Breaker/a.flac")
+              repository.write(TrackMetadata(
+                  artists=("Accept",), album="Restless", audio_format="flac"
+              ), music, "Restless/b.flac")
+              repeated = repository.write(TrackMetadata(
+                  artists=("Accept",), album="Breaker", audio_format="flac"
+              ), music, "Breaker/a.flac")
+              assert (first.file_id, first.track_id) == (repeated.file_id, repeated.track_id)
+              with engine.connect() as connection:
+                  assert connection.exec_driver_sql("SELECT count(*) FROM artists").scalar_one() == 1
           finally:
               engine.dispose()
-          print("Wheel instalado: recursos y migraciones correctos sin checkout ni Qt.")
+          legacy = target.with_name("legacy.tfo")
+          with sqlite3.connect(legacy) as connection:
+              connection.executescript(database.initial_schema_sql())
+              connection.executemany(
+                  "INSERT INTO artists(id, name) VALUES (?, ?)", [(5, "Accept"), (9, "Accept")]
+              )
+          backup = database.upgrade_database(legacy)
+          assert backup is not None and backup.is_file()
+          with sqlite3.connect(legacy) as connection:
+              assert connection.execute("SELECT id, name FROM artists").fetchall() == [(5, "Accept")]
+              assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == (REVISION,)
+          assert database.upgrade_database(legacy) is None
+          print("Wheel instalado: generación, importación y migración correctas sin checkout ni Qt.")
           """
               subprocess.run(
                   [

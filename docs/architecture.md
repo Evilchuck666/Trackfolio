@@ -53,7 +53,23 @@ Una futura CLI/TUI utilizará los mismos casos de uso. Para una biblioteca remot
 
 ## Persistencia y rutas
 
-SQLAlchemy implementa el repositorio SQLite y Alembic gestiona su esquema. La migración inicial y su exportación SQL comparten una única definición empaquetada. `ImportAudio`, `GetTrack` y `ListTracks` usan contratos de repositorio y dataclasses de dominio; el lector Mutagen y el repositorio SQLAlchemy son adaptadores intercambiables. El script de importación conecta estos componentes para preparar la revisión en SQLiteBrowser. Consulta el [modelo y sus reglas de importación](database.md).
+SQLAlchemy implementa el repositorio SQLite y Alembic gestiona su esquema. El snapshot
+`migrations/initial_schema.py` y la revisión `001_initial` permanecen inmutables.
+`infrastructure/schema.py` copia esa metadata y define el esquema vigente, con el índice
+único de nombres de artista añadido por `002_unique_artists`. Las exportaciones SQL
+histórica y vigente se generan desde la misma cadena de Alembic.
+
+`schema_validation.py` reconoce ambos esquemas para lectura y exige el vigente para
+escritura, incluida la unicidad global y exacta. El respaldo SQLite y la migración
+transaccional se comparten entre el destino de importación, el script individual y el
+comando de actualización. El escritor reserva el catálogo antes del respaldo y revalida
+su revisión bajo ese bloqueo. Abrir para consultar nunca migra el archivo.
+
+El repositorio resuelve artistas por nombre exacto en todo el catálogo, con inserciones
+que reutilizan el índice único. El contexto del álbum decide su agrupación, pero no la
+identidad del artista. `ImportAudio`, `GetTrack` y `ListTracks` usan contratos de repositorio
+y dataclasses de dominio; el lector Mutagen y el repositorio SQLAlchemy son adaptadores
+intercambiables. Consulta el [modelo y sus reglas de importación](database.md).
 
 La importación guarda cada archivo en una transacción y no modifica la música. La transacción de la base de datos no cubre automáticamente la edición de archivos musicales: los futuros casos de uso deberán definir cómo detectar, comunicar y recuperar fallos parciales.
 

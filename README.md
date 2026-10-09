@@ -104,7 +104,18 @@ Desde la raíz del proyecto, importa un archivo sin modificarlo:
 bash setup.sh --run-uv run --locked --extra gui python scripts/import_audio.py "ruta/a/cancion.flac" --database data/database.tfo
 ```
 
-Abre `data/database.tfo` en SQLiteBrowser y consulta la vista `track_details`. La [guía de la base de datos](docs/database.md) explica las tablas, los campos ausentes y la revisión de carátulas. El SQL inicial está en [migrations/001_initial.sql](migrations/001_initial.sql); la base local y la música están excluidas de Git.
+Los artistas se comparten por nombre exacto en todo el catálogo. Para consolidar las
+filas repetidas de un catálogo anterior sin importar música:
+
+```sh
+bash setup.sh --run-uv run --locked python -m trackfolio.infrastructure.database --upgrade data/database.tfo
+```
+
+Se crea un respaldo junto al archivo y se aplica `002_unique_artists`, conservando las
+relaciones de canciones y álbumes. Importar sobre un catálogo anterior también realiza
+esa actualización; abrirlo para consultar mantiene sus datos intactos.
+
+Abre `data/database.tfo` en SQLiteBrowser y consulta la vista `track_details`. La [guía de la base de datos](docs/database.md) explica las tablas, los campos ausentes, los respaldos y la revisión de carátulas. El SQL vigente para una base nueva está en [migrations/002_current.sql](migrations/002_current.sql); el [SQL inicial histórico](migrations/001_initial.sql) se conserva. La base local y la música están excluidas de Git.
 
 ## Compatibilidad prevista
 

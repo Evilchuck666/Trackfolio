@@ -68,6 +68,11 @@ Este alcance utiliza el esquema actual. No requiere modificar `001_initial`, el 
 exportado ni `migrations/env.py`. Cualquier necesidad futura de columnas o historial se
 resolverá mediante una nueva revisión de Alembic.
 
+La entrega posterior de [artistas únicos por nombre](artist-identity-plan.md) está
+implementada: sustituye la reutilización contextual de artistas y añade la revisión `002`
+para consolidar catálogos existentes. Los párrafos anteriores describen el alcance original
+de esta importación.
+
 ## 2. Caso de uso y contratos del núcleo
 
 Crear `application/import_catalog.py` con el caso de uso `ImportCatalog`. Recibe una

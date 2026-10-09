@@ -19,7 +19,7 @@ no sustituye las tablas normalizadas ni contiene otra copia de los metadatos.
 | `libraries` | Raíz local de cada biblioteca. |
 | `albums` | Agrupaciones provisionales de álbum: biblioteca, directorio, título, año, fecha y total de discos. |
 | `tracks` | Título de pista, numeración, referencia opcional al álbum y letras cuando existen. |
-| `artists` | Nombres acreditados e identificador externo opcional; el nombre no es único. |
+| `artists` | Artistas compartidos por nombre exacto único e identificador externo opcional. |
 | `genres` | Géneros, reutilizados cuando coincide exactamente el texto de su nombre. |
 | `track_artists` | Créditos de artistas de pista, con rol y posición. |
 | `album_artists` | Créditos de artistas de álbum, con rol y posición. |
@@ -48,11 +48,17 @@ otro archivo; la ruta no demuestra que dos grabaciones sean iguales.
 Los álbumes se agrupan provisionalmente por biblioteca, directorio y metadatos de álbum,
 incluidos fecha, año, total de discos y artistas de álbum. Dos títulos iguales no bastan
 para fusionarlos. Si falta el título pero existen otros datos de álbum, se conserva una
-agrupación con título `NULL` para mantener esos datos y créditos. Un artista se reutiliza
-por nombre exacto dentro del mismo contexto de álbum, o de biblioteca/directorio para
-pistas sin álbum. Pueden existir entidades con
-el mismo nombre en otros contextos: fusionarlas requiere una decisión posterior basada
-en identificadores o revisión del usuario.
+agrupación con título `NULL` para mantener esos datos y créditos.
+
+Cada nombre exacto identifica un único artista en todo el catálogo. Sus pistas y álbumes
+comparten `artist_id` entre carpetas y bibliotecas; el índice `uq_artists_name` impide
+duplicados. No se normalizan espacios ni mayúsculas: `Accept` y `ACCEPT` son nombres
+distintos. `external_id` sigue siendo opcional y no determina la identidad.
+
+Corregir el artista de una canción de Abbath a Accept significa reasignar su crédito al
+ID de Accept, conservando Abbath y sus otros créditos. La reimportación de ese archivo
+ya permite aplicar una etiqueta corregida; la edición desde la GUI queda pendiente.
+Consulta el [plan implementado de identidad de artistas](artist-identity-plan.md).
 
 Un campo escalar ausente se guarda como `NULL`. Los artistas o géneros ausentes no
 generan relaciones: en los contratos Python se representan con una tupla vacía y en
@@ -121,6 +127,40 @@ La base local de revisión es `data/database.tfo`. Los archivos SQLite y la mús
 están excluidos de Git. La raíz de biblioteca es una ubicación local: mover el proyecto
 no mueve la música ni adapta automáticamente la raíz guardada en una base existente.
 
+## Actualizar un catálogo anterior
+
+La revisión vigente es `002_unique_artists`. La GUI puede consultar catálogos `001_initial`
+sin modificarlos. Al importar sobre uno anterior, el escritor crea un respaldo consistente
+de SQLite y aplica la migración antes de guardar audio. Validar el formulario o importar
+una carpeta sin audio válido no inicia esa actualización.
+
+Para consolidar los artistas sin releer música, cierra otras aplicaciones que estén
+escribiendo el catálogo y ejecuta:
+
+```sh
+uv run --locked python -m trackfolio.infrastructure.database --upgrade data/database.tfo
+```
+
+El comando imprime la ruta de la copia anterior, junto al catálogo, con el patrón
+`database.tfo.001_initial.<identificador>.bak`. No sobrescribe copias existentes. Si falla
+el respaldo, no empieza la migración; si falla la actualización, revierte sus cambios.
+Repetir el comando sobre `002` no cambia datos ni crea otro respaldo.
+
+La consolidación conserva el menor ID de cada nombre exacto y redirige tanto los créditos
+de pista como los de álbum. Conserva sus filas, roles y posiciones, y los IDs y datos de
+pistas, archivos y álbumes. Si el `external_id` canónico está vacío, toma el primer valor
+no nulo por ID del grupo. El downgrade sólo retira el índice: para recuperar las filas
+duplicadas originales hay que restaurar la copia de respaldo con la aplicación cerrada.
+
+El SQL histórico [001_initial.sql](../migrations/001_initial.sql) permanece intacto.
+[002_current.sql](../migrations/002_current.sql) crea una base nueva hasta la revisión
+vigente; no se ejecuta sobre un catálogo poblado. Ambos se generan desde Alembic:
+
+```sh
+uv run --locked python -m trackfolio.infrastructure.database --export-sql migrations/001_initial.sql
+uv run --locked python -m trackfolio.infrastructure.database --export-current-sql migrations/002_current.sql
+```
+
 ## Comprobar en SQLiteBrowser
 
 1. Abrir `data/database.tfo` con **Abrir base de datos**.
@@ -147,12 +187,14 @@ SELECT id, mime, width, height, length(data) AS bytes
 FROM artworks;
 
 SELECT version_num FROM alembic_version;
+SELECT name, count(*) FROM artists GROUP BY name HAVING count(*) > 1;
 PRAGMA foreign_key_check;
 PRAGMA integrity_check;
 ```
 
-La revisión aplicada debe ser `001_initial`, `foreign_key_check` no debe devolver
-filas e `integrity_check` debe devolver `ok`. En `artworks`, SQLiteBrowser permite
+La revisión de un catálogo actualizado debe ser `002_unique_artists`; la consulta de
+nombres repetidos y `foreign_key_check` no deben devolver filas, e `integrity_check` debe
+devolver `ok`. En `artworks`, SQLiteBrowser permite
 examinar el BLOB de la imagen; la consulta anterior comprueba sus propiedades sin
 mostrar el contenido binario.
 
