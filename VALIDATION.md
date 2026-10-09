@@ -145,6 +145,45 @@ Las comprobaciones locales se realizaron en el mismo Artix Linux x86-64 de la se
 
 La CI queda configurada para usar los lanzadores en los ocho jobs; Windows utiliza Windows PowerShell 5.1. Linux y Windows con uv 0.12.10 añaden una preparación inicial del núcleo sin uv ni Python en `PATH`, repetida dos veces. **Estos cambios todavía no se han ejecutado en GitHub Actions.** Quedan pendientes la comprobación real de Windows/macOS, sus descargas del editor y la revisión manual de su integración con VS Code. No se han instalado paquetes del sistema durante las comprobaciones locales: la propuesta y la autorización de esas instalaciones se prueban con simulaciones.
 
+## Importación gráfica y generación de catálogo: 9 de octubre de 2026
+
+Implementado el [plan de importación](docs/import-plan.md): botón **Importar música…**
+y atajo `Ctrl+I`, carpeta recursiva FLAC/MP3, creación de `.tfo` o actualización del
+catálogo abierto, progreso, cancelación e informe de incidencias. El núcleo permanece
+independiente de Qt. No se cambiaron el esquema, las dependencias ni `uv.lock`.
+
+Comprobaciones locales en Linux x86-64, glibc 2.44, sesión Wayland, uv 0.12.10,
+CPython 3.13.15 y PySide6 6.11.2:
+
+| Comprobación | Resultado observado |
+| --- | --- |
+| Suite completa con GUI | **291 passed, 4 skipped**; los cuatro omitidos necesitan PowerShell, ausente en esta máquina. |
+| Ruff y formato | Correctos; 68 archivos con formato comprobado. |
+| mypy estricto | Correcto sobre 39 archivos de código. |
+| Núcleo desde wheel instalado fuera del checkout, sin PySide6 | **247 passed, 8 skipped**; cuatro módulos GUI omitidos por ausencia de Qt y cuatro pruebas por ausencia de PowerShell. |
+| Lotes con audio temporal controlado y lector Mutagen real | Creación, reimportación, IDs estables, campos eliminados, portadas y archivos corruptos comprobados. |
+| Errores y cancelación | Vacío/sin audio válido, permisos, bloqueo SQLite real, rollback, destino desconocido, reserva exclusiva y limpieza propia comprobados. |
+| GUI y ciclo de vida | Lecturas previas terminan antes del escritor; segunda importación bloqueada; selección conservada; cancelación parcial, disposición y salida directa de QApplication verificadas con eventos/temporizadores controlados. |
+| Diagnóstico del producto | Correcto en `offscreen`, Wayland y `xcb` disponible en la sesión local; importa un FLAC temporal, retira el audio y consulta el resultado. |
+| Generación desde el botón en escritorio Wayland con música real | Importada una copia temporal de **To War! / Abbath / Abbath / 2016**, pista **1/10**, disco **1/1**, género **Black Metal**, portada **500 × 500**; original intacto por SHA-256. |
+| Revisión visual local | Inspeccionadas capturas del formulario, resultado y catálogo en Wayland; renders Qt `offscreen` de tamaño mínimo con Unicode e incidencias largas sin recortes en los diálogos. |
+| Wheel y distribución de fuentes | Construidos; contienen módulos nuevos, diálogo, icono, estilos y migraciones. Comprobados 12 hashes de recursos y 54 hashes RECORD. |
+| Probe del wheel con GUI desde un directorio ajeno | `offscreen`, Fusion, eventos e importación correctos (`imported=true`). |
+
+La comprobación de música real utilizó una copia en un directorio temporal y un catálogo
+nuevo. No modificó el archivo original ni los catálogos de trabajo. Las capturas y bases
+de validación permanecen fuera del repositorio.
+
+La instalación aislada utilizó requisitos exportados con `uv export --locked`, hashes y
+`--no-deps`; el wheel se instaló también con `--no-deps`. El entorno temporal se eliminó.
+Las comprobaciones del checkout utilizaron `uv run --locked --extra gui`.
+
+La matriz existente de GitHub Actions incorpora estas pruebas y verifica los módulos y
+la importación desde el wheel. **Esta entrega todavía no se ha ejecutado en GitHub
+Actions**. Quedan pendientes Windows/macOS y su revisión visual e interacción real.
+Los resultados `offscreen` no acreditan un escritorio; los backends Wayland/`xcb`
+comprobados aquí corresponden únicamente a esta máquina Linux.
+
 ## Repositorio
 
 Git inicializado con rama `main`, `origin` y seguimiento de `origin/main`. La infraestructura y documentación están subidas a [Evilchuck666/Trackfolio](https://github.com/Evilchuck666/Trackfolio), un repositorio privado. El workspace se abre mediante `code Trackfolio.code-workspace`; la preparación para otro PC está en [README.md](README.md).

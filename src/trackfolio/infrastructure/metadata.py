@@ -15,15 +15,10 @@ from mutagen.flac import FLAC
 from mutagen.id3 import ID3, ID3NoHeaderError
 from mutagen.mp3 import MP3
 
+from trackfolio.application.catalog import MetadataReadError, UnsupportedAudioError
 from trackfolio.domain.metadata import Artwork, RawTagValue, TrackMetadata
 
-
-class MetadataReadError(Exception):
-    """The audio file could not be read; callers decide how to present the error."""
-
-
-class UnsupportedAudioError(MetadataReadError):
-    """The detected format is outside the supported FLAC/MP3 formats."""
+__all__ = ["MetadataReadError", "UnsupportedAudioError", "read_metadata"]
 
 
 class _Picture(Protocol):

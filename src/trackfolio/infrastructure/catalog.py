@@ -9,6 +9,7 @@ from typing import Any
 
 from sqlalchemy import Connection, Engine, Table, delete, insert, select, update
 
+from trackfolio.application.import_catalog import SaveOutcome
 from trackfolio.domain.catalog import CatalogEntry, CatalogSummary
 from trackfolio.domain.metadata import Artwork, RawTagValue, TrackMetadata
 from trackfolio.infrastructure.database import (
@@ -131,6 +132,14 @@ class SqliteCatalogRepository:
         return _insert_id(connection, artists, {"name": name})
 
     def save(self, metadata: TrackMetadata, library_root: Path, relative_path: str) -> CatalogEntry:
+        outcome = self.write(metadata, library_root, relative_path)
+        entry = self.get(outcome.file_id)
+        if entry is None:
+            raise RuntimeError("La importación no produjo un registro consultable.")
+        return entry
+
+    def write(self, metadata: TrackMetadata, library_root: Path, relative_path: str) -> SaveOutcome:
+        """Guardar una transacción y devolver sus identificadores, sin releer el detalle."""
         relative = PurePosixPath(relative_path)
         if relative.is_absolute() or ".." in relative.parts or not relative.parts:
             raise ValueError("La ruta del archivo debe ser relativa a la biblioteca.")
@@ -270,10 +279,7 @@ class SqliteCatalogRepository:
                         file_id=file_id, key=tag.key, value=tag.value, position=tag.position
                     )
                 )
-        entry = self.get(file_id)
-        if entry is None:
-            raise RuntimeError("La importación no produjo un registro consultable.")
-        return entry
+        return SaveOutcome(file_id, track_id, "created" if existing_file is None else "updated")
 
     def get(self, file_id: int) -> CatalogEntry | None:
         with self.engine.connect() as connection:

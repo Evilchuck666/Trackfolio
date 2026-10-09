@@ -10,7 +10,9 @@ from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import QApplication, QStyleFactory
 
 FONT_FILES = ("Inter-Regular.ttf", "Inter-SemiBold.ttf")
-ICON_NAMES = frozenset({"app", "open", "refresh", "close", "minimize", "maximize", "restore"})
+ICON_NAMES = frozenset(
+    {"app", "open", "import", "refresh", "close", "minimize", "maximize", "restore"}
+)
 _font_family: str | None = None
 
 

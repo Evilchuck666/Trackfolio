@@ -35,6 +35,20 @@ La GUI es una capa de presentación: recoge una solicitud, invoca un caso de uso
 
 El controlador gráfico ejecuta consultas mediante un pool de tareas Qt y sólo modifica widgets en el hilo gráfico. Usa identificadores de solicitud para descartar resultados de selecciones o catálogos anteriores. Las conexiones SQLite se obtienen por operación; el cierre espera a las consultas activas antes de liberar las sesiones y los objetos Qt. Los casos de uso permanecen independientes del bucle de eventos.
 
+`ImportCatalog` coordina una carpeta con contratos de exploración, lectura y destino de
+escritura. Solicitud, progreso, incidencias e informe son dataclasses inmutables Python.
+Los adaptadores convierten errores técnicos a errores de aplicación. La exploración
+selecciona rutas FLAC/MP3; la lectura y escritura son secuenciales, con una transacción
+por archivo y resultados ligeros de creación/actualización sin recargar BLOBs.
+
+La GUI invalida y termina sus consultas pendientes antes de retirar el lector e iniciar
+el escritor. Durante la importación deshabilita cambios de catálogo y selección; progreso
+y resultados llegan mediante señales encoladas. La cancelación es cooperativa y conserva
+las escrituras confirmadas. Al terminar libera el escritor y reabre el lector, conservando
+la selección cuando actualiza el mismo catálogo. El cierre de ventana y las solicitudes
+normales de salida de Qt mantienen activo el bucle de eventos hasta liberar el trabajador;
+la disposición final garantiza que sus objetos Qt no se destruyen antes de ese cierre.
+
 Una futura CLI/TUI utilizará los mismos casos de uso. Para una biblioteca remota, el servidor ejecutará los casos de uso junto a su música y su almacenamiento; el frontend web consumirá su API. Autenticación, protocolo, concurrencia y despliegue se diseñarán cuando se implemente esa interfaz. Esta preparación no añade un servidor.
 
 ## Persistencia y rutas

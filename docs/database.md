@@ -1,9 +1,9 @@
 # Catálogo SQLite y revisión en SQLiteBrowser
 
-Esta fase permite importar y consultar metadatos FLAC/MP3 sin Qt y sin modificar los
-archivos musicales. La GUI queda pendiente de validar primero el esquema y los datos
-con SQLiteBrowser. `scripts/import_audio.py` es una herramienta de preparación y
-revisión, no la interfaz CLI completa de Trackfolio.
+El catálogo permite importar y consultar metadatos FLAC/MP3 sin modificar los archivos
+musicales. La GUI genera catálogos desde carpetas mediante **Importar música…**; el núcleo
+también funciona sin Qt. `scripts/import_audio.py` sigue siendo una herramienta individual
+de preparación y revisión, no la interfaz CLI completa de Trackfolio.
 
 La extensión predeterminada de los catálogos nuevos es `.tfo`, de Trackfolio. Siguen
 siendo bases SQLite que se pueden consultar con SQLiteBrowser. También se pueden
@@ -56,7 +56,7 @@ en identificadores o revisión del usuario.
 
 Un campo escalar ausente se guarda como `NULL`. Los artistas o géneros ausentes no
 generan relaciones: en los contratos Python se representan con una tupla vacía y en
-la vista agregada aparecen como `NULL`. La futura GUI deberá mostrarlos en blanco.
+la vista agregada aparecen como `NULL`. La GUI los muestra en blanco.
 No se rellenan usando el nombre del archivo, otras pistas o información externa.
 
 El año puede extraerse de una fecha presente: `DATE=1981` produce `album_date='1981'`
@@ -83,6 +83,23 @@ caso también conserva la ruta relativa. La imagen sigue disponible en el catál
 aunque después cambie el archivo externo. Esta fase no descarga ni genera carátulas.
 
 ## Importar para revisar
+
+Desde la GUI, **Importar música…** permite elegir una carpeta raíz y crear un `.tfo`
+nuevo o actualizar el catálogo abierto. La exploración es recursiva y selecciona
+extensiones FLAC/MP3 sin distinguir mayúsculas; el lector comprueba su contenido real.
+Se ignoran otros archivos y no se atraviesan enlaces simbólicos ni puntos de unión.
+
+Cada archivo se guarda en su propia transacción. Un archivo ilegible produce una
+incidencia y permite continuar; un fallo del destino detiene la operación. Cancelar
+conserva los commits anteriores y el informe muestra los pendientes. Una carpeta vacía
+o sin audio válido no genera un catálogo nuevo. Si se creó uno y falló antes de guardar
+ningún archivo, se intenta eliminarlo; cualquier fallo de limpieza aparece en el informe.
+Un catálogo existente nunca se elimina ni se sobrescribe al elegir crear uno nuevo.
+
+Actualizar relee todos los candidatos: conserva IDs para la misma raíz/ruta y reemplaza
+los metadatos anteriores, incluidos los campos que ahora faltan. No elimina registros
+de audio desaparecido, no identifica grabaciones duplicadas y no reasigna raíces al
+mover la biblioteca. Consulta el [plan implementado](import-plan.md).
 
 Desde la raíz del proyecto, con el entorno preparado, sustituir las rutas de ejemplo
 por un archivo y una biblioteca reales:
@@ -152,9 +169,9 @@ En la muestra de validación, el resultado esperado es:
 | Carátula | `embedded`, `image/jpeg`, 500 × 500, 385192 bytes |
 | Letras | `NULL` |
 
-La ausencia de artista de álbum es intencionada: el archivo sólo acredita al artista
-de pista. Antes de iniciar la GUI se revisarán estos resultados y las relaciones del
-esquema con el usuario.
+La ausencia de artista de álbum en esta muestra es intencionada: el archivo sólo
+acredita al artista de pista. La GUI conserva esa ausencia; importar no completa
+metadatos mediante suposiciones.
 
 ## Migración canónica y SQL reproducible
 

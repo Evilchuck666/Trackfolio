@@ -13,8 +13,10 @@ está almacenada en la base de datos.
 
 Este incremento ofrece apertura de catálogo, actualización de la lista, selección
 y consulta de todos los campos solicitados. Los campos son de lectura y permiten
-copiar texto. La edición y la importación desde la GUI se abordarán después sobre
-los mismos casos de uso; TUI y API siguen siendo posibilidades futuras.
+copiar texto. La edición se abordará después sobre los mismos casos de uso. La
+importación gráfica y la generación del catálogo tienen su
+[plan de implementación](import-plan.md), ejecutado y comprobado localmente el 9 de octubre
+de 2026; TUI y API siguen siendo posibilidades futuras.
 
 ## 1. Contratos y arranque
 

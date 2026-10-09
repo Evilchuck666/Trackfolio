@@ -206,6 +206,10 @@ jobs:
                   "trackfolio/resources/icons/app.svg",
                   "trackfolio/interfaces/gui/theme.py",
                   "trackfolio/interfaces/gui/probe.py",
+                  "trackfolio/interfaces/gui/import_dialog.py",
+                  "trackfolio/application/import_catalog.py",
+                  "trackfolio/infrastructure/audio_scan.py",
+                  "trackfolio/infrastructure/import_target.py",
                   "trackfolio/infrastructure/migrations/env.py",
                   "trackfolio/infrastructure/migrations/initial_schema.py",
                   "trackfolio/infrastructure/migrations/versions/001_initial.py",
@@ -349,6 +353,7 @@ jobs:
               assert sha256(resources.joinpath(*name.split("/")).read_bytes()).hexdigest() == digest
           report = probe.run_probe(["-platform", "offscreen"])
           assert report["events"] is True and report["style"].lower() == "fusion", report
+          assert report["imported"] is True, report
           print("Wheel GUI instalado fuera del checkout:", report)
           """
               subprocess.run(
