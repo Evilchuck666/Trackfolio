@@ -342,7 +342,19 @@ No se omiten pruebas ni se modifica el comportamiento del producto.
 Comprobaciones locales: **39 pruebas** de widgets e integración de edición correctas;
 suite completa `offscreen` con **426 passed, 4 skipped** (PowerShell ausente); Ruff,
 formato de 82 archivos y mypy sobre 46 archivos de código correctos.
-La nueva matriz remota está pendiente.
+La [ejecución 37937722182](https://github.com/Evilchuck666/Trackfolio/actions/runs/37937722182),
+sobre `33b6813`, confirmó la corrección: **430 pruebas correctas** en las cuatro
+combinaciones de macOS (Intel y Apple Silicon, uv 0.12.10 y 0.12.23). Linux también
+pasó con ambas versiones. Los diagnósticos gráficos y la verificación del wheel
+pasaron en esas seis combinaciones.
+
+Windows llegó a otro fallo en ambas variantes: la prueba de guardar y continuar con
+**Actualizar** esperaba el guardado, pero no la finalización de la actualización.
+Podía observar un estado intermedio sin tareas pendientes y salir del bucle; al
+comenzar la actualización aplazada, su comprobación final volvía a ser falsa.
+La prueba espera ahora también la señal de detalle cargado posterior a **Actualizar**
+y comprueba que el guardado produjo un resultado. Se conserva el límite de cinco
+segundos y el código del producto no cambia. Su nueva matriz remota está pendiente.
 
 ## Repositorio
 

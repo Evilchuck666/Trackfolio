@@ -320,12 +320,21 @@ def test_unsaved_guard_continues_requested_action_after_save_or_discard(
         open_ready(qt_app, window, controller, database)
         begin_edit(qt_app, window, controller)
         replace_text(window.fields["title"], "Continued correction")
+        assert window.fields["title"].text() == "Continued correction"
+        assert window.edit_dirty()
         if action == "refresh":
+            refreshed = QSignalSpy(controller.detail_loaded)
             controller.refresh()
             wait_until(
                 qt_app,
-                lambda: bool(finished) and not controller._jobs and not window.edit_dirty(),
+                lambda: (
+                    bool(finished)
+                    and refreshed.count() == 1
+                    and not controller._jobs
+                    and not window.edit_dirty()
+                ),
             )
+            assert finished[0] is not None
             assert window.fields["title"].text() == "Continued correction"
         elif action == "open":
             other = tmp_path / "Other.tfo"
