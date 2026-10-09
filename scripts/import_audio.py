@@ -19,7 +19,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--database",
         type=Path,
-        default=Path("data/trackfolio.tfo"),
+        default=Path("data/database.tfo"),
         help="Catálogo de destino (por defecto: %(default)s).",
     )
     parser.add_argument(

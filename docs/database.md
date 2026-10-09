@@ -89,7 +89,7 @@ por un archivo y una biblioteca reales:
 
 ```sh
 uv sync --locked --group dev
-uv run --locked python scripts/import_audio.py "/ruta/a/biblioteca/cancion.flac" --database data/trackfolio.tfo --library-root "/ruta/a/biblioteca"
+uv run --locked python scripts/import_audio.py "/ruta/a/biblioteca/cancion.flac" --database data/database.tfo --library-root "/ruta/a/biblioteca"
 ```
 
 Los mismos argumentos funcionan en Windows usando sus rutas. El archivo debe estar
@@ -97,16 +97,16 @@ dentro de la raíz indicada. Si se omite `--library-root`, se utiliza el directo
 archivo. El script prepara o reconoce el esquema antes de guardar el catálogo; una
 base de datos ajena o de revisión desconocida se rechaza.
 
-Si se omite `--database`, se crea o actualiza `data/trackfolio.tfo`. Una ruta indicada
+Si se omite `--database`, se crea o actualiza `data/database.tfo`. Una ruta indicada
 explícitamente se respeta, incluida su extensión.
 
-La base local de revisión es `data/trackfolio.tfo`. Los archivos SQLite y la música
+La base local de revisión es `data/database.tfo`. Los archivos SQLite y la música
 están excluidos de Git. La raíz de biblioteca es una ubicación local: mover el proyecto
 no mueve la música ni adapta automáticamente la raíz guardada en una base existente.
 
 ## Comprobar en SQLiteBrowser
 
-1. Abrir `data/trackfolio.tfo` con **Abrir base de datos**.
+1. Abrir `data/database.tfo` con **Abrir base de datos**.
 2. En **Estructura de base de datos**, revisar las tablas anteriores y `track_details`.
 3. En **Examinar datos**, seleccionar la vista `track_details` para ver los metadatos
    reunidos, o una tabla para comprobar sus relaciones.
@@ -177,6 +177,6 @@ No contiene la música ni los datos de la muestra y no se ejecuta sobre un catá
 existente. Esta ruta permite revisar el mismo esquema que usa la migración en línea.
 
 En desarrollo, `uv run --locked alembic upgrade head` aplica la migración sobre la
-base configurada en `alembic.ini`, por defecto `data/trackfolio.tfo`. Las siguientes
+base configurada en `alembic.ini`, por defecto `data/database.tfo`. Las siguientes
 modificaciones del esquema deberán convertirse en nuevas revisiones; el SQL inicial
 no sustituye las migraciones de catálogos existentes.

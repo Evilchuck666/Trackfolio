@@ -5,10 +5,10 @@
       "label": "Trackfolio: iniciar GUI con la muestra",
       "type": "process",
       "command": "bash",
-      "args": ["${workspaceFolder}/setup.sh", "--run-uv", "run", "--locked", "--extra", "gui", "python", "-m", "trackfolio.interfaces.gui", "--database", "${workspaceFolder}/data/trackfolio.tfo"],
+      "args": ["${workspaceFolder}/setup.sh", "--run-uv", "run", "--locked", "--extra", "gui", "python", "-m", "trackfolio.interfaces.gui", "--database", "${workspaceFolder}/data/database.tfo"],
       "windows": {
         "command": "powershell",
-        "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/setup.ps1", "--run-uv", "run", "--locked", "--extra", "gui", "python", "-m", "trackfolio.interfaces.gui", "--database", "${workspaceFolder}/data/trackfolio.tfo"]
+        "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/setup.ps1", "--run-uv", "run", "--locked", "--extra", "gui", "python", "-m", "trackfolio.interfaces.gui", "--database", "${workspaceFolder}/data/database.tfo"]
       },
       "options": { "cwd": "${workspaceFolder}" },
       "problemMatcher": []

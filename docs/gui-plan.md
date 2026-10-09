@@ -43,7 +43,7 @@ los mismos casos de uso; TUI y API siguen siendo posibilidades futuras.
 Comando para abrir la muestra desde la raíz:
 
 ```sh
-uv run --locked --extra gui python -m trackfolio.interfaces.gui --database data/trackfolio.tfo
+uv run --locked --extra gui python -m trackfolio.interfaces.gui --database data/database.tfo
 ```
 
 Las rutas se pasan como argumentos, con comillas cuando contienen espacios. El
