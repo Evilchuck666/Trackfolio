@@ -9,14 +9,13 @@ import subprocess
 import sys
 import textwrap
 import threading
-import time
 
 import pytest
 
 pytest.importorskip("PySide6")
 
-from PySide6.QtCore import QTimer
-from PySide6.QtTest import QSignalSpy, QTest
+from PySide6.QtCore import QEventLoop, Qt, QTimer
+from PySide6.QtTest import QSignalSpy
 from test_gui_integration import ControlledSession
 from test_metadata import png, write_flac, write_mp3
 
@@ -34,10 +33,39 @@ from trackfolio.startup import create_window
 
 
 def wait_until(app, predicate, timeout=5):
-    deadline = time.monotonic() + timeout
-    while not predicate() and time.monotonic() < deadline:
-        app.processEvents()
-        QTest.qWait(5)
+    if predicate():
+        return
+    # A real Qt loop lets Python workers run between callbacks. Repeated qWait
+    # calls can starve them under different thread scheduling (notably ARM CI).
+    loop = QEventLoop(app)
+    poll = QTimer(loop)
+    poll.setInterval(5)
+    deadline = QTimer(loop)
+    deadline.setSingleShot(True)
+    deadline.setTimerType(Qt.TimerType.PreciseTimer)
+    error = None
+
+    def check():
+        nonlocal error
+        try:
+            if predicate():
+                loop.quit()
+        except Exception as exc:
+            error = exc
+            loop.quit()
+
+    poll.timeout.connect(check)
+    deadline.timeout.connect(loop.quit)
+    try:
+        poll.start()
+        deadline.start(int(timeout * 1000))
+        loop.exec()
+    finally:
+        poll.stop()
+        deadline.stop()
+        loop.deleteLater()
+    if error is not None:
+        raise error
     assert predicate(), "Timed out waiting for an import result"
 
 
@@ -382,7 +410,8 @@ def test_application_quit_defers_until_a_timer_can_release_the_import_worker(tmp
     assert "Quit deferred" in result.stdout
 
 
-def test_import_finished_observer_can_start_another_import(qt_app, tmp_path):
+@pytest.mark.parametrize("switch_interval", [0.005, 0.1])
+def test_import_finished_observer_can_start_another_import(qt_app, tmp_path, switch_interval):
     first = tmp_path / "first"
     second = tmp_path / "second"
     first.mkdir()
@@ -398,12 +427,15 @@ def test_import_finished_observer_can_start_another_import(qt_app, tmp_path):
             controller.start_import(ImportRequest(second, tmp_path / "second.tfo", "create"))
 
     controller.import_finished.connect(finished)
+    previous_interval = sys.getswitchinterval()
     try:
+        sys.setswitchinterval(switch_interval)
         controller.start_import(ImportRequest(first, tmp_path / "first.tfo", "create"))
         wait_until(qt_app, lambda: len(reports) == 2 and window.fields["title"].text() == "Segunda")
         assert not controller.importing
         assert reports[0].saved == reports[1].saved == 1
         assert window.model.rowCount() == 1
     finally:
+        sys.setswitchinterval(previous_interval)
         controller.shutdown()
         dispose_window(window)

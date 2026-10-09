@@ -2,6 +2,7 @@
 
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 from pathlib import Path
 from threading import Barrier, local
 
@@ -49,7 +50,7 @@ def test_exports_match_their_revision_and_committed_artifact(
     )
     offline_path = tmp_path / "offline.sqlite3"
     try:
-        with sqlite3.connect(offline_path) as offline:
+        with closing(sqlite3.connect(offline_path)) as offline, offline:
             offline.executescript(exported)
             assert offline.execute("PRAGMA foreign_keys").fetchone()[0] == 1
             assert offline.execute("SELECT version_num FROM alembic_version").fetchone() == (
@@ -70,7 +71,7 @@ def test_exports_match_their_revision_and_committed_artifact(
 
 
 def legacy_catalog(path):
-    with sqlite3.connect(path) as connection:
+    with closing(sqlite3.connect(path)) as connection, connection:
         connection.executescript(db.initial_schema_sql())
         connection.execute("INSERT INTO artists (id, name) VALUES (1, 'Accept'), (2, 'Accept')")
         connection.execute("INSERT INTO tracks (id, title) VALUES (1, 'Preserved')")
@@ -79,13 +80,29 @@ def legacy_catalog(path):
         )
 
 
+def test_legacy_catalog_releases_its_connection(tmp_path, monkeypatch):
+    connect = sqlite3.connect
+    connections = []
+
+    def record_connection(*args, **kwargs):
+        connection = connect(*args, **kwargs)
+        connections.append(connection)
+        return connection
+
+    monkeypatch.setattr(sqlite3, "connect", record_connection)
+    legacy_catalog(tmp_path / "legacy.tfo")
+    assert len(connections) == 1
+    with pytest.raises(sqlite3.ProgrammingError, match="closed"):
+        connections[0].execute("SELECT 1")
+
+
 def test_upgrade_backs_up_legacy_data_and_is_idempotent(tmp_path):
     path = tmp_path / "catálogo %.tfo"
     legacy_catalog(path)
     backup = db.upgrade_database(path)
     assert backup is not None and backup.parent == path.parent
     assert backup.name.startswith(f"{path.name}.{db.LEGACY_REVISION}.")
-    with sqlite3.connect(backup) as saved:
+    with closing(sqlite3.connect(backup)) as saved, saved:
         assert saved.execute("SELECT version_num FROM alembic_version").fetchone() == (
             db.LEGACY_REVISION,
         )
@@ -94,7 +111,7 @@ def test_upgrade_backs_up_legacy_data_and_is_idempotent(tmp_path):
             (2, "Accept"),
         ]
         assert saved.execute("SELECT artist_id FROM track_artists").fetchone() == (2,)
-    with sqlite3.connect(path) as current:
+    with closing(sqlite3.connect(path)) as current, current:
         assert current.execute("SELECT version_num FROM alembic_version").fetchone() == (
             db.REVISION,
         )
@@ -117,7 +134,7 @@ def test_backup_includes_committed_wal_pages(tmp_path):
         assert path.with_name(path.name + "-wal").exists()
         backup = db.upgrade_database(path)
         assert backup is not None
-        with sqlite3.connect(backup) as saved:
+        with closing(sqlite3.connect(backup)) as saved, saved:
             assert saved.execute("SELECT name FROM artists WHERE id=3").fetchone() == ("In WAL",)
             assert saved.execute("PRAGMA integrity_check").fetchone() == ("ok",)
     finally:
@@ -147,7 +164,7 @@ def test_simultaneous_upgrades_share_one_backup_and_recheck_after_writer_lock(
         backups = [future.result(timeout=10) for future in futures]
     assert sum(backup is not None for backup in backups) == 1
     assert len(list(tmp_path.glob("*.bak"))) == 1
-    with sqlite3.connect(path) as current:
+    with closing(sqlite3.connect(path)) as current, current:
         assert current.execute("SELECT version_num FROM alembic_version").fetchone() == (
             db.REVISION,
         )
@@ -206,7 +223,7 @@ def test_failed_legacy_upgrade_keeps_valid_backup_and_rolls_back(tmp_path, monke
         db.upgrade_database(path)
     assert path.read_bytes() == before
     [backup] = tmp_path.glob("*.bak")
-    with sqlite3.connect(backup) as saved:
+    with closing(sqlite3.connect(backup)) as saved, saved:
         assert saved.execute("SELECT count(*) FROM artists").fetchone() == (2,)
         assert saved.execute("SELECT version_num FROM alembic_version").fetchone() == (
             db.LEGACY_REVISION,
@@ -426,12 +443,12 @@ def test_failed_migration_rolls_back_ddl_and_stamp(tmp_path, monkeypatch):
 
 def test_unknown_database_is_not_adopted_or_changed(tmp_path):
     path = tmp_path / "foreign.sqlite3"
-    with sqlite3.connect(path) as connection:
+    with closing(sqlite3.connect(path)) as connection, connection:
         connection.execute("CREATE TABLE other_application (value TEXT)")
         connection.execute("INSERT INTO other_application VALUES ('keep me')")
     with pytest.raises(db.UnknownDatabaseError, match="no se adoptan"):
         db.migrate_database(path)
-    with sqlite3.connect(path) as connection:
+    with closing(sqlite3.connect(path)) as connection, connection:
         assert connection.execute("SELECT value FROM other_application").fetchone() == ("keep me",)
         assert connection.execute(
             "SELECT count(*) FROM sqlite_schema WHERE type = 'table'"
