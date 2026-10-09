@@ -57,7 +57,8 @@ distintos. `external_id` sigue siendo opcional y no determina la identidad.
 
 Corregir el artista de una canción de Abbath a Accept significa reasignar su crédito al
 ID de Accept, conservando Abbath y sus otros créditos. La reimportación de ese archivo
-ya permite aplicar una etiqueta corregida; la edición desde la GUI queda pendiente.
+ya permite aplicar una etiqueta corregida; la edición desde la GUI tiene un
+[plan pendiente de implementación](edit-plan.md).
 Consulta el [plan implementado de identidad de artistas](artist-identity-plan.md).
 
 Un campo escalar ausente se guarda como `NULL`. Los artistas o géneros ausentes no
