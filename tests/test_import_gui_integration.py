@@ -9,6 +9,7 @@ import subprocess
 import sys
 import textwrap
 import threading
+from contextlib import closing
 
 import pytest
 
@@ -119,9 +120,12 @@ def test_update_legacy_catalog_migrates_only_when_writer_opens(qt_app, tmp_path)
     write_flac(music / "a.flac", [("TITLE", "Actualizada"), ("ARTIST", "Accept")])
     write_flac(music / "b.flac", [("TITLE", "Nueva"), ("ARTIST", "Accept")])
     database = tmp_path / "legacy.tfo"
-    with sqlite3.connect(database) as connection:
+    with closing(sqlite3.connect(database)) as connection, connection:
         connection.executescript(initial_schema_sql())
-        connection.execute("INSERT INTO libraries(id, root_path) VALUES (1, ?)", (str(music),))
+        # Match the repository's portable path representation, including Windows.
+        connection.execute(
+            "INSERT INTO libraries(id, root_path) VALUES (1, ?)", (music.as_posix(),)
+        )
         connection.executemany(
             "INSERT INTO artists(id, name) VALUES (?, ?)", [(1, "Accept"), (2, "Accept")]
         )
@@ -156,7 +160,7 @@ def test_update_legacy_catalog_migrates_only_when_writer_opens(qt_app, tmp_path)
         assert window.current_file_id() == selected
         assert window.fields["title"].text() == "Actualizada"
         assert window.model.rowCount() == 2
-        with sqlite3.connect(database) as connection:
+        with closing(sqlite3.connect(database)) as connection, connection:
             assert connection.execute("SELECT id, name FROM artists").fetchall() == [(1, "Accept")]
             assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == (
                 "002_unique_artists",
@@ -167,7 +171,7 @@ def test_update_legacy_catalog_migrates_only_when_writer_opens(qt_app, tmp_path)
             assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         backups = list(tmp_path.glob("*.bak"))
         assert len(backups) == 1
-        with sqlite3.connect(backups[0]) as connection:
+        with closing(sqlite3.connect(backups[0])) as connection, connection:
             assert connection.execute("SELECT count(*) FROM artists").fetchone() == (2,)
             assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == (
                 "001_initial",

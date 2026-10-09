@@ -130,7 +130,7 @@ def test_qt_folder_and_destination_pickers_select_unicode_paths(import_dialog, t
 
     QTimer.singleShot(0, choose_root)
     QTest.mouseClick(import_dialog.folder_button, Qt.MouseButton.LeftButton)
-    assert import_dialog.root_edit.text() == str(root)
+    assert Path(import_dialog.root_edit.text()) == root
 
     def choose_destination():
         chooser = import_dialog.findChildren(QFileDialog)[-1]
@@ -142,7 +142,7 @@ def test_qt_folder_and_destination_pickers_select_unicode_paths(import_dialog, t
 
     QTimer.singleShot(0, choose_destination)
     QTest.mouseClick(import_dialog.destination_button, Qt.MouseButton.LeftButton)
-    assert import_dialog.destination_edit.text() == str(destination)
+    assert Path(import_dialog.destination_edit.text()) == destination
     assert pickers == [True, True]
     assert not destination.exists()
 
