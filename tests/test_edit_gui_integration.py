@@ -212,12 +212,13 @@ def test_real_unsaved_dialog_cancel_restores_selection_and_draft(qt_app, edit_ca
                 QTimer.singleShot(5, cancel_dialog)
                 return
             dialog = dialogs[-1]
-            seen.append(dialog.windowTitle())
+            # QMessageBox ignores window titles on macOS; its message is portable.
+            seen.append(dialog.text())
             dialog.button(QMessageBox.StandardButton.Cancel).click()
 
         QTimer.singleShot(0, cancel_dialog)
         window.table.selectRow(window.model.row_for_file(second.file_id))
-        assert seen == ["Cambios sin guardar"]
+        assert seen == ["Hay cambios sin guardar en esta canción."]
         assert window.current_file_id() == first.file_id
         assert window.fields["title"].text() == "Kept draft"
         assert window.edit_dirty()

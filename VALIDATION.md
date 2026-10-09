@@ -320,10 +320,29 @@ Las esperas nuevas de integración usan el bucle nativo de Qt y las conexiones S
 se cierran explícitamente para conservar las correcciones previas de macOS y Windows.
 
 La matriz existente incorpora las pruebas nuevas y exige la edición en los diagnósticos
-y el wheel instalado. **No se ha ejecutado una nueva matriz remota para estos cambios**;
-Windows y macOS permanecen pendientes de esa ejecución y de revisión visual manual.
+y el wheel instalado. La primera ejecución remota se recoge en la sección siguiente.
+La revisión visual manual de Windows y macOS sigue pendiente.
 Las pruebas `offscreen` no acreditan un escritorio real y los backends nativos comprobados
 en esta entrega corresponden únicamente a esta máquina Linux.
+
+## Corrección del diálogo de edición en macOS: 9 de octubre de 2026
+
+La [ejecución 37935958225](https://github.com/Evilchuck666/Trackfolio/actions/runs/37935958225),
+sobre `60e8948`, pasó en Linux y Windows con ambas versiones de uv. Las cuatro
+combinaciones de macOS (Intel y Apple Silicon) fallaron únicamente en
+`test_real_unsaved_dialog_cancel_restores_selection_and_draft`: esperaba el título
+«Cambios sin guardar» y recibía una cadena vacía.
+
+[Qt documenta](https://doc.qt.io/qt-6/qmessagebox.html#setWindowTitle) que macOS ignora
+el título de `QMessageBox`. La prueba comprueba ahora el mensaje del diálogo real,
+«Hay cambios sin guardar en esta canción.», y sigue pulsando **Cancelar** y comprobando
+que se conservan la selección y el borrador y que SQLite permanece sin cambios.
+No se omiten pruebas ni se modifica el comportamiento del producto.
+
+Comprobaciones locales: **39 pruebas** de widgets e integración de edición correctas;
+suite completa `offscreen` con **426 passed, 4 skipped** (PowerShell ausente); Ruff,
+formato de 82 archivos y mypy sobre 46 archivos de código correctos.
+La nueva matriz remota está pendiente.
 
 ## Repositorio
 
