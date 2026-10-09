@@ -93,7 +93,9 @@ class ImportDialog(QDialog):
         self.current_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         destination_layout.addWidget(self.current_label)
         self.update_note = _label(
-            "Se añadirán canciones nuevas y se actualizarán las ya importadas desde esta carpeta.",
+            "Se añadirán canciones nuevas y se actualizarán las ya importadas. "
+            "Se volverán a leer los metadatos de los archivos "
+            "y se sustituirán los valores del catálogo, incluidas las correcciones manuales.",
             destination_group,
         )
         destination_layout.addWidget(self.update_note)

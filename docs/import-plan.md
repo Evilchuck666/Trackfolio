@@ -73,6 +73,12 @@ implementada: sustituye la reutilización contextual de artistas y añade la rev
 para consolidar catálogos existentes. Los párrafos anteriores describen el alcance original
 de esta importación.
 
+La [edición de canciones](edit-plan.md), también implementada, añade aislamiento cuando
+varios archivos comparten una pista: al editar o reimportar uno se conserva `file_id` y se
+copia su pista, por lo que puede cambiar `track_id`. La importación conserva los créditos
+de roles adicionales que el lector musical no gestiona; los metadatos leídos siguen
+reemplazando los valores del catálogo, incluidas las correcciones manuales.
+
 ## 2. Caso de uso y contratos del núcleo
 
 Crear `application/import_catalog.py` con el caso de uso `ImportCatalog`. Recibe una

@@ -358,6 +358,8 @@ def check_qt(qt_platform: str | None, timeout: float) -> CheckResult:
             raise ValueError("El informe contiene tipos incorrectos.")
         if style.lower() != "fusion" or report.get("events") is not True:
             raise ValueError("No se comprobó Fusion o el ciclo de eventos.")
+        if report.get("imported") is not True or report.get("edited") is not True:
+            raise ValueError("No se comprobó la importación y edición del catálogo.")
     except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
         return CheckResult("Qt/Fusion", False, f"El subproceso no confirmó la prueba Qt: {exc}")
     scope = (
@@ -365,7 +367,11 @@ def check_qt(qt_platform: str | None, timeout: float) -> CheckResult:
         if backend in ("offscreen", "minimal")
         else "Ventana del backend gráfico y ciclo de eventos comprobados."
     )
-    return CheckResult("Qt/Fusion", True, f"Qt {qt_version}, Fusion, backend {backend}. {scope}")
+    return CheckResult(
+        "Qt/Fusion",
+        True,
+        f"Qt {qt_version}, Fusion, backend {backend}; importación y edición comprobadas. {scope}",
+    )
 
 
 def positive_timeout(value: str) -> float:

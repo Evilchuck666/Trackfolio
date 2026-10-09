@@ -207,8 +207,13 @@ jobs:
                   "trackfolio/interfaces/gui/theme.py",
                   "trackfolio/interfaces/gui/probe.py",
                   "trackfolio/interfaces/gui/import_dialog.py",
+                  "trackfolio/interfaces/gui/ordered_labels.py",
+                  "trackfolio/domain/catalog_edit.py",
                   "trackfolio/application/import_catalog.py",
+                  "trackfolio/application/edit_catalog.py",
                   "trackfolio/infrastructure/audio_scan.py",
+                  "trackfolio/infrastructure/catalog_edit.py",
+                  "trackfolio/infrastructure/catalog.py",
                   "trackfolio/infrastructure/import_target.py",
                   "trackfolio/infrastructure/schema.py",
                   "trackfolio/infrastructure/schema_validation.py",
@@ -276,9 +281,12 @@ jobs:
           import sqlite3
           import sys
           from sqlalchemy import inspect
+          from trackfolio.application.edit_catalog import GetEditableTrack, UpdateCatalogTrack
+          from trackfolio.domain.catalog_edit import FieldChange, TrackEditPatch
           from trackfolio.domain.metadata import TrackMetadata
           from trackfolio.infrastructure import database
           from trackfolio.infrastructure.catalog import SqliteCatalogRepository
+          from trackfolio.infrastructure.catalog_edit import SqliteCatalogEditSessionFactory
           from trackfolio.infrastructure.schema import REVISION
 
           assert Path(database.__file__).resolve().is_relative_to(Path(sys.argv[2]).resolve())
@@ -315,6 +323,27 @@ jobs:
                   assert connection.exec_driver_sql("SELECT count(*) FROM artists").scalar_one() == 1
           finally:
               engine.dispose()
+          edit_factory = SqliteCatalogEditSessionFactory()
+          reader = edit_factory.open_reader(target)
+          try:
+              snapshot = GetEditableTrack(reader).execute(first.file_id)
+          finally:
+              reader.close()
+          assert snapshot is not None and snapshot.values.artists == ("Accept",)
+          edited = UpdateCatalogTrack(edit_factory).execute(target, snapshot, TrackEditPatch((
+              FieldChange("title", "Core catalogue correction"),
+              FieldChange("artists", ("Abbath",)),
+          )))
+          assert edited is not None
+          reader = edit_factory.open_reader(target)
+          try:
+              persisted = GetEditableTrack(reader).execute(first.file_id)
+              assert persisted is not None
+              assert persisted.values.title == "Core catalogue correction"
+              assert persisted.values.artists == ("Abbath",)
+          finally:
+              reader.close()
+          assert find_spec("PySide6") is None
           legacy = target.with_name("legacy.tfo")
           with sqlite3.connect(legacy) as connection:
               connection.executescript(database.initial_schema_sql())
@@ -327,7 +356,7 @@ jobs:
               assert connection.execute("SELECT id, name FROM artists").fetchall() == [(5, "Accept")]
               assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == (REVISION,)
           assert database.upgrade_database(legacy) is None
-          print("Wheel instalado: generación, importación y migración correctas sin checkout ni Qt.")
+          print("Wheel instalado: generación, importación, edición y migración correctas sin checkout ni Qt.")
           """
               subprocess.run(
                   [
@@ -391,6 +420,7 @@ jobs:
           report = probe.run_probe(["-platform", "offscreen"])
           assert report["events"] is True and report["style"].lower() == "fusion", report
           assert report["imported"] is True, report
+          assert report["edited"] is True, report
           print("Wheel GUI instalado fuera del checkout:", report)
           """
               subprocess.run(

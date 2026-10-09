@@ -1,6 +1,8 @@
 # Plan de edición de canciones en la GUI
 
-Estado: propuesto el 9 de octubre de 2026; pendiente de implementación.
+Estado: implementado y validado localmente en Linux el 9 de octubre de 2026. Las
+comprobaciones y los límites de revisión multiplataforma se registran en
+[VALIDATION.md](../VALIDATION.md). El resto del documento conserva el diseño de la entrega.
 
 ## Resultado y alcance
 
@@ -11,7 +13,7 @@ abrir el catálogo conservará la edición. **Cancelar** recuperará los valores
 Este plan toma como primera entrega la **edición del catálogo SQLite**. Funcionará aunque
 la música original no esté disponible. La escritura de etiquetas en FLAC/MP3 requiere
 otro adaptador y un diseño de recuperación entre archivos y SQLite; queda fuera de esta
-entrega. Esta decisión de alcance se puede cambiar antes de implementar.
+entrega.
 
 La unidad de edición será la fila seleccionada, identificada por `file_id`. Por ejemplo,
 cambiar **Abbath → Accept** reasignará el artista de esa canción al Accept existente,
@@ -267,3 +269,20 @@ pruebas que cambian o reimportan metadatos.
 Al terminar, actualizar README, arquitectura y guía de base de datos para explicar
 la edición de catálogo, su alcance por canción y el comportamiento al reimportar.
 Marcar este plan como implementado únicamente después de completar esas comprobaciones.
+
+## Entrega implementada
+
+Los seis pasos tienen implementación y pruebas locales. Se añadieron los módulos de
+dominio, aplicación y persistencia previstos, el control de listas `ordered_labels.py`,
+la composición y la coordinación gráfica. Las pruebas de núcleo y SQLite están en
+`test_catalog_edit.py` y `test_edit_catalog_use_case.py`; las de widgets y coordinación
+están en `test_edit_gui.py` y `test_edit_gui_integration.py`.
+
+La importación comparte la copia de pistas referenciadas por varios archivos y conserva
+roles adicionales de pista y álbum. Las consultas de GUI muestran intérpretes; la vista
+SQL mantiene todos los créditos. Si falla la liberación del adaptador después de un
+commit, el resultado sigue identificándose como guardado y muestra la incidencia.
+
+El diagnóstico gráfico y la validación del wheel comprueban también la edición sobre
+SQLite temporal. La matriz existente incorpora las nuevas pruebas; su ejecución para
+estos cambios y la revisión visual manual de Windows/macOS quedan pendientes.

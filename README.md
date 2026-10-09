@@ -1,8 +1,8 @@
 # Trackfolio
 
-Trackfolio es una aplicación multiplataforma para consultar metadatos de bibliotecas FLAC y MP3. Usa Python, Qt 6 mediante PySide6 y SQLite mediante SQLAlchemy. El dominio y los casos de uso son independientes de la GUI, para poder añadir interfaces CLI/TUI o un servidor con frontend web.
+Trackfolio es una aplicación multiplataforma para consultar y editar un catálogo de bibliotecas FLAC y MP3. Usa Python, Qt 6 mediante PySide6 y SQLite mediante SQLAlchemy. El dominio y los casos de uso son independientes de la GUI, para poder añadir interfaces CLI/TUI o un servidor con frontend web.
 
-La GUI importa carpetas FLAC/MP3 y muestra canciones, artistas, álbum, año, numeración, géneros, líricas y portada desde el catálogo. Los campos ausentes quedan vacíos. El importador conserva las carátulas incrustadas o procedentes de `album.jpg` sin modificar la música. La edición de etiquetas se abordará en un siguiente incremento.
+La GUI importa carpetas FLAC/MP3 y permite editar canción, artistas, álbum, año, numeración, géneros y líricas en SQLite. Los campos ausentes quedan vacíos. El importador conserva las carátulas incrustadas o procedentes de `album.jpg`. Las ediciones se guardan en el catálogo; la escritura de etiquetas en la música queda para otra entrega.
 
 ## Preparar un PC
 
@@ -83,9 +83,26 @@ Para abrir una base concreta añade `--database "ruta/al/catalogo.tfo"`. La base
 
 Sin `--database`, se restaura el último catálogo abierto cuando sigue disponible. Para empezar sin restaurarlo, usa `--no-restore`. Puedes abrir otra base con **Abrir catálogo…** y recargar sus registros con **Actualizar**. Selecciona una canción para consultar su detalle; los textos permiten copiar datos y las líricas se muestran como texto plano.
 
-La consulta abre SQLite en modo de sólo lectura; la importación utiliza un escritor separado. Mostrar los registros no requiere acceder al FLAC/MP3 original: también las imágenes están guardadas en el catálogo. Las fuentes, iconos y estilos se incluyen en el paquete y se cargan sin descargas durante el uso.
+La consulta abre SQLite en modo de sólo lectura; importar y guardar una edición utilizan escritores separados. Consultar y editar no requieren acceder al FLAC/MP3 original: también las imágenes están guardadas en el catálogo. Las fuentes, iconos y estilos se incluyen en el paquete y se cargan sin descargas durante el uso.
 
 En VS Code, ejecuta la tarea **Trackfolio: iniciar GUI con la muestra** o la configuración de depuración **Trackfolio: GUI con catálogo de ejemplo**. Consulta el [plan y su estado](docs/gui-plan.md) y los [resultados comprobados](VALIDATION.md).
+
+## Editar una canción
+
+1. Selecciona una canción y pulsa **Editar** (`Ctrl+E`, o `Cmd+E` en macOS).
+2. Modifica sus campos. En artistas y géneros, añade, quita u ordena nombres completos;
+   las sugerencias permiten elegir valores existentes.
+3. Pulsa **Guardar** (`Ctrl+S` / `Cmd+S`) para confirmar o **Cancelar** (`Escape`) para
+   recuperar los valores del catálogo.
+
+Cambiar **Abbath → Accept** en una canción reutiliza el artista Accept sin cambiar otras
+canciones. Cambiar su álbum o año tampoco modifica las demás pistas del álbum. Los valores
+inválidos se indican junto al campo; un conflicto con otra escritura conserva el borrador
+para revisarlo. Navegar o cerrar con cambios pendientes ofrece guardar, descartar o cancelar.
+
+Las correcciones se guardan sólo en SQLite. **Reimportar la música sustituye los valores
+del catálogo por las etiquetas de los archivos**, incluidas las correcciones manuales.
+Consulta el [plan de edición implementado](docs/edit-plan.md).
 
 ## Importar música
 
@@ -112,8 +129,9 @@ bash setup.sh --run-uv run --locked python -m trackfolio.infrastructure.database
 ```
 
 Se crea un respaldo junto al archivo y se aplica `002_unique_artists`, conservando las
-relaciones de canciones y álbumes. Importar sobre un catálogo anterior también realiza
-esa actualización; abrirlo para consultar mantiene sus datos intactos.
+relaciones de canciones y álbumes. Importar o guardar una edición sobre un catálogo
+anterior también realiza esa actualización; consultar o preparar un borrador mantiene
+sus datos intactos.
 
 Abre `data/database.tfo` en SQLiteBrowser y consulta la vista `track_details`. La [guía de la base de datos](docs/database.md) explica las tablas, los campos ausentes, los respaldos y la revisión de carátulas. El SQL vigente para una base nueva está en [migrations/002_current.sql](migrations/002_current.sql); el [SQL inicial histórico](migrations/001_initial.sql) se conserva. La base local y la música están excluidas de Git.
 

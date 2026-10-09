@@ -1,7 +1,7 @@
 # Catálogo SQLite y revisión en SQLiteBrowser
 
-El catálogo permite importar y consultar metadatos FLAC/MP3 sin modificar los archivos
-musicales. La GUI genera catálogos desde carpetas mediante **Importar música…**; el núcleo
+El catálogo permite importar, consultar y editar metadatos sin modificar los archivos
+FLAC/MP3. La GUI genera catálogos desde carpetas mediante **Importar música…**; el núcleo
 también funciona sin Qt. `scripts/import_audio.py` sigue siendo una herramienta individual
 de preparación y revisión, no la interfaz CLI completa de Trackfolio.
 
@@ -57,9 +57,21 @@ distintos. `external_id` sigue siendo opcional y no determina la identidad.
 
 Corregir el artista de una canción de Abbath a Accept significa reasignar su crédito al
 ID de Accept, conservando Abbath y sus otros créditos. La reimportación de ese archivo
-ya permite aplicar una etiqueta corregida; la edición desde la GUI tiene un
-[plan pendiente de implementación](edit-plan.md).
+ya permite aplicar una etiqueta corregida. La GUI permite corregir el crédito mediante
+**Editar** y **Guardar**, con sugerencias de artistas existentes y nombres nuevos exactos.
+Consulta el [plan implementado de edición](edit-plan.md).
 Consulta el [plan implementado de identidad de artistas](artist-identity-plan.md).
+
+La edición aplica sólo los campos modificados y preserva audio, portada, etiquetas
+originales y créditos de roles adicionales. La GUI y sus resúmenes muestran intérpretes
+de rol `artist` en **Artista(s)**; `track_details` sigue reuniendo todos los roles del catálogo.
+
+Cambiar el título o año de un álbum desde una canción reasigna únicamente esa pista a
+la agrupación resultante; no cambia la fila del álbum compartido. Se conservan fecha y
+créditos de álbum. El total de discos del formulario corresponde a `tracks.disc_total`:
+su edición no modifica `albums.disc_total`. Si un archivo comparte pista con otros,
+editarlo o reimportarlo copia la pista y sus relaciones antes de guardar. En ese caso se
+mantiene `file_id` y cambia su `track_id`; los demás archivos conservan sus datos.
 
 Un campo escalar ausente se guarda como `NULL`. Los artistas o géneros ausentes no
 generan relaciones: en los contratos Python se representan con una tupla vacía y en
@@ -103,8 +115,10 @@ o sin audio válido no genera un catálogo nuevo. Si se creó uno y falló antes
 ningún archivo, se intenta eliminarlo; cualquier fallo de limpieza aparece en el informe.
 Un catálogo existente nunca se elimina ni se sobrescribe al elegir crear uno nuevo.
 
-Actualizar relee todos los candidatos: conserva IDs para la misma raíz/ruta y reemplaza
-los metadatos anteriores, incluidos los campos que ahora faltan. No elimina registros
+Actualizar relee todos los candidatos: conserva `file_id` para la misma raíz/ruta y
+`track_id` mientras la pista no esté compartida. Reemplaza los metadatos anteriores,
+incluidas las correcciones manuales y los campos que ahora faltan; conserva créditos
+adicionales que el lector musical no gestiona. No elimina registros
 de audio desaparecido, no identifica grabaciones duplicadas y no reasigna raíces al
 mover la biblioteca. Consulta el [plan implementado](import-plan.md).
 
@@ -131,8 +145,9 @@ no mueve la música ni adapta automáticamente la raíz guardada en una base exi
 ## Actualizar un catálogo anterior
 
 La revisión vigente es `002_unique_artists`. La GUI puede consultar catálogos `001_initial`
-sin modificarlos. Al importar sobre uno anterior, el escritor crea un respaldo consistente
-de SQLite y aplica la migración antes de guardar audio. Validar el formulario o importar
+sin modificarlos. Al importar o guardar una edición sobre uno anterior, el escritor crea
+un respaldo consistente de SQLite y aplica la migración antes de escribir. Preparar o
+cancelar un borrador, guardar sin cambios, validar el formulario de importación o importar
 una carpeta sin audio válido no inicia esa actualización.
 
 Para consolidar los artistas sin releer música, cierra otras aplicaciones que estén

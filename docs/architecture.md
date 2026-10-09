@@ -1,6 +1,6 @@
 # Arquitectura de Trackfolio
 
-El núcleo importa y consulta metadatos de archivos FLAC/MP3 mediante contratos independientes de Qt. La primera GUI muestra el catálogo mediante estos contratos; las interfaces CLI/TUI y de servidor se mantienen como posibilidades futuras.
+El núcleo importa, consulta y edita un catálogo de archivos FLAC/MP3 mediante contratos independientes de Qt. La GUI utiliza estos contratos; las interfaces CLI/TUI y de servidor se mantienen como posibilidades futuras.
 
 ## Dependencias entre capas
 
@@ -51,6 +51,17 @@ la disposición final garantiza que sus objetos Qt no se destruyen antes de ese 
 
 Una futura CLI/TUI utilizará los mismos casos de uso. Para una biblioteca remota, el servidor ejecutará los casos de uso junto a su música y su almacenamiento; el frontend web consumirá su API. Autenticación, protocolo, concurrencia y despliegue se diseñarán cuando se implemente esa interfaz. Esta preparación no añade un servidor.
 
+`GetEditableTrack`, `FindArtists`, `FindGenres` y `UpdateCatalogTrack` usan valores
+inmutables y un patch explícito de campos modificados. La validación reside en el núcleo;
+obtener sugerencias o preparar un borrador sólo abre lectores. La fábrica de edición
+abre un escritor de SQLite únicamente para un cambio válido y efectivo.
+
+El controlador mantiene la instantánea y el borrador, invalida consultas anteriores al
+iniciar la edición y espera a los trabajadores antes de guardar. Guardar, cancelar y la
+navegación con cambios pendientes son estados explícitos. Un conflicto conserva el
+borrador; el cierre durante una escritura espera su resultado. Las continuaciones
+diferidas se descartan si otro evento inició una nueva operación.
+
 ## Persistencia y rutas
 
 SQLAlchemy implementa el repositorio SQLite y Alembic gestiona su esquema. El snapshot
@@ -70,6 +81,17 @@ que reutilizan el índice único. El contexto del álbum decide su agrupación, 
 identidad del artista. `ImportAudio`, `GetTrack` y `ListTracks` usan contratos de repositorio
 y dataclasses de dominio; el lector Mutagen y el repositorio SQLAlchemy son adaptadores
 intercambiables. Consulta el [modelo y sus reglas de importación](database.md).
+
+El adaptador de edición compara una instantánea musical bajo `BEGIN IMMEDIATE` antes
+de aplicar un patch. Los nombres, roles y posiciones hacen que el token siga siendo
+válido tras consolidar artistas de `001` a `002`. La misma transacción resuelve artistas
+exactos, copia pistas compartidas, reasigna álbumes y obtiene el resultado confirmado.
+No reutiliza la sustitución completa del importador. Los valores técnicos, carátulas,
+`raw_tags` y roles ajenos al campo editado se conservan.
+
+Las correcciones modifican SQLite. Reimportar sigue tomando los metadatos del archivo
+como origen y reemplaza las correcciones del catálogo, conservando roles adicionales.
+La edición no añade tablas ni dependencias y reutiliza el respaldo de catálogos antiguos.
 
 La importación guarda cada archivo en una transacción y no modifica la música. La transacción de la base de datos no cubre automáticamente la edición de archivos musicales: los futuros casos de uso deberán definir cómo detectar, comunicar y recuperar fallos parciales.
 

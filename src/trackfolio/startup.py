@@ -1,4 +1,4 @@
-"""Compose independent catalog queries and import operations for the GUI."""
+"""Compose catalog queries, import and editing operations for the GUI."""
 
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ def create_window(
 
     from trackfolio.application.import_catalog import ImportCatalog
     from trackfolio.infrastructure.audio_scan import FileSystemAudioScanner
+    from trackfolio.infrastructure.catalog_edit import SqliteCatalogEditSessionFactory
     from trackfolio.infrastructure.import_target import SqliteImportTargetFactory
     from trackfolio.infrastructure.metadata import read_metadata
     from trackfolio.infrastructure.session import open_catalog
@@ -36,5 +37,6 @@ def create_window(
             FileSystemAudioScanner(), read_metadata, SqliteImportTargetFactory()
         ),
         import_directory=directory,
+        edit_factory=SqliteCatalogEditSessionFactory(),
     )
     return window, controller

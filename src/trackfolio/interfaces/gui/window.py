@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
+from typing import cast
 
-from PySide6.QtCore import QEvent, QModelIndex, QPoint, QRect, QSignalBlocker, Qt, Signal
+from PySide6.QtCore import QEvent, QModelIndex, QObject, QPoint, QRect, QSignalBlocker, Qt, Signal
 from PySide6.QtGui import (
     QAction,
     QCloseEvent,
     QGuiApplication,
+    QKeyEvent,
     QKeySequence,
     QMouseEvent,
     QPixmap,
@@ -37,7 +39,9 @@ from PySide6.QtWidgets import (
 )
 
 from trackfolio.domain.catalog import CatalogEntry, CatalogSummary
+from trackfolio.domain.catalog_edit import EditableValues, EditField, FieldChange, TrackEditPatch
 from trackfolio.interfaces.gui.catalog_model import CatalogTableModel
+from trackfolio.interfaces.gui.ordered_labels import OrderedLabels
 from trackfolio.interfaces.gui.theme import icon
 
 
@@ -224,6 +228,11 @@ class MainWindow(QMainWindow):
     import_requested = Signal()
     refresh_requested = Signal()
     track_selected = Signal(int)
+    edit_requested = Signal()
+    save_requested = Signal()
+    cancel_edit_requested = Signal()
+    dirty_changed = Signal(bool)
+    suggestions_requested = Signal(str, str)
     closing = Signal()
 
     def __init__(self) -> None:
@@ -240,9 +249,20 @@ class MainWindow(QMainWindow):
         self._busy = False
         self._importing = False
         self.close_guard: Callable[[], bool] | None = None
+        self.selection_guard: Callable[[int], bool] | None = None
         self._current_file_id: int | None = None
+        self._detail_loaded = False
+        self._edit_enabled = False
+        self._editing = False
+        self._saving = False
+        self._updating_edit = False
+        self._edit_values: EditableValues | None = None
+        self._edit_valid = True
+        self._dirty = False
         self._system_frame = False
         self.fields: dict[str, QLineEdit] = {}
+        self.field_errors: dict[str, QLabel] = {}
+        self.ordered_labels: dict[str, OrderedLabels] = {}
 
         shell = QWidget(self)
         shell.setObjectName("WindowShell")
@@ -385,10 +405,28 @@ class MainWindow(QMainWindow):
         value.setAccessibleName(label)
         value.setMinimumWidth(0)
         value.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        value.installEventFilter(self)
         self.fields[key] = value
         caption.setBuddy(value)
         layout.addWidget(caption)
         layout.addWidget(value)
+        value.textEdited.connect(lambda _text, field=key: self._draft_changed(field))
+        if key in ("artists", "genres"):
+            labels = OrderedLabels(label, container)
+            labels.hide()
+            labels.changed.connect(lambda field=key: self._draft_changed(field))
+            labels.suggestion_requested.connect(
+                lambda query, field=key: self.suggestions_requested.emit(field, query)
+            )
+            self.ordered_labels[key] = labels
+            layout.addWidget(labels)
+        error = QLabel(container)
+        error.setObjectName("FieldError")
+        error.setTextFormat(Qt.TextFormat.PlainText)
+        error.setWordWrap(True)
+        error.hide()
+        self.field_errors[key] = error
+        layout.addWidget(error)
         return container
 
     def _build_detail(self) -> QWidget:
@@ -403,9 +441,40 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(22, 20, 22, 22)
         layout.setSpacing(22)
+        heading = QHBoxLayout()
         title = QLabel("DETALLE DE LA CANCIÓN", panel)
         title.setObjectName("SectionTitle")
-        layout.addWidget(title)
+        heading.addWidget(title)
+        heading.addStretch()
+        self.edit_action = QAction("Editar", self)
+        self.edit_action.setShortcut(QKeySequence("Ctrl+E"))
+        self.edit_action.triggered.connect(self.edit_requested.emit)
+        self.save_action = QAction("Guardar", self)
+        self.save_action.setShortcut(QKeySequence(QKeySequence.StandardKey.Save))
+        self.save_action.triggered.connect(self.save_requested.emit)
+        self.cancel_edit_action = QAction("Cancelar", self)
+        self.cancel_edit_action.setShortcut(QKeySequence(Qt.Key.Key_Escape))
+        self.cancel_edit_action.triggered.connect(self.cancel_edit_requested.emit)
+        self.edit_button = QPushButton("Editar", panel)
+        self.save_button = QPushButton("Guardar", panel)
+        self.save_button.setObjectName("PrimaryButton")
+        self.cancel_edit_button = QPushButton("Cancelar", panel)
+        for action, button in (
+            (self.edit_action, self.edit_button),
+            (self.save_action, self.save_button),
+            (self.cancel_edit_action, self.cancel_edit_button),
+        ):
+            self.addAction(action)
+            button.setToolTip(f"{action.text()} ({action.shortcut().toString()})")
+            button.clicked.connect(action.trigger)
+            heading.addWidget(button)
+        layout.addLayout(heading)
+        self.edit_status = QLabel(panel)
+        self.edit_status.setObjectName("MutedLabel")
+        self.edit_status.setTextFormat(Qt.TextFormat.PlainText)
+        self.edit_status.setWordWrap(True)
+        self.edit_status.hide()
+        layout.addWidget(self.edit_status)
         identification = QHBoxLayout()
         identification.setSpacing(18)
         self.cover = CoverLabel(panel)
@@ -442,8 +511,17 @@ class MainWindow(QMainWindow):
         self.lyrics.setReadOnly(True)
         self.lyrics.setAccessibleName("Líricas")
         self.lyrics.setMinimumHeight(140)
+        self.lyrics.installEventFilter(self)
+        self.lyrics.textChanged.connect(lambda: self._draft_changed("lyrics"))
         lyrics_label.setBuddy(self.lyrics)
         lyrics_layout.addWidget(self.lyrics, 1)
+        lyrics_error = QLabel(panel)
+        lyrics_error.setObjectName("FieldError")
+        lyrics_error.setTextFormat(Qt.TextFormat.PlainText)
+        lyrics_error.setWordWrap(True)
+        lyrics_error.hide()
+        self.field_errors["lyrics"] = lyrics_error
+        lyrics_layout.addWidget(lyrics_error)
         layout.addLayout(lyrics_layout, 1)
         scroll.setWidget(panel)
         return scroll
@@ -532,10 +610,17 @@ class MainWindow(QMainWindow):
             self.track_selected.emit(self._current_file_id)
 
     def _selection_changed(self, current: QModelIndex, previous: QModelIndex) -> None:
-        if self._importing:
+        if self._importing or self._saving:
             return
         file_id = self.model.file_id_at(current.row()) if current.isValid() else None
         if file_id == self._current_file_id:
+            return
+        if (
+            file_id is not None
+            and self.selection_guard is not None
+            and not self.selection_guard(file_id)
+        ):
+            self._restore_selection()
             return
         self._current_file_id = file_id
         self.set_detail(None)
@@ -545,11 +630,32 @@ class MainWindow(QMainWindow):
     def current_file_id(self) -> int | None:
         return self._current_file_id
 
+    def _restore_selection(self) -> None:
+        blocker = QSignalBlocker(self.table.selectionModel())
+        row = self.model.row_for_file(self._current_file_id)
+        if row is None:
+            self.table.clearSelection()
+            self.table.setCurrentIndex(QModelIndex())
+        else:
+            self.table.selectRow(row)
+        del blocker
+
+    def select_file(self, file_id: int) -> None:
+        """Continue a selection that the controller deferred while saving a draft."""
+        row = self.model.row_for_file(file_id)
+        if row is not None:
+            self.table.selectRow(row)
+
     def set_detail(self, entry: CatalogEntry | None) -> None:
+        # Results from a query started before editing must never overwrite the draft.
+        if self._editing:
+            return
+        self._detail_loaded = entry is not None
         for field in self.fields.values():
             field.clear()
         self.lyrics.clear()
         self.cover.set_cover(None)
+        self._update_actions()
         if entry is None:
             return
         data = entry.metadata
@@ -570,6 +676,117 @@ class MainWindow(QMainWindow):
         self.lyrics.setPlainText(data.lyrics or "")
         self.cover.set_cover(data.artwork.data if data.artwork is not None else None)
 
+    def set_edit_enabled(self, enabled: bool) -> None:
+        """Expose editing only when the composition root supplies the edit adapter."""
+        self._edit_enabled = enabled
+        self._update_actions()
+
+    def begin_edit(self, values: EditableValues) -> None:
+        self._updating_edit = True
+        self._edit_values = values
+        self._editing = True
+        self._saving = False
+        for key, field in self.fields.items():
+            value = getattr(values, key)
+            field.setText(
+                "; ".join(value)
+                if isinstance(value, tuple)
+                else str(value)
+                if value is not None
+                else ""
+            )
+            field.setCursorPosition(0)
+        self.ordered_labels["artists"].set_names(values.artists)
+        self.ordered_labels["genres"].set_names(values.genres)
+        self.lyrics.setPlainText(values.lyrics or "")
+        self._updating_edit = False
+        self.set_field_errors({})
+        self._dirty = False
+        self.dirty_changed.emit(False)
+        self._validate_draft()
+        self._update_actions()
+        self.fields["title"].setFocus()
+
+    def edit_patch(self) -> TrackEditPatch:
+        """Collect only differences; the application validates the raw number strings."""
+        if self._edit_values is None:
+            return TrackEditPatch(())
+        changes = []
+        for key, field in self.fields.items():
+            original = getattr(self._edit_values, key)
+            if key in self.ordered_labels:
+                value: str | int | tuple[str, ...] | None = self.ordered_labels[key].names()
+            else:
+                text = field.text()
+                if key in ("title", "album"):
+                    if text == (original or ""):
+                        continue
+                    value = text if text.strip() else None
+                elif (
+                    len(text.strip()) <= 19 and text.strip().isascii() and text.strip().isdecimal()
+                ):
+                    value = int(text.strip())
+                else:
+                    value = text.strip() or None
+            if value != original:
+                changes.append(FieldChange(cast(EditField, key), value))
+        lyrics = self.lyrics.toPlainText() or None
+        if lyrics != self._edit_values.lyrics:
+            changes.append(FieldChange("lyrics", lyrics))
+        return TrackEditPatch(tuple(changes))
+
+    def edit_dirty(self) -> bool:
+        return self._editing and bool(self.edit_patch().changes)
+
+    def set_edit_state(self, editing: bool, saving: bool = False) -> None:
+        self._editing = editing
+        self._saving = saving
+        if not editing:
+            self._edit_values = None
+            self._dirty = False
+            self._edit_valid = True
+            self.set_field_errors({})
+            self.dirty_changed.emit(False)
+        self._update_actions()
+
+    def set_field_errors(self, errors: dict[str, str]) -> None:
+        for key, label in self.field_errors.items():
+            message = errors.get(key, "")
+            label.setText(message)
+            label.setVisible(bool(message))
+        self._edit_valid = not errors
+        self._update_actions()
+
+    def set_suggestions(self, field: str, names: tuple[str, ...]) -> None:
+        """Apply already-filtered asynchronous suggestions to the active name control."""
+        if self._editing and not self._saving and field in self.ordered_labels:
+            self.ordered_labels[field].set_suggestions(names)
+
+    def _draft_changed(self, field: str) -> None:
+        if not self._editing or self._updating_edit or self._saving:
+            return
+        self._validate_draft()
+        dirty = self.edit_dirty()
+        if dirty != self._dirty:
+            self._dirty = dirty
+            self.dirty_changed.emit(dirty)
+        self._update_actions()
+
+    def _validate_draft(self) -> None:
+        from trackfolio.application.edit_catalog import (
+            CatalogEditValidationError,
+            validate_edit_patch,
+        )
+
+        if self._edit_values is None:
+            return
+        try:
+            validate_edit_patch(self._edit_values, self.edit_patch())
+        except CatalogEditValidationError as error:
+            self.set_field_errors({issue.field: issue.message for issue in error.errors})
+        else:
+            self.set_field_errors({})
+
     def set_status(self, text: str) -> None:
         self.status_label.setText(text)
 
@@ -587,17 +804,69 @@ class MainWindow(QMainWindow):
         self._update_actions()
 
     def _update_actions(self) -> None:
-        self.open_button.setEnabled(not self._importing)
-        self.import_button.setEnabled(not self._importing)
-        self.import_action.setEnabled(not self._importing)
+        navigating = not self._importing and not self._saving
+        self.open_button.setEnabled(navigating)
+        self.import_button.setEnabled(navigating)
+        self.import_action.setEnabled(navigating)
         self.refresh_button.setEnabled(
-            self._catalog_path is not None and not self._busy and not self._importing
+            self._catalog_path is not None and not self._busy and navigating
         )
-        self.table.setEnabled(not self._importing)
+        self.table.setEnabled(navigating)
+        self.edit_action.setEnabled(
+            self._edit_enabled
+            and self._detail_loaded
+            and not self._busy
+            and navigating
+            and not self._editing
+        )
+        self.save_action.setEnabled(
+            self._editing and not self._saving and self._edit_valid and self.edit_dirty()
+        )
+        self.cancel_edit_action.setEnabled(self._editing and not self._saving)
+        for action, button in (
+            (self.edit_action, self.edit_button),
+            (self.save_action, self.save_button),
+            (self.cancel_edit_action, self.cancel_edit_button),
+        ):
+            button.setEnabled(action.isEnabled())
+        self.edit_button.setVisible(not self._editing)
+        self.save_button.setVisible(self._editing)
+        self.cancel_edit_button.setVisible(self._editing)
+        for key, field in self.fields.items():
+            field.setReadOnly(not self._editing or key in self.ordered_labels)
+            field.setEnabled(not self._saving)
+            if key in self.ordered_labels:
+                field.setVisible(not self._editing)
+                labels = self.ordered_labels[key]
+                labels.setVisible(self._editing)
+                labels.setEnabled(not self._saving)
+        self.lyrics.setReadOnly(not self._editing)
+        self.lyrics.setEnabled(not self._saving)
+        self.edit_status.setVisible(self._editing)
+        self.edit_status.setText(
+            "Guardando cambios…"
+            if self._saving
+            else "Cambios en el catálogo · Cambios sin guardar"
+            if self.edit_dirty()
+            else "Cambios en el catálogo"
+        )
 
     def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)
         self._place_resize_handles()
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        # QLineEdit otherwise reserves Ctrl+E for End-of-Line on Unix, even readonly.
+        if event.type() == QEvent.Type.ShortcutOverride and hasattr(self, "edit_action"):
+            key_event = cast(QKeyEvent, event)
+            if (
+                self.edit_action.isEnabled()
+                and key_event.key() == Qt.Key.Key_E
+                and key_event.modifiers() == Qt.KeyboardModifier.ControlModifier
+            ):
+                event.ignore()
+                return True
+        return super().eventFilter(watched, event)
 
     def changeEvent(self, event: QEvent) -> None:
         super().changeEvent(event)

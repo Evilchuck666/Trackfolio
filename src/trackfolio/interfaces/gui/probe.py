@@ -8,9 +8,12 @@ import tempfile
 import zlib
 from pathlib import Path
 
-from PySide6.QtCore import QTimer, qVersion
+from PySide6.QtCore import Qt, QTimer, qVersion
+from PySide6.QtTest import QTest
 
+from trackfolio.application.edit_catalog import CatalogEditOutcome
 from trackfolio.application.import_catalog import ImportReport, ImportRequest
+from trackfolio.infrastructure.session import open_catalog
 from trackfolio.interfaces.gui.app import CatalogApplication
 from trackfolio.interfaces.gui.lifecycle import dispose_window
 from trackfolio.interfaces.gui.theme import apply_theme
@@ -88,15 +91,27 @@ def run_probe(argv: list[str]) -> dict[str, object]:
         app.aboutToQuit.connect(controller.shutdown)
         state: dict[str, object] = {"events": False, "failure": "La ventana no cargó el detalle."}
 
+        def fail(message: str) -> None:
+            state["failure"] = message
+            # A diagnostic failure must not display a pending-draft dialog unattended.
+            app.close_guard = None
+            app.quit()
+
         def inspect_import(report: ImportReport) -> None:
             if report.state != "completed" or report.created != 1 or report.failed:
-                state["failure"] = report.fatal_error or "La importación de prueba falló."
-                app.quit()
+                fail(report.fatal_error or "La importación de prueba falló.")
             else:
                 source.unlink()
                 state["imported"] = True
 
         controller.import_finished.connect(inspect_import)
+
+        def request_edit() -> None:
+            try:
+                assert window.edit_button.isEnabled(), "El botón Editar no se habilitó."
+                QTest.mouseClick(window.edit_button, Qt.MouseButton.LeftButton)
+            except Exception as exc:
+                fail(str(exc) or type(exc).__name__)
 
         def inspect_detail(file_id: int) -> None:
             expected = {
@@ -118,15 +133,70 @@ def run_probe(argv: list[str]) -> dict[str, object]:
                 assert window.lyrics.toPlainText() == "Texto inventado\nSegunda línea"
                 assert window.cover.pixmap() is not None and not window.cover.pixmap().isNull()
                 state["events"] = True
-                state["failure"] = ""
+                state["failure"] = "La ventana no preparó la edición del catálogo."
+                # detail_loaded fires before the controller restores idle actions.
+                QTimer.singleShot(0, request_edit)
             except Exception as exc:
-                state["failure"] = str(exc) or type(exc).__name__
-            QTimer.singleShot(100, app.quit)
+                fail(str(exc) or type(exc).__name__)
 
         controller.detail_loaded.connect(inspect_detail)
+
+        def inspect_edit(file_id: int) -> None:
+            try:
+                assert file_id == window.current_file_id()
+                assert not source.exists(), "La edición debe funcionar sin el archivo musical."
+                assert not window.fields["title"].isReadOnly()
+                assert not window.save_button.isEnabled()
+                window.fields["title"].selectAll()
+                QTest.keyClicks(window.fields["title"], "Catalog correction")
+                artists = window.ordered_labels["artists"]
+                artists.list.setCurrentRow(0)
+                QTest.mouseClick(artists.remove_button, Qt.MouseButton.LeftButton)
+                QTest.keyClicks(artists.name_edit, "Accept")
+                QTest.mouseClick(artists.add_button, Qt.MouseButton.LeftButton)
+                assert window.edit_dirty()
+                assert window.save_button.isEnabled()
+                state["failure"] = "La ventana no confirmó el guardado del catálogo."
+                QTest.mouseClick(window.save_button, Qt.MouseButton.LeftButton)
+            except Exception as exc:
+                fail(str(exc) or type(exc).__name__)
+
+        controller.edit_started.connect(inspect_edit)
+
+        def inspect_saved(result: object) -> None:
+            try:
+                assert isinstance(result, CatalogEditOutcome), window.error_label.text()
+                assert window.fields["title"].text() == "Catalog correction"
+                assert window.fields["artists"].text() == "Accept"
+                assert all(field.isReadOnly() for field in window.fields.values())
+                assert window.lyrics.isReadOnly()
+                assert not window.edit_dirty()
+                assert window.model.data(window.model.index(0, 0)) == "Catalog correction"
+                assert window.model.data(window.model.index(0, 1)) == "Accept"
+                session = open_catalog(database)
+                try:
+                    stored = session.get(result.entry.file_id)
+                    assert stored is not None
+                    assert stored.metadata.title == "Catalog correction"
+                    assert stored.metadata.artists == ("Accept",)
+                    assert session.list_summaries() == window.model.summaries()
+                    assert any(
+                        tag.key.lower() == "title" and tag.value == "Canción de prueba"
+                        for tag in stored.metadata.raw_tags
+                    )
+                    assert stored.metadata.artwork is not None
+                finally:
+                    session.close()
+                state["edited"] = True
+                state["failure"] = ""
+                QTimer.singleShot(100, app.quit)
+            except Exception as exc:
+                fail(str(exc) or type(exc).__name__)
+
+        controller.edit_finished.connect(inspect_saved)
         timeout = QTimer()
         timeout.setSingleShot(True)
-        timeout.timeout.connect(app.quit)
+        timeout.timeout.connect(lambda: fail(str(state["failure"])))
         timeout.start(10000)
         window.show()
         QTimer.singleShot(
@@ -137,7 +207,7 @@ def run_probe(argv: list[str]) -> dict[str, object]:
         controller.shutdown()
         app.close_guard = None
         dispose_window(window)
-        if exit_code != 0 or not state["events"]:
+        if exit_code != 0 or not state["events"] or not state.get("edited"):
             raise RuntimeError(str(state["failure"]))
         return {
             "platform": app.platformName(),
@@ -145,4 +215,5 @@ def run_probe(argv: list[str]) -> dict[str, object]:
             "qt_version": qVersion(),
             "events": True,
             "imported": bool(state.get("imported")),
+            "edited": bool(state.get("edited")),
         }

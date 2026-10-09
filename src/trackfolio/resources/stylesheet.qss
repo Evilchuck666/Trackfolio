@@ -23,6 +23,7 @@ QLabel#songTitle { color: #f5f6ff; font-size: 22px; font-weight: 600; }
 QLabel#catalogPath, QLabel#emptyState, QLabel#MutedLabel, QLabel#StatusLabel,
 QLabel#EmptyCatalog, QLabel[role="secondary"] { color: #a1aac4; }
 QLabel#FieldLabel { color: #a1aac4; font-size: 10px; font-weight: 600; }
+QLabel#FieldError { color: #ffc6d2; font-size: 11px; }
 QLabel#CountBadge {
     color: #bdc2ff;
     background-color: #303654;
@@ -92,6 +93,14 @@ QLineEdit#MetadataField { background-color: #1b2030; border-color: #303750; }
 QLineEdit#TrackTitle { background-color: #1b2030; font-size: 18px; font-weight: 600; }
 QLineEdit#MetadataField:focus, QLineEdit#TrackTitle:focus { border-color: #8e94ff; }
 QPlainTextEdit#Lyrics { background-color: #1b2030; }
+QListWidget {
+    background-color: #1b2030;
+    border: 1px solid #303750;
+    border-radius: 6px;
+    padding: 3px;
+}
+QListWidget::item { padding: 3px 6px; }
+QListWidget::item:selected { background-color: #343c64; color: #ffffff; }
 QTableView {
     background-color: #151824;
     alternate-background-color: #1a1e2c;

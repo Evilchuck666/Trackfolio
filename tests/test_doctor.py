@@ -92,7 +92,14 @@ def test_child_success_without_qt_report_is_not_accepted(doctor, monkeypatch):
 
 @pytest.mark.parametrize("backend", ["offscreen", "minimal"])
 def test_headless_qt_success_does_not_claim_desktop_validation(doctor, monkeypatch, backend):
-    report = {"platform": backend, "style": "fusion", "qt_version": "6.11.2", "events": True}
+    report = {
+        "platform": backend,
+        "style": "fusion",
+        "qt_version": "6.11.2",
+        "events": True,
+        "imported": True,
+        "edited": True,
+    }
     output = doctor.QT_PROBE_PREFIX + json.dumps(report)
 
     def run(command, **kwargs):
@@ -102,6 +109,28 @@ def test_headless_qt_success_does_not_claim_desktop_validation(doctor, monkeypat
     result = doctor.check_qt(backend, timeout=2)
     assert result.ok
     assert "no confirma el escritorio real" in result.detail
+
+
+@pytest.mark.parametrize("missing", ["imported", "edited"])
+def test_qt_report_requires_import_and_edit_confirmation(doctor, monkeypatch, missing):
+    report = {
+        "platform": "offscreen",
+        "style": "fusion",
+        "qt_version": "6.11.2",
+        "events": True,
+        "imported": True,
+        "edited": True,
+    }
+    report.pop(missing)
+    output = doctor.QT_PROBE_PREFIX + json.dumps(report)
+    monkeypatch.setattr(
+        doctor.subprocess,
+        "run",
+        lambda command, **kwargs: subprocess.CompletedProcess(command, 0, output, ""),
+    )
+    result = doctor.check_qt("offscreen", timeout=2)
+    assert not result.ok
+    assert "importación y edición" in result.detail
 
 
 def test_sqlite_persists_unicode_through_sqlalchemy_and_removes_temp_file(

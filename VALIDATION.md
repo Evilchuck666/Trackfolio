@@ -276,6 +276,55 @@ No se omitieron las pruebas corregidas. Ruff, formato, mypy, los diagnósticos g
 `offscreen`/nativos y la verificación del wheel instalado fuera del checkout pasaron.
 La revisión visual manual de Windows/macOS sigue pendiente.
 
+## Edición de canciones en el catálogo: 9 de octubre de 2026
+
+Implementado el [plan de edición](docs/edit-plan.md): **Editar**, **Guardar** y
+**Cancelar** para los diez campos del detalle, artistas y géneros como listas ordenadas,
+validación junto al campo y navegación con cambios pendientes. Las correcciones se
+guardan en SQLite y funcionan sin el archivo musical. Reimportar sustituye los valores
+manuales por las etiquetas del archivo; el formulario explica esta consecuencia.
+
+La corrección Abbath → Accept reutiliza la identidad exacta del artista y cambia sólo
+la canción seleccionada. Título/año de álbum reasignan una agrupación sin modificar
+otras pistas; pistas compartidas se copian para el archivo seleccionado. Se preservan
+audio, portada, `raw_tags` y roles adicionales. No cambian las dependencias, `uv.lock`,
+las revisiones históricas ni el esquema vigente `002_unique_artists`.
+
+Comprobaciones locales en Linux x86-64, glibc 2.44, CPython 3.13.15, uv 0.12.10,
+PySide6/Qt 6.11.2 y SQLite 3.53.1:
+
+| Comprobación | Resultado observado |
+| --- | --- |
+| Suite completa del checkout, Qt `offscreen` | **426 passed, 4 skipped**; los cuatro omitidos requieren PowerShell, ausente. |
+| Edición de núcleo/SQLite y limpieza del caso de uso | **48 pruebas**: patch parcial, vaciados, validación, identidad exacta, aislamiento, conflictos, rollback, sugerencias y respaldo de `001`. |
+| Coordinación GUI con SQLite temporal | **23 pruebas**: guardar/reabrir, cancelar, guardas de navegación, cierre cooperativo, conflictos y respuestas atrasadas. |
+| Ruff y formato | Correctos; **82 archivos** comprobados. |
+| mypy estricto | Correcto sobre **46 archivos** de código. |
+| Diagnóstico del producto | Importación y edición confirmadas en `offscreen`, Wayland y X11 (`xcb`), con Fusion y 12 recursos verificados. |
+| Ventana nativa Wayland | Guardar título y artista desde los controles, releer SQLite, cancelar otro borrador y mantener la selección; catálogo fuente y FLAC temporal originales intactos por SHA-256. |
+| Revisión de capturas | Inspeccionados los controles en la ventana Wayland y los renders a 1320 × 840 y 960 × 640; listas, botones y scroll disponibles. |
+| Wheel y distribución de fuentes | Construidos; módulos nuevos y recursos incluidos. Ejecutado localmente el bloque de verificación del wheel de la matriz CI. |
+| Wheel instalado sin checkout ni Qt | Generación, importación, edición por caso de uso, relectura y migración con respaldo correctas; PySide6 ausente. |
+| Suite desde el wheel instalado sin Qt | **341 passed, 10 skipped**; seis módulos GUI omitidos por ausencia de PySide6 y cuatro pruebas por ausencia de PowerShell. |
+| Wheel GUI instalado fuera del checkout | Probe con `events=true`, `imported=true` y `edited=true`, backend `offscreen` y Fusion; edita después de retirar el audio y preserva etiquetas originales y portada. |
+
+Las comprobaciones utilizaron bases y contenedores FLAC temporales controlados; no
+modificaron música ni catálogos personales. Las capturas se conservaron fuera del
+repositorio. El respaldo del primer guardado de `001`, la detección de cambios externos
+y el resultado confirmado ante un fallo posterior de liberación tienen pruebas específicas.
+
+Se corrigieron y cubrieron dos carreras: una respuesta de actualización anterior a
+**Editar** ya no reemplaza el borrador ni abre un diálogo inesperado; una continuación
+de navegación posterior al guardado se descarta si un observador ya abrió otro catálogo.
+Las esperas nuevas de integración usan el bucle nativo de Qt y las conexiones SQLite
+se cierran explícitamente para conservar las correcciones previas de macOS y Windows.
+
+La matriz existente incorpora las pruebas nuevas y exige la edición en los diagnósticos
+y el wheel instalado. **No se ha ejecutado una nueva matriz remota para estos cambios**;
+Windows y macOS permanecen pendientes de esa ejecución y de revisión visual manual.
+Las pruebas `offscreen` no acreditan un escritorio real y los backends nativos comprobados
+en esta entrega corresponden únicamente a esta máquina Linux.
+
 ## Repositorio
 
 Git inicializado con rama `main`, `origin` y seguimiento de `origin/main`. La infraestructura y documentación están subidas a [Evilchuck666/Trackfolio](https://github.com/Evilchuck666/Trackfolio), un repositorio privado. El workspace se abre mediante `code Trackfolio.code-workspace`; la preparación para otro PC está en [README.md](README.md).

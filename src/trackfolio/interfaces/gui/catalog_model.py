@@ -26,6 +26,17 @@ class CatalogTableModel(QAbstractTableModel):
     def summaries(self) -> tuple[CatalogSummary, ...]:
         return self._rows
 
+    def update_summary(self, summary: CatalogSummary) -> bool:
+        """Actualizar una canción conservando la selección y el resto de la lista."""
+        row = self.row_for_file(summary.file_id)
+        if row is None:
+            return False
+        rows = list(self._rows)
+        rows[row] = summary
+        self._rows = tuple(rows)
+        self.dataChanged.emit(self.index(row, 0), self.index(row, self.columnCount() - 1))
+        return True
+
     def file_id_at(self, row: int) -> int | None:
         return self._rows[row].file_id if 0 <= row < len(self._rows) else None
 

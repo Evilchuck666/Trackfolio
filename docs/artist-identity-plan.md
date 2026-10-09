@@ -16,8 +16,8 @@ distintos. La identidad se determina por `name`; `external_id` permanece como da
 
 Para corregir una canción de **Abbath** a **Accept**, se resolverá el identificador único
 de Accept y se sustituirá el crédito de esa canción. La identidad y el nombre de Abbath
-se conservarán para sus otros créditos. Este cambio prepara esa operación; la edición
-de canciones en la GUI se implementará en otra entrega.
+se conservarán para sus otros créditos. La [edición de canciones en la GUI](edit-plan.md)
+ya permite realizar esa operación, como entrega posterior implementada el 9 de octubre.
 
 ## Estado comprobado del catálogo de trabajo
 
