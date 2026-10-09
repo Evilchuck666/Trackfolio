@@ -45,7 +45,7 @@ La importación guarda cada archivo en una transacción y no modifica la música
 
 Se usan `pathlib`, una raíz de biblioteca configurable y rutas relativas para los archivos. La ruta identifica la ubicación importada, no la identidad musical de una grabación. El esquema separa pistas y archivos, pero el importador inicial crea una pista por cada archivo nuevo; la identificación entre ediciones y la reasignación de raíces al mover una biblioteca quedan pendientes.
 
-`platformdirs` ubicará la configuración, caché y base de datos en directorios del usuario adecuados a cada sistema. Durante la revisión se utiliza explícitamente `data/trackfolio.sqlite3`, excluido de Git. La música y los datos locales no se guardan en el repositorio. Trasladar el código mediante Git y trasladar una biblioteca musical son operaciones distintas.
+`platformdirs` ubicará la configuración, caché y base de datos en directorios del usuario adecuados a cada sistema. Durante la revisión se utiliza explícitamente `data/trackfolio.tfo`, excluido de Git. La música y los datos locales no se guardan en el repositorio. Trasladar el código mediante Git y trasladar una biblioteca musical son operaciones distintas.
 
 ## Apariencia compartida
 

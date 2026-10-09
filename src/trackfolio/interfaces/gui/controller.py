@@ -108,7 +108,7 @@ class CatalogController(QObject):
         dialog.setOption(QFileDialog.Option.DontUseNativeDialog, True)
         dialog.setFileMode(QFileDialog.FileMode.ExistingFile)
         dialog.setNameFilters(
-            ["Catálogos SQLite (*.sqlite3 *.sqlite *.db)", "Todos los archivos (*)"]
+            ["Catálogos de Trackfolio (*.tfo *.sqlite3 *.sqlite *.db)", "Todos los archivos (*)"]
         )
         if self._session is not None:
             dialog.setDirectory(str(self._session.database_path.parent))

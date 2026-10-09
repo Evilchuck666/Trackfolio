@@ -35,7 +35,7 @@ def run_online() -> None:
     if isinstance(connection, Connection):
         run_with_connection(connection)
         return
-    url = make_url(config.get_main_option("sqlalchemy.url") or "sqlite:///data/trackfolio.sqlite3")
+    url = make_url(config.get_main_option("sqlalchemy.url") or "sqlite:///data/trackfolio.tfo")
     if url.get_backend_name() != "sqlite" or not url.database or url.database == ":memory:":
         raise ValueError("Las migraciones necesitan una ruta de base de datos SQLite persistente.")
     database = Path(url.database)

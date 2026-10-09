@@ -35,7 +35,15 @@ def build_catalog(path):
         engine.dispose()
 
 
-@pytest.mark.parametrize("name", ["catálogo con espacios.sqlite3", "catálogo % #.sqlite3"])
+@pytest.mark.parametrize(
+    "name",
+    [
+        "catálogo con espacios.tfo",
+        "catálogo % #.tfo",
+        "catálogo con espacios.sqlite3",
+        "catálogo % #.sqlite3",
+    ],
+)
 def test_open_reads_from_database_with_portable_paths_and_does_not_modify_it(tmp_path, name):
     path = tmp_path / name
     entry = build_catalog(path)

@@ -79,7 +79,7 @@ Desde la raíz, después de preparar el entorno:
 bash setup.sh --run-uv run --locked --extra gui trackfolio
 ```
 
-Para abrir una base concreta añade `--database "ruta/al/catalogo.sqlite3"`. La base de ejemplo es local y está excluida de Git: **la preparación deja la aplicación lista, pero no inventa canciones ni crea un catálogo con tu música**. Un clon nuevo necesita importar un archivo o abrir un catálogo existente.
+Para abrir una base concreta añade `--database "ruta/al/catalogo.tfo"`. La base de ejemplo es local y está excluida de Git: **la preparación deja la aplicación lista, pero no inventa canciones ni crea un catálogo con tu música**. Un clon nuevo necesita importar un archivo o abrir un catálogo existente.
 
 Sin `--database`, se restaura el último catálogo abierto cuando sigue disponible. Para empezar sin restaurarlo, usa `--no-restore`. Puedes abrir otra base con **Abrir catálogo…** y recargar sus registros con **Actualizar**. Selecciona una canción para consultar su detalle; los textos permiten copiar datos y las líricas se muestran como texto plano.
 
@@ -92,10 +92,10 @@ En VS Code, ejecuta la tarea **Trackfolio: iniciar GUI con la muestra** o la con
 Desde la raíz del proyecto, importa un archivo sin modificarlo:
 
 ```sh
-bash setup.sh --run-uv run --locked --extra gui python scripts/import_audio.py "ruta/a/cancion.flac" --database data/trackfolio.sqlite3
+bash setup.sh --run-uv run --locked --extra gui python scripts/import_audio.py "ruta/a/cancion.flac" --database data/trackfolio.tfo
 ```
 
-Abre `data/trackfolio.sqlite3` en SQLiteBrowser y consulta la vista `track_details`. La [guía de la base de datos](docs/database.md) explica las tablas, los campos ausentes y la revisión de carátulas. El SQL inicial está en [migrations/001_initial.sql](migrations/001_initial.sql); la base local y la música están excluidas de Git.
+Abre `data/trackfolio.tfo` en SQLiteBrowser y consulta la vista `track_details`. La [guía de la base de datos](docs/database.md) explica las tablas, los campos ausentes y la revisión de carátulas. El SQL inicial está en [migrations/001_initial.sql](migrations/001_initial.sql); la base local y la música están excluidas de Git.
 
 ## Compatibilidad prevista
 

@@ -16,7 +16,12 @@ from trackfolio.infrastructure.metadata import MetadataReadError, read_metadata
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("audio", type=Path, help="Archivo FLAC o MP3 que se desea importar.")
-    parser.add_argument("--database", type=Path, default=Path("data/trackfolio.sqlite3"))
+    parser.add_argument(
+        "--database",
+        type=Path,
+        default=Path("data/trackfolio.tfo"),
+        help="Catálogo de destino (por defecto: %(default)s).",
+    )
     parser.add_argument(
         "--library-root",
         type=Path,

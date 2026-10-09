@@ -12,7 +12,7 @@ from trackfolio.infrastructure import database as db
 
 
 def catalogue(tmp_path):
-    path = tmp_path / "catálogo % portable.sqlite3"
+    path = tmp_path / "catálogo % portable.tfo"
     db.migrate_database(path)
     return db.create_engine(path)
 

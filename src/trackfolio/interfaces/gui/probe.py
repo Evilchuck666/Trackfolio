@@ -28,7 +28,7 @@ def run_probe(argv: list[str]) -> dict[str, object]:
     app = QApplication(["trackfolio-doctor", *argv])
     apply_theme(app)
     with tempfile.TemporaryDirectory(prefix="trackfolio-gui-") as directory:
-        database = Path(directory) / "catálogo portable.sqlite3"
+        database = Path(directory) / "catálogo portable.tfo"
         migrate_database(database)
         engine = create_engine(database)
         try:
