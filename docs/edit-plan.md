@@ -284,5 +284,8 @@ SQL mantiene todos los créditos. Si falla la liberación del adaptador después
 commit, el resultado sigue identificándose como guardado y muestra la incidencia.
 
 El diagnóstico gráfico y la validación del wheel comprueban también la edición sobre
-SQLite temporal. La matriz existente incorpora las nuevas pruebas; su ejecución para
-estos cambios y la revisión visual manual de Windows/macOS quedan pendientes.
+SQLite temporal. La [ejecución 37939283014](https://github.com/Evilchuck666/Trackfolio/actions/runs/37939283014)
+pasó en las ocho combinaciones de Linux, Windows, macOS Intel y Apple Silicon, con
+uv 0.12.10 y 0.12.23. La revisión visual manual de Windows/macOS sigue pendiente;
+los resultados y las correcciones de portabilidad de las pruebas están en
+[VALIDATION.md](../VALIDATION.md).

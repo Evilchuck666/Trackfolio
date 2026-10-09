@@ -354,7 +354,25 @@ Podía observar un estado intermedio sin tareas pendientes y salir del bucle; al
 comenzar la actualización aplazada, su comprobación final volvía a ser falsa.
 La prueba espera ahora también la señal de detalle cargado posterior a **Actualizar**
 y comprueba que el guardado produjo un resultado. Se conserva el límite de cinco
-segundos y el código del producto no cambia. Su nueva matriz remota está pendiente.
+segundos y el código del producto no cambia. El orden de eventos se reprodujo con
+Qt y SQLite reales: el mensaje de timeout apareció en **0,026 segundos** al comenzar
+el trabajo de actualización antes de salir del bucle de espera. La suite completa
+local sigue con **426 passed, 4 skipped**, y Ruff, formato y mypy pasan.
+La [ejecución 37939283014](https://github.com/Evilchuck666/Trackfolio/actions/runs/37939283014),
+sobre `efb9935a9177b509b9bd2962a2f21c46656cc400`, terminó con **los ocho jobs correctos**:
+
+| Plataforma, con uv 0.12.10 y 0.12.23 | Núcleo sin Qt | Suite con GUI |
+| --- | --- | --- |
+| Linux x86-64 | 345 passed, 6 skipped | 430 passed |
+| Windows x86-64 | 333 passed, 18 skipped | 418 passed, 12 skipped |
+| macOS Intel | 345 passed, 6 skipped | 430 passed |
+| macOS Apple Silicon | 345 passed, 6 skipped | 430 passed |
+
+Los seis módulos GUI se omiten cuando Qt no está instalado. En Windows se conservan
+las omisiones de los lanzadores Unix y del nombre de archivo con `?`; las pruebas
+corregidas se ejecutan en todas las plataformas. Ruff, formato, mypy, diagnósticos
+gráficos nativos y `offscreen` y la verificación del wheel instalado fuera del checkout
+pasaron. La revisión visual manual de Windows y macOS sigue pendiente.
 
 ## Repositorio
 
