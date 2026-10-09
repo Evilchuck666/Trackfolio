@@ -179,8 +179,9 @@ La instalación aislada utilizó requisitos exportados con `uv export --locked`,
 Las comprobaciones del checkout utilizaron `uv run --locked --extra gui`.
 
 La matriz existente de GitHub Actions incorpora estas pruebas y verifica los módulos y
-la importación desde el wheel. **Esta entrega todavía no se ha ejecutado en GitHub
-Actions**. Quedan pendientes Windows/macOS y su revisión visual e interacción real.
+la importación desde el wheel. Sus resultados multiplataforma, tras corregir las pruebas,
+se registran en la sección de corrección del 9 de octubre. Quedan pendientes la revisión
+visual manual y la interacción real de Windows/macOS.
 Los resultados `offscreen` no acreditan un escritorio; los backends Wayland/`xcb`
 comprobados aquí corresponden únicamente a esta máquina Linux.
 
@@ -218,8 +219,62 @@ La edición de créditos desde la GUI sigue pendiente; se comprobó la correcci�
 reimportación de metadatos corregidos.
 
 La matriz multiplataforma incorpora los módulos nuevos y la verificación del wheel.
-**Esta entrega aún no se ha ejecutado en GitHub Actions**. Quedan pendientes los resultados
-de Windows/macOS y su revisión visual manual; Wayland acredita únicamente esta máquina.
+Los resultados de Windows/macOS constan en la sección siguiente. Su revisión visual manual
+sigue pendiente; Wayland acredita únicamente esta máquina.
+
+## Corrección de pruebas multiplataforma: 9 de octubre de 2026
+
+La [ejecución 37916069251](https://github.com/Evilchuck666/Trackfolio/actions/runs/37916069251),
+sobre `8a755c8`, pasó en Linux y macOS Intel con ambas versiones de uv. Windows falló en
+una prueba del núcleo, y macOS Apple Silicon tuvo esperas agotadas en la integración GUI.
+
+En Windows, la preparación de `test_existing_migration_target_disappearing_is_not_recreated`
+dejaba abierta su conexión SQLite: el contexto de conexión confirma o revierte la
+transacción, pero no cierra el archivo. Se añadió cierre explícito a las conexiones de
+`test_database.py`, manteniendo commit/rollback, y una regresión que retiene una referencia
+a la conexión para comprobar que se cerró también en Linux.
+
+En Apple Silicon, los fallos aparecían al iniciar otra importación tras consultas previas.
+El mismo timeout se reprodujo localmente con `sys.setswitchinterval(0.1)`: la espera que
+alternaba `processEvents()` y `QTest.qWait(5)` impedía avanzar a los trabajadores con esa
+planificación. Las esperas usan ahora `QEventLoop` y temporizadores Qt, con el mismo límite
+de cinco segundos. La prueba de importación reentrante cubre los intervalos de 0,005 y
+0,1 segundos y restaura el valor anterior. No se modificó el código del producto, el
+catálogo ni el entorno bloqueado.
+
+| Comprobación local | Resultado |
+| --- | --- |
+| Pruebas de base e integración de importación | **34 passed**. |
+| Suite completa, GUI `offscreen` | **337 passed, 4 skipped**; PowerShell ausente. |
+| Ruff, formato y mypy | Correctos; 73 archivos con formato y 42 archivos de código en mypy. |
+
+La [ejecución 37919647833](https://github.com/Evilchuck666/Trackfolio/actions/runs/37919647833)
+confirmó la corrección `1b68511` en las seis combinaciones de Linux y macOS. Windows superó
+la prueba del núcleo y llegó a dos errores de GUI que antes no se habían ejecutado:
+
+- El selector Qt devuelve rutas con `/`, mientras `str(WindowsPath)` usa `\\`. La prueba
+  compara ahora objetos `Path`, manteniendo la comprobación de ruta y Unicode.
+- El catálogo antiguo del test almacenaba la raíz con `str(music)`, en lugar de
+  `music.as_posix()`, que usa el repositorio. El fixture utiliza la representación real;
+  se mantienen las expectativas de IDs, artistas y una canción creada y otra actualizada.
+  Sus conexiones SQLite también se cierran explícitamente.
+
+Estos cambios se publicaron en `5850021`, rama `generate-db`. Sus **25 pruebas afectadas**,
+Ruff, formato y mypy pasan localmente. La [ejecución 37920075123](https://github.com/Evilchuck666/Trackfolio/actions/runs/37920075123),
+sobre `58500218e7b11e22836f7036f593eed3a20a242e`, terminó con **los ocho jobs correctos**:
+
+| Plataforma, con uv 0.12.10 y 0.12.23 | Núcleo sin Qt | Suite con GUI |
+| --- | --- | --- |
+| Linux x86-64 | 295 passed, 4 skipped | 341 passed |
+| Windows x86-64 | 283 passed, 16 skipped | 329 passed, 12 skipped |
+| macOS Intel | 295 passed, 4 skipped | 341 passed |
+| macOS Apple Silicon | 295 passed, 4 skipped | 341 passed |
+
+Los módulos Qt se omiten en las suites del núcleo. En Windows también se omiten los
+lanzadores Unix y el caso de un nombre de archivo con `?`, no admitido por ese sistema.
+No se omitieron las pruebas corregidas. Ruff, formato, mypy, los diagnósticos gráficos
+`offscreen`/nativos y la verificación del wheel instalado fuera del checkout pasaron.
+La revisión visual manual de Windows/macOS sigue pendiente.
 
 ## Repositorio
 
