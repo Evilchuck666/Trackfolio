@@ -7,9 +7,11 @@ import json
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from sqlalchemy import Connection, Engine, Table, delete, insert, select, update
+from sqlalchemy import Connection, Engine, Table, and_, delete, func, insert, select, update
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
-from trackfolio.domain.catalog import CatalogEntry
+from trackfolio.application.import_catalog import SaveOutcome
+from trackfolio.domain.catalog import CatalogEntry, CatalogSummary
 from trackfolio.domain.metadata import Artwork, RawTagValue, TrackMetadata
 from trackfolio.infrastructure.database import (
     album_artists,
@@ -24,6 +26,7 @@ from trackfolio.infrastructure.database import (
     track_genres,
     tracks,
 )
+from trackfolio.infrastructure.schema_validation import validate_catalog_connection
 
 
 def _insert_id(connection: Connection, table: Table, values: dict[str, Any]) -> int:
@@ -38,9 +41,69 @@ def _unique_labels(values: tuple[str, ...]) -> tuple[str, ...]:
     return tuple(dict.fromkeys(value for value in values if value.strip()))
 
 
+def album_import_key(
+    library_id: int,
+    directory: str,
+    title: str | None,
+    date: str | None,
+    year: int | None,
+    disc_total: int | None,
+    artist_names: tuple[str, ...],
+) -> str:
+    """Identidad de agrupación compartida por la importación y la edición."""
+    context = {
+        "library_id": library_id,
+        "directory": directory,
+        "title": title,
+        "date": date,
+        "year": year,
+        "disc_total": disc_total,
+        "album_artists": artist_names,
+    }
+    return hashlib.sha256(
+        json.dumps(context, ensure_ascii=False, sort_keys=True).encode("utf-8")
+    ).hexdigest()
+
+
+def separate_shared_track(connection: Connection, file_id: int, track_id: int) -> int:
+    """Copiar pista y créditos cuando editar un archivo afectaría a otros."""
+    references = connection.execute(
+        select(func.count()).select_from(audio_files).where(audio_files.c.track_id == track_id)
+    ).scalar_one()
+    if references <= 1:
+        return track_id
+    record = connection.execute(select(tracks).where(tracks.c.id == track_id)).mappings().one()
+    copied_id = _insert_id(
+        connection, tracks, {key: value for key, value in record.items() if key != "id"}
+    )
+    for table in (track_artists, track_genres):
+        for relation in connection.execute(
+            select(table).where(table.c.track_id == track_id)
+        ).mappings():
+            connection.execute(insert(table).values(**{**relation, "track_id": copied_id}))
+    connection.execute(
+        update(audio_files).where(audio_files.c.id == file_id).values(track_id=copied_id)
+    )
+    return copied_id
+
+
 class SqliteCatalogRepository:
     def __init__(self, engine: Engine) -> None:
         self.engine = engine
+        self._write_schema: tuple[int, int, str] | None = None
+
+    def _validate_write_schema(self, connection: Connection) -> None:
+        """Exigir el esquema vigente y reutilizar su inspección mientras no cambie."""
+        schema_version = int(connection.exec_driver_sql("PRAGMA schema_version").scalar_one())
+        application_id = int(connection.exec_driver_sql("PRAGMA application_id").scalar_one())
+        if self._write_schema is not None:
+            actual_revision: object = connection.exec_driver_sql(
+                "SELECT version_num FROM alembic_version"
+            ).scalar_one_or_none()
+            if self._write_schema == (schema_version, application_id, actual_revision):
+                return
+        revision = validate_catalog_connection(connection, require_current=True)
+        self._write_schema = (schema_version, application_id, revision)
 
     def _album_id(
         self, connection: Connection, metadata: TrackMetadata, library_id: int, directory: str
@@ -53,18 +116,15 @@ class SqliteCatalogRepository:
             and metadata.disc_total is None
         ):
             return None
-        context = {
-            "library_id": library_id,
-            "directory": directory,
-            "title": metadata.album,
-            "date": metadata.album_date,
-            "year": metadata.album_year,
-            "disc_total": metadata.disc_total,
-            "album_artists": metadata.album_artists,
-        }
-        import_key = hashlib.sha256(
-            json.dumps(context, ensure_ascii=False, sort_keys=True).encode("utf-8")
-        ).hexdigest()
+        import_key = album_import_key(
+            library_id,
+            directory,
+            metadata.album,
+            metadata.album_date,
+            metadata.album_year,
+            metadata.disc_total,
+            metadata.album_artists,
+        )
         existing = connection.execute(
             select(albums.c.id).where(albums.c.import_key == import_key)
         ).scalar_one_or_none()
@@ -84,58 +144,31 @@ class SqliteCatalogRepository:
             },
         )
 
-    def _artist_id(
-        self,
-        connection: Connection,
-        name: str,
-        album_id: int | None,
-        library_id: int,
-        directory: str,
-    ) -> int:
-        if album_id is not None:
-            existing = connection.execute(
-                select(artists.c.id)
-                .join(album_artists, album_artists.c.artist_id == artists.c.id)
-                .where(album_artists.c.album_id == album_id, artists.c.name == name)
-                .order_by(artists.c.id)
-                .limit(1)
-            ).scalar_one_or_none()
-            if existing is not None:
-                return int(existing)
-            existing = connection.execute(
-                select(artists.c.id)
-                .join(track_artists, track_artists.c.artist_id == artists.c.id)
-                .join(tracks, tracks.c.id == track_artists.c.track_id)
-                .where(tracks.c.album_id == album_id, artists.c.name == name)
-                .order_by(artists.c.id)
-                .limit(1)
-            ).scalar_one_or_none()
-            if existing is not None:
-                return int(existing)
-        else:
-            candidates = connection.execute(
-                select(artists.c.id, audio_files.c.relative_path)
-                .join(track_artists, track_artists.c.artist_id == artists.c.id)
-                .join(audio_files, audio_files.c.track_id == track_artists.c.track_id)
-                .join(tracks, tracks.c.id == audio_files.c.track_id)
-                .where(
-                    audio_files.c.library_id == library_id,
-                    tracks.c.album_id.is_(None),
-                    artists.c.name == name,
-                )
-                .order_by(artists.c.id)
-            )
-            for candidate in candidates:
-                if PurePosixPath(str(candidate.relative_path)).parent.as_posix() == directory:
-                    return int(candidate.id)
-        return _insert_id(connection, artists, {"name": name})
+    def _artist_id(self, connection: Connection, name: str) -> int:
+        connection.execute(
+            sqlite_insert(artists)
+            .values(name=name)
+            .on_conflict_do_nothing(index_elements=[artists.c.name])
+        )
+        return int(
+            connection.execute(select(artists.c.id).where(artists.c.name == name)).scalar_one()
+        )
 
     def save(self, metadata: TrackMetadata, library_root: Path, relative_path: str) -> CatalogEntry:
+        outcome = self.write(metadata, library_root, relative_path)
+        entry = self.get(outcome.file_id)
+        if entry is None:
+            raise RuntimeError("La importación no produjo un registro consultable.")
+        return entry
+
+    def write(self, metadata: TrackMetadata, library_root: Path, relative_path: str) -> SaveOutcome:
+        """Guardar una transacción y devolver sus identificadores, sin releer el detalle."""
         relative = PurePosixPath(relative_path)
         if relative.is_absolute() or ".." in relative.parts or not relative.parts:
             raise ValueError("La ruta del archivo debe ser relativa a la biblioteca.")
         directory = relative.parent.as_posix()
         with self.engine.begin() as connection:
+            self._validate_write_schema(connection)
             root_path = library_root.as_posix()
             existing_library = connection.execute(
                 select(libraries.c.id).where(libraries.c.root_path == root_path)
@@ -164,7 +197,9 @@ class SqliteCatalogRepository:
             if existing_file is None:
                 track_id = _insert_id(connection, tracks, track_values)
             else:
-                track_id = int(existing_file.track_id)
+                track_id = separate_shared_track(
+                    connection, int(existing_file.id), int(existing_file.track_id)
+                )
                 connection.execute(
                     update(tracks).where(tracks.c.id == track_id).values(**track_values)
                 )
@@ -173,16 +208,18 @@ class SqliteCatalogRepository:
 
             def artist_id_for(name: str) -> int:
                 if name not in artist_cache:
-                    artist_cache[name] = self._artist_id(
-                        connection, name, album_id, library_id, directory
-                    )
+                    artist_cache[name] = self._artist_id(connection, name)
                 return artist_cache[name]
 
             track_artist_ids = [artist_id_for(name) for name in _unique_labels(metadata.artists)]
             album_artist_ids = [
                 artist_id_for(name) for name in _unique_labels(metadata.album_artists)
             ]
-            connection.execute(delete(track_artists).where(track_artists.c.track_id == track_id))
+            connection.execute(
+                delete(track_artists).where(
+                    track_artists.c.track_id == track_id, track_artists.c.role == "artist"
+                )
+            )
             for position, artist_id in enumerate(track_artist_ids):
                 connection.execute(
                     insert(track_artists).values(
@@ -191,7 +228,10 @@ class SqliteCatalogRepository:
                 )
             if album_id is not None:
                 connection.execute(
-                    delete(album_artists).where(album_artists.c.album_id == album_id)
+                    delete(album_artists).where(
+                        album_artists.c.album_id == album_id,
+                        album_artists.c.role == "album_artist",
+                    )
                 )
                 for position, artist_id in enumerate(album_artist_ids):
                     connection.execute(
@@ -270,126 +310,130 @@ class SqliteCatalogRepository:
                         file_id=file_id, key=tag.key, value=tag.value, position=tag.position
                     )
                 )
-        entry = self.get(file_id)
-        if entry is None:
-            raise RuntimeError("La importación no produjo un registro consultable.")
-        return entry
+        return SaveOutcome(file_id, track_id, "created" if existing_file is None else "updated")
 
     def get(self, file_id: int) -> CatalogEntry | None:
         with self.engine.connect() as connection:
-            record = (
-                connection.execute(
-                    select(
-                        audio_files,
-                        libraries.c.root_path,
-                        tracks.c.title,
-                        tracks.c.track_number,
-                        tracks.c.track_total,
-                        tracks.c.disc_number,
-                        tracks.c.disc_total,
-                        tracks.c.lyrics,
-                        albums.c.id.label("album_id"),
-                        albums.c.title.label("album_title"),
-                        albums.c.year.label("album_year"),
-                        albums.c.date.label("album_date"),
-                    )
-                    .join(libraries, libraries.c.id == audio_files.c.library_id)
-                    .join(tracks, tracks.c.id == audio_files.c.track_id)
-                    .outerjoin(albums, albums.c.id == tracks.c.album_id)
-                    .where(audio_files.c.id == file_id)
+            return self.get_from_connection(connection, file_id)
+
+    def get_from_connection(self, connection: Connection, file_id: int) -> CatalogEntry | None:
+        """Leer un detalle dentro de la transacción que lo acaba de guardar."""
+        record = (
+            connection.execute(
+                select(
+                    audio_files,
+                    libraries.c.root_path,
+                    tracks.c.title,
+                    tracks.c.track_number,
+                    tracks.c.track_total,
+                    tracks.c.disc_number,
+                    tracks.c.disc_total,
+                    tracks.c.lyrics,
+                    albums.c.id.label("album_id"),
+                    albums.c.title.label("album_title"),
+                    albums.c.year.label("album_year"),
+                    albums.c.date.label("album_date"),
                 )
-                .mappings()
-                .one_or_none()
+                .join(libraries, libraries.c.id == audio_files.c.library_id)
+                .join(tracks, tracks.c.id == audio_files.c.track_id)
+                .outerjoin(albums, albums.c.id == tracks.c.album_id)
+                .where(audio_files.c.id == file_id)
             )
-            if record is None:
-                return None
-            track_id = int(record["track_id"])
-            track_artist_names: tuple[str, ...] = tuple(
+            .mappings()
+            .one_or_none()
+        )
+        if record is None:
+            return None
+        track_id = int(record["track_id"])
+        track_artist_names: tuple[str, ...] = tuple(
+            connection.execute(
+                select(artists.c.name)
+                .join(track_artists, track_artists.c.artist_id == artists.c.id)
+                .where(track_artists.c.track_id == track_id, track_artists.c.role == "artist")
+                .order_by(track_artists.c.position)
+            ).scalars()
+        )
+        album_artist_names: tuple[str, ...] = (
+            tuple(
                 connection.execute(
                     select(artists.c.name)
-                    .join(track_artists, track_artists.c.artist_id == artists.c.id)
-                    .where(track_artists.c.track_id == track_id)
-                    .order_by(track_artists.c.position)
-                ).scalars()
-            )
-            album_artist_names: tuple[str, ...] = (
-                tuple(
-                    connection.execute(
-                        select(artists.c.name)
-                        .join(album_artists, album_artists.c.artist_id == artists.c.id)
-                        .where(album_artists.c.album_id == record["album_id"])
-                        .order_by(album_artists.c.position)
-                    ).scalars()
-                )
-                if record["album_id"] is not None
-                else ()
-            )
-            genre_names: tuple[str, ...] = tuple(
-                connection.execute(
-                    select(genres.c.name)
-                    .join(track_genres, track_genres.c.genre_id == genres.c.id)
-                    .where(track_genres.c.track_id == track_id)
-                    .order_by(track_genres.c.position)
-                ).scalars()
-            )
-            raw = tuple(
-                RawTagValue(key=row.key, value=row.value, position=row.position)
-                for row in connection.execute(
-                    select(raw_tags.c.key, raw_tags.c.value, raw_tags.c.position)
-                    .where(raw_tags.c.file_id == file_id)
-                    .order_by(raw_tags.c.key, raw_tags.c.position)
-                )
-            )
-            artwork: Artwork | None = None
-            if record["cover_artwork_id"] is not None:
-                art = (
-                    connection.execute(
-                        select(artworks).where(artworks.c.id == record["cover_artwork_id"])
+                    .join(album_artists, album_artists.c.artist_id == artists.c.id)
+                    .where(
+                        album_artists.c.album_id == record["album_id"],
+                        album_artists.c.role == "album_artist",
                     )
-                    .mappings()
-                    .one()
-                )
-                source_path = (
-                    Path(record["root_path"]) / record["cover_relative_path"]
-                    if record["cover_relative_path"] is not None
-                    else None
-                )
-                artwork = Artwork(
-                    data=bytes(art["data"]),
-                    mime_type=art["mime"],
-                    width=art["width"],
-                    height=art["height"],
-                    source=record["cover_source"],
-                    source_path=source_path,
-                )
-            metadata = TrackMetadata(
-                title=record["title"],
-                album=record["album_title"],
-                album_year=record["album_year"],
-                album_date=record["album_date"],
-                track_number=record["track_number"],
-                track_total=record["track_total"],
-                disc_number=record["disc_number"],
-                disc_total=record["disc_total"],
-                artists=track_artist_names,
-                album_artists=album_artist_names,
-                genres=genre_names,
-                lyrics=record["lyrics"],
-                artwork=artwork,
-                raw_tags=raw,
-                audio_format=str(record["format"]).lower(),
-                duration_seconds=record["duration_seconds"],
-                sample_rate_hz=record["sample_rate_hz"],
-                channels=record["channels"],
-                bits_per_sample=record["bits_per_sample"],
+                    .order_by(album_artists.c.position)
+                ).scalars()
             )
-            return CatalogEntry(
-                file_id=file_id,
-                track_id=track_id,
-                library_root=Path(record["root_path"]),
-                relative_path=record["relative_path"],
-                metadata=metadata,
+            if record["album_id"] is not None
+            else ()
+        )
+        genre_names: tuple[str, ...] = tuple(
+            connection.execute(
+                select(genres.c.name)
+                .join(track_genres, track_genres.c.genre_id == genres.c.id)
+                .where(track_genres.c.track_id == track_id)
+                .order_by(track_genres.c.position)
+            ).scalars()
+        )
+        raw = tuple(
+            RawTagValue(key=row.key, value=row.value, position=row.position)
+            for row in connection.execute(
+                select(raw_tags.c.key, raw_tags.c.value, raw_tags.c.position)
+                .where(raw_tags.c.file_id == file_id)
+                .order_by(raw_tags.c.key, raw_tags.c.position)
             )
+        )
+        artwork: Artwork | None = None
+        if record["cover_artwork_id"] is not None:
+            art = (
+                connection.execute(
+                    select(artworks).where(artworks.c.id == record["cover_artwork_id"])
+                )
+                .mappings()
+                .one()
+            )
+            source_path = (
+                Path(record["root_path"]) / record["cover_relative_path"]
+                if record["cover_relative_path"] is not None
+                else None
+            )
+            artwork = Artwork(
+                data=bytes(art["data"]),
+                mime_type=art["mime"],
+                width=art["width"],
+                height=art["height"],
+                source=record["cover_source"],
+                source_path=source_path,
+            )
+        metadata = TrackMetadata(
+            title=record["title"],
+            album=record["album_title"],
+            album_year=record["album_year"],
+            album_date=record["album_date"],
+            track_number=record["track_number"],
+            track_total=record["track_total"],
+            disc_number=record["disc_number"],
+            disc_total=record["disc_total"],
+            artists=track_artist_names,
+            album_artists=album_artist_names,
+            genres=genre_names,
+            lyrics=record["lyrics"],
+            artwork=artwork,
+            raw_tags=raw,
+            audio_format=str(record["format"]).lower(),
+            duration_seconds=record["duration_seconds"],
+            sample_rate_hz=record["sample_rate_hz"],
+            channels=record["channels"],
+            bits_per_sample=record["bits_per_sample"],
+        )
+        return CatalogEntry(
+            file_id=file_id,
+            track_id=track_id,
+            library_root=Path(record["root_path"]),
+            relative_path=record["relative_path"],
+            metadata=metadata,
+        )
 
     def list_entries(self) -> tuple[CatalogEntry, ...]:
         with self.engine.connect() as connection:
@@ -398,3 +442,97 @@ class SqliteCatalogRepository:
             )
         entries = (self.get(int(file_id)) for file_id in file_ids)
         return tuple(entry for entry in entries if entry is not None)
+
+    def summary_from_connection(
+        self, connection: Connection, file_id: int
+    ) -> CatalogSummary | None:
+        """Resumen confirmado del archivo sin abrir otra conexión."""
+        row = (
+            connection.execute(
+                select(
+                    audio_files.c.track_id,
+                    audio_files.c.relative_path,
+                    tracks.c.title,
+                    albums.c.title.label("album_title"),
+                    albums.c.year.label("album_year"),
+                )
+                .join(tracks, tracks.c.id == audio_files.c.track_id)
+                .outerjoin(albums, albums.c.id == tracks.c.album_id)
+                .where(audio_files.c.id == file_id)
+            )
+            .mappings()
+            .one_or_none()
+        )
+        if row is None:
+            return None
+        names: tuple[str, ...] = tuple(
+            connection.execute(
+                select(artists.c.name)
+                .join(track_artists, track_artists.c.artist_id == artists.c.id)
+                .where(
+                    track_artists.c.track_id == row["track_id"], track_artists.c.role == "artist"
+                )
+                .order_by(track_artists.c.position)
+            ).scalars()
+        )
+        return CatalogSummary(
+            file_id=file_id,
+            track_id=row["track_id"],
+            title=row["title"],
+            artists=names,
+            album=row["album_title"],
+            album_year=row["album_year"],
+            relative_path=row["relative_path"],
+        )
+
+    def list_summaries(self) -> tuple[CatalogSummary, ...]:
+        """Leer todas las filas de la lista sin cargar el detalle de cada archivo."""
+        statement = (
+            select(
+                audio_files.c.id.label("file_id"),
+                audio_files.c.track_id,
+                audio_files.c.relative_path,
+                tracks.c.title,
+                albums.c.title.label("album_title"),
+                albums.c.year.label("album_year"),
+                artists.c.name.label("artist_name"),
+            )
+            .join(tracks, tracks.c.id == audio_files.c.track_id)
+            .outerjoin(albums, albums.c.id == tracks.c.album_id)
+            .outerjoin(
+                track_artists,
+                and_(track_artists.c.track_id == tracks.c.id, track_artists.c.role == "artist"),
+            )
+            .outerjoin(artists, artists.c.id == track_artists.c.artist_id)
+            .order_by(audio_files.c.id, track_artists.c.position)
+        )
+        summaries: dict[int, CatalogSummary] = {}
+        credits: dict[int, list[str]] = {}
+        with self.engine.connect() as connection:
+            for row in connection.execute(statement).mappings():
+                file_id = int(row["file_id"])
+                if file_id not in summaries:
+                    summaries[file_id] = CatalogSummary(
+                        file_id=file_id,
+                        track_id=int(row["track_id"]),
+                        title=row["title"],
+                        artists=(),
+                        album=row["album_title"],
+                        album_year=row["album_year"],
+                        relative_path=row["relative_path"],
+                    )
+                    credits[file_id] = []
+                if row["artist_name"] is not None:
+                    credits[file_id].append(row["artist_name"])
+        return tuple(
+            CatalogSummary(
+                file_id=summary.file_id,
+                track_id=summary.track_id,
+                title=summary.title,
+                artists=tuple(credits[file_id]),
+                album=summary.album,
+                album_year=summary.album_year,
+                relative_path=summary.relative_path,
+            )
+            for file_id, summary in summaries.items()
+        )

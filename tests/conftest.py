@@ -3,10 +3,31 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import sys
 from pathlib import Path
 
 import pytest
+
+
+@pytest.fixture(scope="session")
+def qt_app():
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    pytest.importorskip("PySide6")
+    from PySide6.QtCore import QCoreApplication, QEvent
+    from PySide6.QtWidgets import QApplication
+
+    from trackfolio.interfaces.gui.theme import apply_theme
+
+    app = QApplication.instance() or QApplication(["Trackfolio-tests"])
+    app.setQuitOnLastWindowClosed(False)
+    apply_theme(app)
+    yield app
+    for window in app.topLevelWidgets():
+        window.close()
+        window.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    app.processEvents()
 
 
 def load_script(name):
@@ -31,11 +52,17 @@ def doctor():
 
 
 @pytest.fixture
+def setup(monkeypatch):
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1]))
+    return load_script("setup")
+
+
+@pytest.fixture
 def configured_root(tmp_path):
     root = tmp_path / "project with spaces"
     root.mkdir()
     (root / "pyproject.toml").write_text(
-        '[tool.uv]\nrequired-version = "==0.12.10"\n', encoding="utf-8"
+        '[tool.uv]\nrequired-version = ">=0.12.10,<0.13"\n', encoding="utf-8"
     )
     (root / ".python-version").write_text("3.13.15\n", encoding="utf-8")
     (root / "uv.lock").write_text(

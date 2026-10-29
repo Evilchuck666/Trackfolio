@@ -1,5 +1,6 @@
 # Entornos locales y cachés.
 .venv/
+.tools/
 venv/
 __pycache__/
 *.py[cod]
@@ -24,6 +25,7 @@ music/
 *.db
 *.sqlite
 *.sqlite3
+*.tfo
 *-wal
 *-shm
 *.flac
@@ -31,6 +33,7 @@ music/
 !tests/fixtures/**/*.flac
 !tests/fixtures/**/*.mp3
 !tests/fixtures/**/*.sqlite3
+!tests/fixtures/**/*.tfo
 
 # Archivos del sistema y del editor.
 .DS_Store

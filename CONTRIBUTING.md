@@ -2,15 +2,17 @@
 
 ## Incorporación
 
-Instala **uv 0.12.10** y Git siguiendo [docs/environment.md](docs/environment.md), clona el repositorio y prepara el entorno desde la raíz:
+Descarga o clona la rama `gui` y prepara el entorno desde la raíz. No hace falta instalar previamente uv ni Python:
 
 ```sh
-uv run --no-project --python 3.13.15 python scripts/bootstrap.py --gui
+bash setup.sh
 ```
 
-Usa `--core` para desarrollar sin Qt. Abre `Trackfolio.code-workspace` en VS Code y selecciona el intérprete local `.venv` si el editor no lo detecta.
+En Windows usa `powershell -NoProfile -ExecutionPolicy Bypass -File .\setup.ps1`. Usa `--core` para desarrollar sin Qt y `--skip-editor` para no preparar VS Code. Las instalaciones del sistema requieren confirmación; `--non-interactive` no realiza preguntas. Consulta [las opciones del lanzador](docs/environment.md#preparación-en-un-solo-comando).
 
-El entorno usa CPython 3.13.15 administrado por uv y dependencias bloqueadas en `uv.lock`. No instales paquetes del proyecto en el Python global ni copies `.venv` desde otro equipo. Los comandos `uv run` no requieren activar el entorno.
+Abre `Trackfolio.code-workspace` en VS Code, o utiliza `bash setup.sh --open-code` (los mismos argumentos en PowerShell). Selecciona el intérprete local `.venv` si el editor no lo detecta.
+
+El entorno usa CPython 3.13.15 administrado por uv y dependencias bloqueadas en `uv.lock`. Reutiliza cualquier uv compatible con `>=0.12.10,<0.13`; si falta, lo descarga en `.tools/uv` sin editar los perfiles del shell. No instales paquetes del proyecto en el Python global ni copies `.venv` o `.tools` desde otro equipo. Los comandos `uv run` no requieren activar el entorno; si uv no está en el `PATH` de tu terminal, antepón `bash setup.sh --run-uv` a sus argumentos o usa el lanzador PowerShell.
 
 ## Cambios de código
 
@@ -49,7 +51,7 @@ uv sync --locked --extra gui --group dev
 uv run --locked --extra gui python scripts/doctor.py --gui
 ```
 
-Revisa el diff del manifiesto y del lock, ejecuta las comprobaciones y sube ambos archivos cuando cambien. Las actualizaciones de CPython, uv, el backend de construcción o PySide6 requieren modificar sus versiones fijadas, los scripts y documentación pertinentes, y verificar nuevamente la matriz. No amplíes `requires-python` sin validar el nuevo intérprete.
+Revisa el diff del manifiesto y del lock, ejecuta las comprobaciones y sube ambos archivos cuando cambien. Las actualizaciones de parche de uv dentro de `>=0.12.10,<0.13` no requieren editar el requisito; verifica la preparación y las pruebas con la versión elegida. Ampliar ese rango o actualizar CPython, el backend de construcción o PySide6 requiere revisar la configuración, los scripts y la documentación pertinentes, y verificar nuevamente la matriz. `uv_build==0.12.10` es el backend de construcción, no una exigencia sobre el ejecutable uv instalado. No amplíes `requires-python` sin validar el nuevo intérprete.
 
 ## Git y datos locales
 

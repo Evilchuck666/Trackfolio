@@ -7,7 +7,11 @@ from pathlib import Path
 
 from sqlalchemy.exc import SQLAlchemyError
 
-from trackfolio.application.catalog import ImportAudio
+from trackfolio.application.catalog import (
+    ImportAudio,
+    prepare_audio_source,
+    validate_library_root,
+)
 from trackfolio.infrastructure.catalog import SqliteCatalogRepository
 from trackfolio.infrastructure.database import create_engine, migrate_database
 from trackfolio.infrastructure.metadata import MetadataReadError, read_metadata
@@ -16,24 +20,31 @@ from trackfolio.infrastructure.metadata import MetadataReadError, read_metadata
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("audio", type=Path, help="Archivo FLAC o MP3 que se desea importar.")
-    parser.add_argument("--database", type=Path, default=Path("data/trackfolio.sqlite3"))
+    parser.add_argument(
+        "--database",
+        type=Path,
+        default=Path("data/database.tfo"),
+        help="Catálogo de destino (por defecto: %(default)s).",
+    )
     parser.add_argument(
         "--library-root",
         type=Path,
         help="Raíz de la música; por defecto el directorio del archivo.",
     )
     args = parser.parse_args(argv)
-    source = args.audio.expanduser().resolve()
+    source = args.audio.expanduser().absolute()
     database = args.database.expanduser().resolve()
     engine = None
     try:
+        root = validate_library_root(args.library_root or source.parent)
+        source, _ = prepare_audio_source(source, root)
         # Leer antes de crear una BD: un archivo inválido no debe dejar una importación vacía.
         parsed = read_metadata(source)
         migrate_database(database)
         engine = create_engine(database)
         repository = SqliteCatalogRepository(engine)
         importer = ImportAudio(lambda _: parsed, repository)
-        entry = importer.execute(source, args.library_root)
+        entry = importer.execute(source, root)
     except (OSError, ValueError, MetadataReadError, SQLAlchemyError) as exc:
         print(f"No se pudo importar: {exc}")
         return 1

@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import shutil
 import signal
 import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -90,7 +92,14 @@ def test_child_success_without_qt_report_is_not_accepted(doctor, monkeypatch):
 
 @pytest.mark.parametrize("backend", ["offscreen", "minimal"])
 def test_headless_qt_success_does_not_claim_desktop_validation(doctor, monkeypatch, backend):
-    report = {"platform": backend, "style": "fusion", "qt_version": "6.11.2", "events": True}
+    report = {
+        "platform": backend,
+        "style": "fusion",
+        "qt_version": "6.11.2",
+        "events": True,
+        "imported": True,
+        "edited": True,
+    }
     output = doctor.QT_PROBE_PREFIX + json.dumps(report)
 
     def run(command, **kwargs):
@@ -100,6 +109,28 @@ def test_headless_qt_success_does_not_claim_desktop_validation(doctor, monkeypat
     result = doctor.check_qt(backend, timeout=2)
     assert result.ok
     assert "no confirma el escritorio real" in result.detail
+
+
+@pytest.mark.parametrize("missing", ["imported", "edited"])
+def test_qt_report_requires_import_and_edit_confirmation(doctor, monkeypatch, missing):
+    report = {
+        "platform": "offscreen",
+        "style": "fusion",
+        "qt_version": "6.11.2",
+        "events": True,
+        "imported": True,
+        "edited": True,
+    }
+    report.pop(missing)
+    output = doctor.QT_PROBE_PREFIX + json.dumps(report)
+    monkeypatch.setattr(
+        doctor.subprocess,
+        "run",
+        lambda command, **kwargs: subprocess.CompletedProcess(command, 0, output, ""),
+    )
+    result = doctor.check_qt("offscreen", timeout=2)
+    assert not result.ok
+    assert "importación y edición" in result.detail
 
 
 def test_sqlite_persists_unicode_through_sqlalchemy_and_removes_temp_file(
@@ -118,6 +149,41 @@ def test_old_linux_glibc_is_rejected_for_gui(doctor, monkeypatch):
     result = doctor.check_gui_platform()
     assert not result.ok
     assert "glibc 2.34+" in result.detail
+
+
+def test_packaged_visual_resources_are_available_from_an_unrelated_directory(
+    doctor, monkeypatch, tmp_path
+):
+    monkeypatch.chdir(tmp_path)
+    result = doctor.check_resources()
+    assert result.ok, result.detail
+    assert "fuentes, licencia, SVG y QSS" in result.detail
+
+
+@pytest.mark.parametrize("resource", ["icons/open.svg", "fonts/Inter-Regular.ttf"])
+def test_missing_packaged_visual_resource_is_an_actionable_error(
+    doctor, monkeypatch, tmp_path, resource
+):
+    source = Path(__file__).resolve().parents[1] / "src/trackfolio/resources"
+    target = tmp_path / "resources"
+    shutil.copytree(source, target)
+    target.joinpath(resource).unlink()
+    monkeypatch.setattr(doctor.importlib.resources, "files", lambda _: target)
+    result = doctor.check_resources()
+    assert not result.ok
+    assert resource.split("/")[-1] in result.detail
+    assert "uv sync --locked" in result.detail
+
+
+def test_changed_font_is_detected_even_when_it_still_exists(doctor, monkeypatch, tmp_path):
+    source = Path(__file__).resolve().parents[1] / "src/trackfolio/resources"
+    target = tmp_path / "resources"
+    shutil.copytree(source, target)
+    target.joinpath("fonts/Inter-Regular.ttf").write_bytes(b"unexpected font replacement")
+    monkeypatch.setattr(doctor.importlib.resources, "files", lambda _: target)
+    result = doctor.check_resources()
+    assert not result.ok
+    assert "SHA-256 no coincide" in result.detail
 
 
 def test_doctor_returns_nonzero_when_a_required_check_fails(doctor, monkeypatch, capsys):

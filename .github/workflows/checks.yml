@@ -14,12 +14,14 @@ concurrency:
 
 jobs:
   environment:
-    name: ${{ matrix.name }} / CPython 3.13.15
+    name: ${{ matrix.name }} / uv ${{ matrix.uv }} / CPython 3.13.15
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
+        uv: ["0.12.10", "0.12.23"]
+        runner: [ubuntu-24.04, windows-2022, macos-15-intel, macos-15]
         include:
           - name: GNU/Linux x86-64
             runner: ubuntu-24.04
@@ -38,18 +40,24 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Instalar uv fijado
+      - name: Instalar uv de la matriz
         uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
-          version: "0.12.10"
+          version: ${{ matrix.uv }}
           enable-cache: true
           cache-dependency-glob: uv.lock
 
       - name: Instalar Python administrado desde .python-version
         run: uv python install --managed-python
 
-      - name: Preparar el núcleo desde el lock
-        run: uv run --no-project --python 3.13.15 python scripts/bootstrap.py --core
+      - name: Preparar el núcleo con el lanzador Unix
+        if: runner.os != 'Windows'
+        run: bash setup.sh --core --skip-editor --non-interactive
+
+      - name: Preparar el núcleo con Windows PowerShell
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\setup.ps1 --core --skip-editor --non-interactive
 
       - name: Verificar que el núcleo no instala Qt
         shell: uv run --locked python {0}
@@ -61,6 +69,9 @@ jobs:
 
       - name: Diagnosticar el núcleo
         run: uv run --locked python scripts/doctor.py --core
+
+      - name: Ejecutar las pruebas del núcleo sin Qt
+        run: uv run --locked pytest
 
       # Son paquetes de ejecución de Qt y de Xvfb en el runner, sin SDK de Qt.
       # Se instalan después de comprobar que el núcleo no necesita escritorio.
@@ -75,10 +86,16 @@ jobs:
             libxcb-randr0 libxcb-shape0 libxcb-sync1 libxcb-xfixes0 \
             libxcb-xkb1 libxcb-util1
 
-      - name: Preparar la GUI desde el lock sin pantalla
-        run: uv run --no-project --python 3.13.15 python scripts/bootstrap.py --gui --platform offscreen
+      - name: Preparar la GUI con el lanzador Unix sin pantalla
+        if: runner.os != 'Windows'
+        run: bash setup.sh --gui --skip-editor --non-interactive --platform offscreen
 
-      - name: Diagnosticar Qt sin pantalla
+      - name: Preparar la GUI con Windows PowerShell sin pantalla
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\setup.ps1 --gui --skip-editor --non-interactive --platform offscreen
+
+      - name: Diagnosticar la ventana del producto sin pantalla
         run: uv run --locked --extra gui python scripts/doctor.py --gui --platform offscreen
 
       - name: Comprobar el backend X11 bajo Xvfb
@@ -98,15 +115,76 @@ jobs:
       - name: Comprobar tipos
         run: uv run --locked --extra gui mypy
 
-      - name: Ejecutar pruebas de infraestructura
+      - name: Ejecutar pruebas del núcleo y de la GUI sin pantalla
+        env:
+          QT_QPA_PLATFORM: offscreen
         run: uv run --locked --extra gui pytest
+
+      - name: Preparar una copia sin uv ni Python en PATH
+        if: matrix.uv == '0.12.10' && runner.os != 'macOS'
+        shell: uv run --no-project --python 3.13.15 python {0}
+        run: |
+          import hashlib
+          import os
+          from pathlib import Path
+          import shutil
+          import subprocess
+          import tempfile
+
+          original = Path.cwd()
+          system_uv = Path(shutil.which("uv"))
+          uv_digest = hashlib.sha256(system_uv.read_bytes()).hexdigest()
+          ignored = shutil.ignore_patterns(
+              ".git", ".venv", ".tools", "__pycache__", ".pytest_cache",
+              ".mypy_cache", ".ruff_cache", "dist", "build", "data", "music",
+          )
+          with tempfile.TemporaryDirectory(prefix="trackfolio-first-setup-") as temporary:
+              root = Path(temporary) / "project with spaces ñ"
+              shutil.copytree(original, root, ignore=ignored)
+              environment = dict(os.environ)
+              if os.name == "nt":
+                  launcher = [
+                      shutil.which("powershell"), "-NoProfile", "-ExecutionPolicy",
+                      "Bypass", "-File", str(root / "setup.ps1"),
+                  ]
+                  environment["PATH"] = os.pathsep.join(
+                      entry for entry in environment["PATH"].split(os.pathsep)
+                      if not any(
+                          (Path(entry) / name).is_file()
+                          for name in ("uv.exe", "uv.cmd", "python.exe")
+                      )
+                  )
+              else:
+                  launcher = [shutil.which("bash"), str(root / "setup.sh")]
+                  binaries = Path(temporary) / "bin"
+                  binaries.mkdir()
+                  for folder in ("/usr/bin", "/bin", "/usr/sbin", "/sbin"):
+                      for executable in Path(folder).iterdir():
+                          name = executable.name
+                          if name in ("uv", "uvx", "code") or name.startswith("python"):
+                              continue
+                          target = binaries / name
+                          if executable.is_file() and not target.exists():
+                              target.symlink_to(executable)
+                  environment["PATH"] = str(binaries)
+              command = [*launcher, "--core", "--skip-editor", "--non-interactive"]
+              before = (root / "uv.lock").read_bytes()
+              for _ in range(2):
+                  subprocess.run(command, cwd=temporary, env=environment, check=True)
+              local_uv = root / ".tools/uv" / ("uv.exe" if os.name == "nt" else "uv")
+              assert local_uv.is_file()
+              assert (root / ".venv").is_dir()
+              assert (root / "uv.lock").read_bytes() == before
+              assert hashlib.sha256(system_uv.read_bytes()).hexdigest() == uv_digest
+              print("Preparación inicial repetible, sin sustituir el uv del sistema.")
 
       - name: Construir wheel y distribución de fuentes
         run: uv build --clear
 
-      - name: Verificar recursos y migraciones del wheel en un entorno aislado
+      - name: Verificar wheel instalado sin checkout, primero núcleo y después GUI
         shell: uv run --no-project --python 3.13.15 python {0}
         run: |
+          import json
           import os
           from pathlib import Path
           import subprocess
@@ -120,17 +198,41 @@ jobs:
           with ZipFile(wheel) as artifact:
               for member in (
                   "trackfolio/resources/README.md",
+                  "trackfolio/resources/manifest.json",
+                  "trackfolio/resources/stylesheet.qss",
+                  "trackfolio/resources/fonts/Inter-Regular.ttf",
+                  "trackfolio/resources/fonts/Inter-SemiBold.ttf",
+                  "trackfolio/resources/fonts/LICENSE.txt",
+                  "trackfolio/resources/icons/app.svg",
+                  "trackfolio/interfaces/gui/theme.py",
+                  "trackfolio/interfaces/gui/probe.py",
+                  "trackfolio/interfaces/gui/import_dialog.py",
+                  "trackfolio/interfaces/gui/ordered_labels.py",
+                  "trackfolio/domain/catalog_edit.py",
+                  "trackfolio/application/import_catalog.py",
+                  "trackfolio/application/edit_catalog.py",
+                  "trackfolio/infrastructure/audio_scan.py",
+                  "trackfolio/infrastructure/catalog_edit.py",
+                  "trackfolio/infrastructure/catalog.py",
+                  "trackfolio/infrastructure/import_target.py",
+                  "trackfolio/infrastructure/schema.py",
+                  "trackfolio/infrastructure/schema_validation.py",
                   "trackfolio/infrastructure/migrations/env.py",
                   "trackfolio/infrastructure/migrations/initial_schema.py",
                   "trackfolio/infrastructure/migrations/versions/001_initial.py",
+                  "trackfolio/infrastructure/migrations/versions/002_unique_artists.py",
                   "trackfolio/infrastructure/migrations/script.py.mako",
               ):
                   assert member in artifact.namelist(), member
+              resource_names = json.loads(artifact.read("trackfolio/resources/manifest.json"))["sha256"]
+              for name in resource_names:
+                  assert "trackfolio/resources/" + name in artifact.namelist(), name
           with tarfile.open(source) as artifact:
-              assert any(
-                  name.endswith("/src/trackfolio/resources/README.md")
-                  for name in artifact.getnames()
-              )
+              for resource in (*resource_names, "README.md", "manifest.json"):
+                  assert any(
+                      name.endswith("/src/trackfolio/resources/" + resource)
+                      for name in artifact.getnames()
+                  ), resource
           with tempfile.TemporaryDirectory(prefix="trackfolio-wheel-") as clean:
               requirements = Path(clean) / "core-requirements.txt"
               subprocess.run(
@@ -176,9 +278,16 @@ jobs:
           from importlib.resources import files
           from importlib.util import find_spec
           from pathlib import Path
+          import sqlite3
           import sys
           from sqlalchemy import inspect
+          from trackfolio.application.edit_catalog import GetEditableTrack, UpdateCatalogTrack
+          from trackfolio.domain.catalog_edit import FieldChange, TrackEditPatch
+          from trackfolio.domain.metadata import TrackMetadata
           from trackfolio.infrastructure import database
+          from trackfolio.infrastructure.catalog import SqliteCatalogRepository
+          from trackfolio.infrastructure.catalog_edit import SqliteCatalogEditSessionFactory
+          from trackfolio.infrastructure.schema import REVISION
 
           assert Path(database.__file__).resolve().is_relative_to(Path(sys.argv[2]).resolve())
           assert find_spec("PySide6") is None
@@ -193,16 +302,129 @@ jobs:
                   assert connection.exec_driver_sql("PRAGMA foreign_keys").scalar_one() == 1
                   assert connection.exec_driver_sql(
                       "SELECT version_num FROM alembic_version"
-                  ).scalar_one() == "001_initial"
+                  ).scalar_one() == REVISION
+                  assert any(
+                      index["name"] == "uq_artists_name" and index["unique"]
+                      for index in inspect(connection).get_indexes("artists")
+                  )
+              repository = SqliteCatalogRepository(engine)
+              music = target.parent / "music"
+              first = repository.write(TrackMetadata(
+                  artists=("Accept",), album="Breaker", audio_format="flac"
+              ), music, "Breaker/a.flac")
+              repository.write(TrackMetadata(
+                  artists=("Accept",), album="Restless", audio_format="flac"
+              ), music, "Restless/b.flac")
+              repeated = repository.write(TrackMetadata(
+                  artists=("Accept",), album="Breaker", audio_format="flac"
+              ), music, "Breaker/a.flac")
+              assert (first.file_id, first.track_id) == (repeated.file_id, repeated.track_id)
+              with engine.connect() as connection:
+                  assert connection.exec_driver_sql("SELECT count(*) FROM artists").scalar_one() == 1
           finally:
               engine.dispose()
-          print("Wheel instalado: recursos y migraciones correctos sin checkout ni Qt.")
+          edit_factory = SqliteCatalogEditSessionFactory()
+          reader = edit_factory.open_reader(target)
+          try:
+              snapshot = GetEditableTrack(reader).execute(first.file_id)
+          finally:
+              reader.close()
+          assert snapshot is not None and snapshot.values.artists == ("Accept",)
+          edited = UpdateCatalogTrack(edit_factory).execute(target, snapshot, TrackEditPatch((
+              FieldChange("title", "Core catalogue correction"),
+              FieldChange("artists", ("Abbath",)),
+          )))
+          assert edited is not None
+          reader = edit_factory.open_reader(target)
+          try:
+              persisted = GetEditableTrack(reader).execute(first.file_id)
+              assert persisted is not None
+              assert persisted.values.title == "Core catalogue correction"
+              assert persisted.values.artists == ("Abbath",)
+          finally:
+              reader.close()
+          assert find_spec("PySide6") is None
+          legacy = target.with_name("legacy.tfo")
+          with sqlite3.connect(legacy) as connection:
+              connection.executescript(database.initial_schema_sql())
+              connection.executemany(
+                  "INSERT INTO artists(id, name) VALUES (?, ?)", [(5, "Accept"), (9, "Accept")]
+              )
+          backup = database.upgrade_database(legacy)
+          assert backup is not None and backup.is_file()
+          with sqlite3.connect(legacy) as connection:
+              assert connection.execute("SELECT id, name FROM artists").fetchall() == [(5, "Accept")]
+              assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == (REVISION,)
+          assert database.upgrade_database(legacy) is None
+          print("Wheel instalado: generación, importación, edición y migración correctas sin checkout ni Qt.")
           """
               subprocess.run(
                   [
                       str(executable), "-c", verification,
                       str(Path(clean) / "packaged.sqlite3"), str(environment),
                   ],
+                  cwd=clean,
+                  check=True,
+              )
+              gui_requirements = Path(clean) / "gui-requirements.txt"
+              subprocess.run(
+                  [
+                      "uv", "export", "--locked", "--extra", "gui", "--no-dev",
+                      "--no-emit-project", "--output-file", str(gui_requirements),
+                  ],
+                  cwd=project_root,
+                  stdout=subprocess.DEVNULL,
+                  check=True,
+              )
+              gui_environment = Path(clean) / ".venv-gui"
+              subprocess.run(
+                  [
+                      "uv", "venv", "--managed-python", "--python", "3.13.15",
+                      str(gui_environment),
+                  ],
+                  cwd=clean,
+                  check=True,
+              )
+              gui_executable = gui_environment / (
+                  "Scripts/python.exe" if os.name == "nt" else "bin/python"
+              )
+              subprocess.run(
+                  [
+                      "uv", "pip", "install", "--require-hashes", "--no-deps",
+                      "--python", str(gui_executable), "--requirements", str(gui_requirements),
+                  ],
+                  cwd=clean,
+                  check=True,
+              )
+              subprocess.run(
+                  [
+                      "uv", "pip", "install", "--no-deps", "--python",
+                      str(gui_executable), str(wheel),
+                  ],
+                  cwd=clean,
+                  check=True,
+              )
+              gui_verification = """
+          from hashlib import sha256
+          from importlib.resources import files
+          import json
+          from pathlib import Path
+          import sys
+          from trackfolio.interfaces.gui import probe
+
+          assert Path(probe.__file__).resolve().is_relative_to(Path(sys.argv[1]).resolve())
+          resources = files("trackfolio.resources")
+          manifest = json.loads(resources.joinpath("manifest.json").read_text(encoding="utf-8"))
+          for name, digest in manifest["sha256"].items():
+              assert sha256(resources.joinpath(*name.split("/")).read_bytes()).hexdigest() == digest
+          report = probe.run_probe(["-platform", "offscreen"])
+          assert report["events"] is True and report["style"].lower() == "fusion", report
+          assert report["imported"] is True, report
+          assert report["edited"] is True, report
+          print("Wheel GUI instalado fuera del checkout:", report)
+          """
+              subprocess.run(
+                  [str(gui_executable), "-c", gui_verification, str(gui_environment)],
                   cwd=clean,
                   check=True,
               )

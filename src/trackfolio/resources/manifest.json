@@ -1,0 +1,16 @@
+{
+  "sha256": {
+    "stylesheet.qss": "0ab1a026c0bfb404738daa2a8b97339fc549f8380213232bc16878727dfa79b7",
+    "icons/app.svg": "250fa792ce18d2ec3a42e616d6ffd10a0d2eb8966a8f41084f19b2abb646fc71",
+    "icons/close.svg": "7ef70e6f6731d06c79c32370ec430866ba247a0f7b1a6b28647af52cc4cd2c91",
+    "icons/maximize.svg": "3c2a101e00d033a784aac5f8d2ccc528cbd20f1726d649c934dd70f1c1d5cec5",
+    "icons/minimize.svg": "e5a83c50b539329fb413e16c27aff551298338d006fd1009a6e3f6edbe64894c",
+    "icons/open.svg": "9c25d6ba7d7d3846b53b6444e9344983ede69a895fa7370d2e804caed17340fd",
+    "icons/refresh.svg": "f5ce239fdab9db086ee5044bbb297bd8d2d82e7f17d305ba195777918ba550bb",
+    "icons/restore.svg": "d0cd2e4e285eee4fb35e14c5d2811008edb8d71593d5227d491f7026ebefc209",
+    "fonts/Inter-Regular.ttf": "40d692fce188e4471e2b3cba937be967878f631ad3ebbbdcd587687c7ebe0c82",
+    "fonts/Inter-SemiBold.ttf": "78a843fade9d4612a5567302fb595b56976eb5fcebf4fea5a5912d638bafcde3",
+    "fonts/LICENSE.txt": "262481e844521b326f5ecd053e59b98c8b2da78c8ee1bdbb6e8174305e54935a",
+    "icons/import.svg": "dcb4bd5d4934608ec38226f123ff68171599c165520ebc044fe4be098c570fef"
+  }
+}

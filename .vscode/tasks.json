@@ -2,75 +2,148 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "Trackfolio: iniciar GUI con la muestra",
+      "type": "process",
+      "command": "bash",
+      "args": ["${workspaceFolder}/setup.sh", "--run-uv", "run", "--locked", "--extra", "gui", "python", "-m", "trackfolio.interfaces.gui", "--database", "${workspaceFolder}/data/database.tfo"],
+      "windows": {
+        "command": "powershell",
+        "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/setup.ps1", "--run-uv", "run", "--locked", "--extra", "gui", "python", "-m", "trackfolio.interfaces.gui", "--database", "${workspaceFolder}/data/database.tfo"]
+      },
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Trackfolio: iniciar GUI",
+      "type": "process",
+      "command": "bash",
+      "args": ["${workspaceFolder}/setup.sh", "--run-uv", "run", "--locked", "--extra", "gui", "python", "-m", "trackfolio.interfaces.gui"],
+      "windows": {
+        "command": "powershell",
+        "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/setup.ps1", "--run-uv", "run", "--locked", "--extra", "gui", "python", "-m", "trackfolio.interfaces.gui"]
+      },
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Trackfolio: ejecutar pruebas GUI sin pantalla",
+      "type": "process",
+      "command": "bash",
+      "args": ["${workspaceFolder}/setup.sh", "--run-uv", "run", "--locked", "--extra", "gui", "pytest"],
+      "windows": {
+        "command": "powershell",
+        "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/setup.ps1", "--run-uv", "run", "--locked", "--extra", "gui", "pytest"]
+      },
+      "options": { "cwd": "${workspaceFolder}", "env": { "QT_QPA_PLATFORM": "offscreen" } },
+      "problemMatcher": [],
+      "group": "test"
+    },
+    {
       "label": "Trackfolio: preparar núcleo",
       "type": "process",
-      "command": "uv",
-      "args": ["run", "--no-project", "--python", "3.13.15", "python", "scripts/bootstrap.py", "--core"],
+      "command": "bash",
+      "args": ["${workspaceFolder}/setup.sh", "--core", "--skip-editor", "--non-interactive"],
+      "windows": {
+        "command": "powershell",
+        "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/setup.ps1", "--core", "--skip-editor", "--non-interactive"]
+      },
       "options": { "cwd": "${workspaceFolder}" },
       "problemMatcher": []
     },
     {
       "label": "Trackfolio: preparar GUI",
       "type": "process",
-      "command": "uv",
-      "args": ["run", "--no-project", "--python", "3.13.15", "python", "scripts/bootstrap.py", "--gui"],
+      "command": "bash",
+      "args": ["${workspaceFolder}/setup.sh", "--gui", "--skip-editor", "--non-interactive"],
+      "windows": {
+        "command": "powershell",
+        "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/setup.ps1", "--gui", "--skip-editor", "--non-interactive"]
+      },
       "options": { "cwd": "${workspaceFolder}" },
       "problemMatcher": []
     },
     {
       "label": "Trackfolio: diagnosticar núcleo",
       "type": "process",
-      "command": "uv",
-      "args": ["run", "--locked", "python", "scripts/doctor.py", "--core"],
+      "command": "bash",
+      "args": ["${workspaceFolder}/setup.sh", "--run-uv", "run", "--locked", "python", "scripts/doctor.py", "--core"],
+      "windows": {
+        "command": "powershell",
+        "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/setup.ps1", "--run-uv", "run", "--locked", "python", "scripts/doctor.py", "--core"]
+      },
       "options": { "cwd": "${workspaceFolder}" },
       "problemMatcher": []
     },
     {
       "label": "Trackfolio: diagnosticar GUI",
       "type": "process",
-      "command": "uv",
-      "args": ["run", "--locked", "--extra", "gui", "python", "scripts/doctor.py", "--gui"],
+      "command": "bash",
+      "args": ["${workspaceFolder}/setup.sh", "--run-uv", "run", "--locked", "--extra", "gui", "python", "scripts/doctor.py", "--gui"],
+      "windows": {
+        "command": "powershell",
+        "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/setup.ps1", "--run-uv", "run", "--locked", "--extra", "gui", "python", "scripts/doctor.py", "--gui"]
+      },
       "options": { "cwd": "${workspaceFolder}" },
       "problemMatcher": []
     },
     {
       "label": "Trackfolio: diagnosticar GUI sin pantalla",
       "type": "process",
-      "command": "uv",
-      "args": ["run", "--locked", "--extra", "gui", "python", "scripts/doctor.py", "--gui", "--platform", "offscreen"],
+      "command": "bash",
+      "args": ["${workspaceFolder}/setup.sh", "--run-uv", "run", "--locked", "--extra", "gui", "python", "scripts/doctor.py", "--gui", "--platform", "offscreen"],
+      "windows": {
+        "command": "powershell",
+        "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/setup.ps1", "--run-uv", "run", "--locked", "--extra", "gui", "python", "scripts/doctor.py", "--gui", "--platform", "offscreen"]
+      },
       "options": { "cwd": "${workspaceFolder}" },
       "problemMatcher": []
     },
     {
       "label": "Trackfolio: analizar código",
       "type": "process",
-      "command": "uv",
-      "args": ["run", "--locked", "ruff", "check", "."],
+      "command": "bash",
+      "args": ["${workspaceFolder}/setup.sh", "--run-uv", "run", "--locked", "--extra", "gui", "ruff", "check", "."],
+      "windows": {
+        "command": "powershell",
+        "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/setup.ps1", "--run-uv", "run", "--locked", "--extra", "gui", "ruff", "check", "."]
+      },
       "options": { "cwd": "${workspaceFolder}" },
       "problemMatcher": []
     },
     {
       "label": "Trackfolio: comprobar formato",
       "type": "process",
-      "command": "uv",
-      "args": ["run", "--locked", "ruff", "format", "--check", "."],
+      "command": "bash",
+      "args": ["${workspaceFolder}/setup.sh", "--run-uv", "run", "--locked", "--extra", "gui", "ruff", "format", "--check", "."],
+      "windows": {
+        "command": "powershell",
+        "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/setup.ps1", "--run-uv", "run", "--locked", "--extra", "gui", "ruff", "format", "--check", "."]
+      },
       "options": { "cwd": "${workspaceFolder}" },
       "problemMatcher": []
     },
     {
       "label": "Trackfolio: comprobar tipos",
       "type": "process",
-      "command": "uv",
-      "args": ["run", "--locked", "mypy"],
+      "command": "bash",
+      "args": ["${workspaceFolder}/setup.sh", "--run-uv", "run", "--locked", "--extra", "gui", "mypy"],
+      "windows": {
+        "command": "powershell",
+        "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/setup.ps1", "--run-uv", "run", "--locked", "--extra", "gui", "mypy"]
+      },
       "options": { "cwd": "${workspaceFolder}" },
       "problemMatcher": []
     },
     {
       "label": "Trackfolio: ejecutar pruebas",
       "type": "process",
-      "command": "uv",
-      "args": ["run", "--locked", "pytest"],
-      "options": { "cwd": "${workspaceFolder}" },
+      "command": "bash",
+      "args": ["${workspaceFolder}/setup.sh", "--run-uv", "run", "--locked", "--extra", "gui", "pytest"],
+      "windows": {
+        "command": "powershell",
+        "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/setup.ps1", "--run-uv", "run", "--locked", "--extra", "gui", "pytest"]
+      },
+      "options": { "cwd": "${workspaceFolder}", "env": { "QT_QPA_PLATFORM": "offscreen" } },
       "problemMatcher": [],
       "group": "test"
     },

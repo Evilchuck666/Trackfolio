@@ -3,6 +3,15 @@
   "settings": {
     "python.defaultInterpreterPath": "${workspaceFolder}/.venv",
     "python.terminal.activateEnvironment": true,
+    "terminal.integrated.env.linux": {
+      "PATH": "${workspaceFolder}/.tools/uv:${env:PATH}"
+    },
+    "terminal.integrated.env.osx": {
+      "PATH": "${workspaceFolder}/.tools/uv:${env:PATH}"
+    },
+    "terminal.integrated.env.windows": {
+      "PATH": "${workspaceFolder}\\.tools\\uv;${env:PATH}"
+    },
     "python.testing.pytestEnabled": true,
     "python.testing.unittestEnabled": false,
     "python.testing.pytestArgs": ["tests"],
