@@ -291,7 +291,7 @@ def test_unavailable_extension_warns_without_breaking_app_environment(
 
 @pytest.mark.parametrize("core", [True, False])
 def test_setup_reuses_bootstrap_and_selected_uv(setup, monkeypatch, core):
-    monkeypatch.setattr(setup.bootstrap, "configuration", lambda _: (">=0.12.10,<0.13", "3.13.15"))
+    monkeypatch.setattr(setup.bootstrap, "configuration", lambda _: (">=0.13.4,<0.14", "3.13.15"))
     monkeypatch.setattr(setup.bootstrap, "check_uv", lambda _, executable: executable)
     calls = []
     monkeypatch.setattr(
@@ -310,7 +310,7 @@ def test_setup_reuses_bootstrap_and_selected_uv(setup, monkeypatch, core):
 
 
 def test_failed_bootstrap_is_not_reported_as_ready(setup, monkeypatch, capsys):
-    monkeypatch.setattr(setup.bootstrap, "configuration", lambda _: (">=0.12.10,<0.13", "3.13.15"))
+    monkeypatch.setattr(setup.bootstrap, "configuration", lambda _: (">=0.13.4,<0.14", "3.13.15"))
     monkeypatch.setattr(setup.bootstrap, "check_uv", lambda _, executable: executable)
     monkeypatch.setattr(setup.bootstrap, "main", lambda *_args, **_kwargs: 42)
     monkeypatch.setattr(setup, "prepare_git", lambda *_: pytest.fail("Bootstrap failed"))

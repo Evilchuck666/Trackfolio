@@ -5,9 +5,9 @@ Trackfolio es una aplicación multiplataforma para consultar y editar un catálo
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20GNU%2FLinux%20%7C%20macOS-blue)
 ![Python](https://img.shields.io/badge/python-3.13-blue)
 ![PySide6](https://img.shields.io/badge/PySide6-6.11.2-blue)
-![Requires](https://img.shields.io/badge/requires-uv%200.12.10-blue)
+![Requires](https://img.shields.io/badge/requires-uv%200.13.4-blue)
 [![License](https://img.shields.io/badge/license-GPLv3-green)](LICENSE)
-[![Build and tests](https://github.com/Evilchuck666/Trackfolio/actions/workflows/checks.yml/badge.svg?branch=main)](https://github.com/Evilchuck666/Trackfolio/actions/workflows/checks.yml)
+[![Build and tests](https://github.com/Evilchuck666/Trackfolio/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/Evilchuck666/Trackfolio/actions/workflows/release.yml)
 
 Trackfolio será una aplicación multiplataforma para administrar metadatos de bibliotecas FLAC y MP3. Usará Python, Qt 6 mediante PySide6 y SQLite mediante SQLAlchemy. El dominio y los casos de uso serán independientes de la GUI, para poder añadir interfaces CLI/TUI o un servidor con frontend web.
 
@@ -36,7 +36,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\setup.ps1
 
 El repositorio es privado: necesitas una cuenta con acceso para descargarlo. Para clonar mediante Git, configura tu gestor de credenciales; si usas GitHub CLI, ejecuta `gh auth login` y `gh auth setup-git`. No guardes credenciales en el proyecto.
 
-La preparación reutiliza un uv compatible (`>=0.12.10,<0.13`, como 0.12.23). Si falta, descarga la versión mínima en `.tools/uv`, **sin sustituir el uv del sistema ni modificar los perfiles del shell**. Obtiene CPython 3.13.15 administrado por uv, crea `.venv`, instala la GUI y las herramientas de desarrollo desde `uv.lock`, y comprueba el entorno.
+La preparación reutiliza un uv compatible (`>=0.13.4,<0.14`, como 0.13.4). Si falta, descarga la versión mínima en `.tools/uv`, **sin sustituir el uv del sistema ni modificar los perfiles del shell**. Obtiene CPython 3.13.15 administrado por uv, crea `.venv`, instala la GUI y las herramientas de desarrollo desde `uv.lock`, y comprueba el entorno.
 
 Si faltan bibliotecas gráficas o Git, propone su instalación y pide permiso. Si no hay VS Code, ofrece descargarlo en `.tools/vscode`; instala las extensiones recomendadas cuando el editor está disponible. No toca música ni catálogos y puedes repetirla. Un requisito obligatorio que falle devuelve un código distinto de cero. Consulta [las opciones y los límites por plataforma](docs/environment.md#preparación-en-un-solo-comando).
 

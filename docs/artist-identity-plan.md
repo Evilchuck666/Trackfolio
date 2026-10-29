@@ -187,7 +187,7 @@ copia de éste y verificar los resultados de la tabla inicial de este plan.
 | 4. Puntos de entrada | `database.py`, `session.py`, `import_target.py`, `migrations/env.py` y comando de actualización. | Lectura compatible; toda escritura utiliza `002`; actualización sin música disponible. |
 | 5. Entrega | SQL vigente, workflow, documentación, paquete instalado y validación. | Pruebas, Ruff, formato, mypy y diagnóstico pasan; resultados registrados. |
 
-Actualizar `.github/workflows/checks.yml`: empaquetar esquema vigente y revisión `002` y
+Actualizar `.github/workflows/release.yml`: empaquetar esquema vigente y revisión `002` y
 reemplazar la expectativa literal de `001_initial` en la creación del wheel por la revisión
 vigente. Mantener la matriz y el entorno bloqueado actuales, sin dependencias nuevas.
 

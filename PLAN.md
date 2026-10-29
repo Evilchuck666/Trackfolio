@@ -60,7 +60,7 @@ Trackfolio/
 │   ├── extensions.json
 │   └── tasks.json
 ├── .github/workflows/
-│   └── checks.yml
+│   └── release.yml
 ├── scripts/
 │   ├── bootstrap.py
 │   └── doctor.py

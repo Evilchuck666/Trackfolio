@@ -6,7 +6,7 @@ Trackfolio reconstruye su entorno en cada PC a partir de archivos versionados. L
 
 | Elemento | Contrato del proyecto |
 | --- | --- |
-| uv | `>=0.12.10,<0.13`, exigido por `tool.uv.required-version` |
+| uv | `>=0.13.4,<0.14`, exigido por `tool.uv.required-version` |
 | CPython | 3.13.15 en `.python-version`, administrado por uv |
 | Versiones Python admitidas | `>=3.13,<3.14` en el manifiesto; el entorno de desarrollo usa el parche fijado |
 | Backend de construcción | `uv_build==0.12.10` |
@@ -26,23 +26,23 @@ SQLite se usa a través del módulo `sqlite3` de CPython. El diagnóstico verifi
 La ruta recomendada es ejecutar el lanzador después de descargar el repositorio; los pasos manuales de esta sección siguen disponibles como alternativa.
 
 1. Instala Git desde las [instrucciones oficiales](https://git-scm.com/install/) y comprueba `git --version`.
-2. Instala **uv >=0.12.10 y <0.13** y comprueba `uv --version` después de abrir una terminal nueva. Si ya tienes una versión compatible, como 0.12.23, puedes conservarla. Los comandos siguientes instalan 0.12.10, la versión mínima admitida.
+2. Instala **uv >=0.13.4 y <0.14** y comprueba `uv --version` después de abrir una terminal nueva. Si ya tienes una versión compatible, como 0.13.4, puedes conservarla. Los comandos siguientes instalan 0.13.4, la versión mínima admitida.
 3. Si vas a usar VS Code, descárgalo desde [su web oficial](https://code.visualstudio.com/download). Es opcional para ejecutar los comandos de desarrollo.
 4. Para autenticarte y gestionar GitHub desde terminal, puedes instalar [GitHub CLI](https://github.com/cli/cli#installation), ejecutar `gh auth login` y configurar Git mediante `gh auth setup-git`. También puedes usar tu gestor de credenciales habitual.
 
 Linux y macOS:
 
 ```sh
-curl -LsSf https://astral.sh/uv/0.12.10/install.sh | sh
+curl -LsSf https://astral.sh/uv/0.13.4/install.sh | sh
 ```
 
 Windows, desde PowerShell:
 
 ```powershell
-powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/0.12.10/install.ps1 | iex"
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/0.13.4/install.ps1 | iex"
 ```
 
-Estos instaladores permiten elegir una versión concreta en la URL. No necesitas volver a 0.12.10 si el uv instalado está dentro de `>=0.12.10,<0.13`. Si está fuera del rango, instala una versión compatible y comprueba qué ejecutable encuentra tu terminal. Cuando coexistan una instalación de sistema y otra de usuario, el orden de `PATH` determina cuál se utiliza; reinicia el editor si conserva un entorno anterior. Antes de usar uv 0.13 o posterior hay que ampliar y validar el contrato del proyecto. [Instalación oficial de uv](https://docs.astral.sh/uv/getting-started/installation/).
+Estos instaladores permiten elegir una versión concreta en la URL. No necesitas volver a 0.13.4 si el uv instalado está dentro de `>=0.13.4,<0.14`. Si está fuera del rango, instala una versión compatible y comprueba qué ejecutable encuentra tu terminal. Cuando coexistan una instalación de sistema y otra de usuario, el orden de `PATH` determina cuál se utiliza; reinicia el editor si conserva un entorno anterior. Antes de usar uv 0.14 o posterior hay que ampliar y validar el contrato del proyecto. [Instalación oficial de uv](https://docs.astral.sh/uv/getting-started/installation/).
 
 El requisito del ejecutable uv es independiente de `uv_build==0.12.10`: el backend de construcción sigue fijado para mantener reproducible el empaquetado. Las versiones de Python, PySide6 y las dependencias de `uv.lock` tampoco cambian al usar otro parche compatible de uv.
 
@@ -212,7 +212,7 @@ El workspace usa una carpeta relativa y tareas de tipo `process` con argumentos 
 | Fallo | Acción |
 | --- | --- |
 | No se encuentra `uv`, `git` o `code` | Ejecuta el lanzador; puede descargar uv localmente y propone preparar Git y VS Code. `--run-uv` y `--open-code` permiten usar las copias locales |
-| Versión de uv fuera de `>=0.12.10,<0.13` | Ejecuta el lanzador para usar una copia compatible sin sustituir la instalación del sistema; con comandos directos, comprueba qué uv encuentra `PATH` |
+| Versión de uv fuera de `>=0.13.4,<0.14` | Ejecuta el lanzador para usar una copia compatible sin sustituir la instalación del sistema; con comandos directos, comprueba qué uv encuentra `PATH` |
 | Descarga de Python o paquetes fallida | Comprueba conexión, proxy y certificados de tu red; repite la preparación |
 | Lock desactualizado | Trae los archivos de una misma revisión de Git; para un cambio deliberado actualiza el lock siguiendo `CONTRIBUTING.md` |
 | Entorno copiado o intérprete incorrecto | Elimina únicamente la `.venv` local del proyecto y vuelve a prepararlo |
@@ -222,4 +222,4 @@ El workspace usa una carpeta relativa y tareas de tipo `process` con argumentos 
 
 ## Validación continua
 
-GitHub Actions recrea el entorno mediante los lanzadores en Windows x86-64, GNU/Linux x86-64 y macOS Intel/ARM con uv 0.12.10 (mínimo) y 0.12.23 (parche posterior), ocho combinaciones en total. Windows comprueba también Windows PowerShell 5.1. Los jobs de Linux y Windows con uv 0.12.10 añaden una copia sin uv ni Python en `PATH` para verificar la descarga local y repetir la preparación del núcleo. Sus pruebas diferencian núcleo, Qt sin pantalla y backend de escritorio. Las comprobaciones automáticas no sustituyen las pruebas manuales de apariencia y comportamiento de ventanas en las plataformas objetivo. Consulta los resultados concretos y las limitaciones en [VALIDATION.md](../VALIDATION.md).
+GitHub Actions recrea el entorno mediante los lanzadores en Windows x86-64, GNU/Linux x86-64 y macOS Intel/ARM con una única versión de uv, 0.13.4 (mínimo admitido y versión descargada en `.tools/uv`), cuatro combinaciones en total. Los lanzadores siguen admitiendo versiones globales compatibles, aunque CI sólo comprueba 0.13.4. Windows comprueba también Windows PowerShell 5.1. Los jobs de Linux y Windows añaden una copia sin uv ni Python en `PATH` para verificar la descarga local y repetir la preparación del núcleo. Sus pruebas diferencian núcleo, Qt sin pantalla y backend de escritorio. Las comprobaciones automáticas no sustituyen las pruebas manuales de apariencia y comportamiento de ventanas en las plataformas objetivo. Consulta los resultados concretos y las limitaciones en [VALIDATION.md](../VALIDATION.md).

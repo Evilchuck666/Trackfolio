@@ -377,3 +377,26 @@ pasaron. La revisión visual manual de Windows y macOS sigue pendiente.
 ## Repositorio
 
 Git inicializado con rama `main`, `origin` y seguimiento de `origin/main`. La infraestructura y documentación están subidas a [Evilchuck666/Trackfolio](https://github.com/Evilchuck666/Trackfolio), un repositorio privado. El workspace se abre mediante `code Trackfolio.code-workspace`; la preparación para otro PC está en [README.md](README.md).
+
+## Actualización a uv 0.13.4 (2026-10-29)
+
+Se han instalado los binarios oficiales `uv` y `uvx` 0.13.4 en `.tools/uv`.
+El requisito del proyecto pasa a `>=0.13.4,<0.14`; los lanzadores leen ese
+requisito para seleccionar o descargar uv. El backend permanece fijado en
+`uv_build==0.12.10` y `uv.lock` no ha cambiado.
+
+Comprobaciones locales en Linux con CPython 3.13.15:
+
+- `uv lock --check --offline`: correcto con uv 0.13.4.
+- Preparación GUI mediante `setup.sh`, diagnóstico Qt/Fusion `offscreen`,
+  importación y edición: correctos con uv 0.13.4.
+- Suite completa con el uv local y `QT_QPA_PLATFORM=offscreen`: 426 pruebas
+  correctas y 4 omitidas porque PowerShell no está instalado. La suite GUI
+  requiere ejecución fuera del sandbox en esta máquina.
+- Ruff, comprobación de formato y mypy: correctos.
+- Wheel y distribución de fuentes: construidos con el uv local 0.13.4.
+
+El workflow se renombra de `checks.yml` a `release.yml`, con uv 0.13.4 en
+las cuatro plataformas. La preparación inicial de Linux y Windows comprueba
+las versiones de ambos binarios locales. La ejecución de esta revisión en
+GitHub Actions y la revisión visual manual de Windows/macOS siguen pendientes.

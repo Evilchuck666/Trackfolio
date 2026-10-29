@@ -7,7 +7,7 @@ import subprocess
 import pytest
 
 
-@pytest.mark.parametrize("version", ["0.11.99", "0.12.0", "0.12.9", "0.13.0", "0.13.1", "1.0.0"])
+@pytest.mark.parametrize("version", ["0.12.23", "0.13.0", "0.13.3", "0.14.0", "0.14.1", "1.0.0"])
 def test_wrong_uv_version_stops_before_install(
     bootstrap, configured_root, monkeypatch, capsys, version
 ):
@@ -23,12 +23,12 @@ def test_wrong_uv_version_stops_before_install(
     assert bootstrap.main(["--core"]) != 0
     assert calls == [["uv", "--version"]]
     error = capsys.readouterr().err
-    assert "requiere uv >=0.12.10,<0.13" in error
+    assert "requiere uv >=0.13.4,<0.14" in error
     assert f"se encontró {version}" in error
-    assert "https://astral.sh/uv/0.12.10/install.sh" in error
+    assert "https://astral.sh/uv/0.13.4/install.sh" in error
 
 
-@pytest.mark.parametrize("version", ["0.12.10", "0.12.11", "0.12.23", "0.12.100", "0.12.999"])
+@pytest.mark.parametrize("version", ["0.13.4", "0.13.5", "0.13.23", "0.13.100", "0.13.999"])
 def test_compatible_uv_version_runs_bootstrap(bootstrap, configured_root, monkeypatch, version):
     monkeypatch.setattr(bootstrap, "PROJECT_ROOT", configured_root)
     monkeypatch.setattr(bootstrap.shutil, "which", lambda _: "uv")
@@ -46,7 +46,7 @@ def test_compatible_uv_version_runs_bootstrap(bootstrap, configured_root, monkey
 
 @pytest.mark.parametrize(
     "requirement",
-    [">=0.12.10,<0.13", ">=0.12.10,<0.13.0", ">=0.12.10, <0.13", ">=0.12.20,<0.13"],
+    [">=0.13.4,<0.14", ">=0.13.4,<0.14.0", ">=0.13.4, <0.14", ">=0.13.20,<0.14"],
 )
 def test_configuration_preserves_uv_range(bootstrap, configured_root, requirement):
     (configured_root / "pyproject.toml").write_text(
@@ -59,12 +59,12 @@ def test_configuration_preserves_uv_range(bootstrap, configured_root, requiremen
     "requirement",
     [
         '""',
-        '"==0.12.10"',
-        '">=0.12.10"',
-        '">=0.12.10,<=0.13"',
-        '">=0.12.10,<0.12"',
-        '">=0.13.0,<0.13.0"',
-        '">=0.13.1,<0.13"',
+        '"==0.13.4"',
+        '">=0.13.4"',
+        '">=0.13.4,<=0.14"',
+        '">=0.13.4,<0.13"',
+        '">=0.14.0,<0.14.0"',
+        '">=0.14.1,<0.14"',
         "12",
     ],
 )
@@ -87,11 +87,11 @@ def test_invalid_uv_range_stops_before_invoking_uv(
 @pytest.mark.parametrize(
     ("requirement", "version", "accepted"),
     [
-        (">=0.12.20,<0.13", "0.12.23", True),
-        (">=0.12.20,<0.13", "0.12.10", False),
-        (">=0.12.10,<0.12.24", "0.12.23", True),
-        (">=0.12.10,<0.12.24", "0.12.24", False),
-        (">=0.12.10,<0.13.0", "0.13.0", False),
+        (">=0.13.20,<0.14", "0.13.23", True),
+        (">=0.13.20,<0.14", "0.13.4", False),
+        (">=0.13.4,<0.13.24", "0.13.23", True),
+        (">=0.13.4,<0.13.24", "0.13.24", False),
+        (">=0.13.4,<0.14.0", "0.14.0", False),
     ],
 )
 def test_uv_check_uses_configured_bounds(bootstrap, monkeypatch, requirement, version, accepted):
@@ -108,7 +108,7 @@ def test_uv_check_uses_configured_bounds(bootstrap, monkeypatch, requirement, ve
             bootstrap.check_uv(requirement)
 
 
-@pytest.mark.parametrize("output", ["uv unknown\n", "uv 0.12\n", "uv 0.12.23rc1\n"])
+@pytest.mark.parametrize("output", ["uv unknown\n", "uv 0.13\n", "uv 0.13.23rc1\n"])
 def test_unrecognized_uv_version_is_rejected(bootstrap, monkeypatch, output):
     monkeypatch.setattr(bootstrap.shutil, "which", lambda _: "uv")
     monkeypatch.setattr(
@@ -117,7 +117,7 @@ def test_unrecognized_uv_version_is_rejected(bootstrap, monkeypatch, output):
         lambda command, **kwargs: subprocess.CompletedProcess(command, 0, output, ""),
     )
     with pytest.raises(bootstrap.BootstrapError, match="respuesta desconocida"):
-        bootstrap.check_uv(">=0.12.10,<0.13")
+        bootstrap.check_uv(">=0.13.4,<0.14")
 
 
 def test_missing_lock_fails_without_invoking_uv(bootstrap, configured_root, monkeypatch, capsys):
@@ -135,9 +135,9 @@ def test_missing_lock_fails_without_invoking_uv(bootstrap, configured_root, monk
 def test_missing_uv_provides_minimum_version_install_instructions(bootstrap, monkeypatch):
     monkeypatch.setattr(bootstrap.shutil, "which", lambda _: None)
     with pytest.raises(bootstrap.BootstrapError) as failure:
-        bootstrap.check_uv(">=0.12.10,<0.13")
-    assert "Se requiere uv >=0.12.10,<0.13" in str(failure.value)
-    assert "https://astral.sh/uv/0.12.10/install.sh" in str(failure.value)
+        bootstrap.check_uv(">=0.13.4,<0.14")
+    assert "Se requiere uv >=0.13.4,<0.14" in str(failure.value)
+    assert "https://astral.sh/uv/0.13.4/install.sh" in str(failure.value)
     assert "install.ps1" in str(failure.value)
 
 
@@ -150,11 +150,11 @@ def test_explicit_uv_is_used_without_searching_path(bootstrap, monkeypatch):
 
     def run(command, **kwargs):
         calls.append(command)
-        return subprocess.CompletedProcess(command, 0, "uv 0.12.23\n", "")
+        return subprocess.CompletedProcess(command, 0, "uv 0.13.23\n", "")
 
     monkeypatch.setattr(bootstrap.subprocess, "run", run)
     executable = "local tools/uv"
-    assert bootstrap.check_uv(">=0.12.10,<0.13", executable=executable) == executable
+    assert bootstrap.check_uv(">=0.13.4,<0.14", executable=executable) == executable
     assert calls == [[executable, "--version"]]
 
 

@@ -37,7 +37,7 @@ def uv_version_range(requirement: str) -> tuple[str, str]:
         requirement.strip(),
     )
     if match is None:
-        raise BootstrapError("tool.uv.required-version debe definir un rango como >=0.12.10,<0.13.")
+        raise BootstrapError("tool.uv.required-version debe definir un rango como >=0.13.4,<0.14.")
     minimum, maximum = match.groups()
     if version_tuple(minimum) >= version_tuple(maximum):
         raise BootstrapError(
@@ -61,7 +61,7 @@ def configuration(root: Path) -> tuple[str, str]:
     uv_settings = tool.get("uv", {}) if isinstance(tool, dict) else {}
     required_uv = uv_settings.get("required-version", "") if isinstance(uv_settings, dict) else ""
     if not isinstance(required_uv, str):
-        raise BootstrapError("tool.uv.required-version debe definir un rango como >=0.12.10,<0.13.")
+        raise BootstrapError("tool.uv.required-version debe definir un rango como >=0.13.4,<0.14.")
     uv_version_range(required_uv)
     if not re.fullmatch(r"\d+\.\d+\.\d+", python_version):
         raise BootstrapError(".python-version debe fijar una versión CPython exacta (X.Y.Z).")

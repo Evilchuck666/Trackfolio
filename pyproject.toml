@@ -29,7 +29,7 @@ requires = ["uv_build==0.12.10"]
 build-backend = "uv_build"
 
 [tool.uv]
-required-version = ">=0.12.10,<0.13"
+required-version = ">=0.13.4,<0.14"
 python-preference = "only-managed"
 required-environments = [
     "sys_platform == 'win32' and platform_machine == 'AMD64'",

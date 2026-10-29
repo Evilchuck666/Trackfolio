@@ -142,7 +142,7 @@ del plan. Referencias: [Fusion](https://doc.qt.io/qt-6.11/qstylefactory.html),
 
 ## 6. Entrega reproducible y validación multiplataforma
 
-- [x] Mantener CPython 3.13.15 administrado por uv, uv dentro de `>=0.12.10,<0.13` y PySide6 6.11.2.
+- [x] Mantener CPython 3.13.15 administrado por uv, uv dentro de `>=0.13.4,<0.14` y PySide6 6.11.2.
   Versionar en `pyproject.toml` y `uv.lock` las dependencias nuevas necesarias.
   Esta GUI utiliza inicialmente los módulos ya instalados.
 - [x] Ampliar `doctor.py` para verificar recursos reales y arranque de la ventana

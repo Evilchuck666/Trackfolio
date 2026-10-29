@@ -9,18 +9,17 @@ permissions:
   contents: read
 
 concurrency:
-  group: checks-${{ github.workflow }}-${{ github.ref }}
+  group: release-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   environment:
-    name: ${{ matrix.name }} / uv ${{ matrix.uv }} / CPython 3.13.15
+    name: ${{ matrix.name }} / uv 0.13.4 / CPython 3.13.15
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        uv: ["0.12.10", "0.12.23"]
         runner: [ubuntu-24.04, windows-2022, macos-15-intel, macos-15]
         include:
           - name: GNU/Linux x86-64
@@ -40,10 +39,10 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Instalar uv de la matriz
+      - name: Instalar uv 0.13.4
         uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
-          version: ${{ matrix.uv }}
+          version: "0.13.4"
           enable-cache: true
           cache-dependency-glob: uv.lock
 
@@ -121,7 +120,7 @@ jobs:
         run: uv run --locked --extra gui pytest
 
       - name: Preparar una copia sin uv ni Python en PATH
-        if: matrix.uv == '0.12.10' && runner.os != 'macOS'
+        if: runner.os != 'macOS'
         shell: uv run --no-project --python 3.13.15 python {0}
         run: |
           import hashlib
@@ -172,7 +171,11 @@ jobs:
               for _ in range(2):
                   subprocess.run(command, cwd=temporary, env=environment, check=True)
               local_uv = root / ".tools/uv" / ("uv.exe" if os.name == "nt" else "uv")
-              assert local_uv.is_file()
+              local_uvx = local_uv.with_name("uvx.exe" if os.name == "nt" else "uvx")
+              for executable, name in ((local_uv, "uv"), (local_uvx, "uvx")):
+                  assert executable.is_file()
+                  version = subprocess.check_output([str(executable), "--version"], text=True)
+                  assert version.split()[:2] == [name, "0.13.4"], version
               assert (root / ".venv").is_dir()
               assert (root / "uv.lock").read_bytes() == before
               assert hashlib.sha256(system_uv.read_bytes()).hexdigest() == uv_digest
