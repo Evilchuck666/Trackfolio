@@ -1,6 +1,15 @@
 # Trackfolio
 
 Trackfolio es una aplicación multiplataforma para consultar y editar un catálogo de bibliotecas FLAC y MP3. Usa Python, Qt 6 mediante PySide6 y SQLite mediante SQLAlchemy. El dominio y los casos de uso son independientes de la GUI, para poder añadir interfaces CLI/TUI o un servidor con frontend web.
+=======
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20GNU%2FLinux%20%7C%20macOS-blue)
+![Python](https://img.shields.io/badge/python-3.13-blue)
+![PySide6](https://img.shields.io/badge/PySide6-6.11.2-blue)
+![Requires](https://img.shields.io/badge/requires-uv%200.12.10-blue)
+[![License](https://img.shields.io/badge/license-GPLv3-green)](LICENSE)
+[![Build and tests](https://github.com/Evilchuck666/Trackfolio/actions/workflows/checks.yml/badge.svg?branch=main)](https://github.com/Evilchuck666/Trackfolio/actions/workflows/checks.yml)
+
+Trackfolio será una aplicación multiplataforma para administrar metadatos de bibliotecas FLAC y MP3. Usará Python, Qt 6 mediante PySide6 y SQLite mediante SQLAlchemy. El dominio y los casos de uso serán independientes de la GUI, para poder añadir interfaces CLI/TUI o un servidor con frontend web.
 
 La GUI importa carpetas FLAC/MP3 y permite editar canción, artistas, álbum, año, numeración, géneros y líricas en SQLite. Los campos ausentes quedan vacíos. El importador conserva las carátulas incrustadas o procedentes de `album.jpg`. Las ediciones se guardan en el catálogo; la escritura de etiquetas en la música queda para otra entrega.
 
@@ -148,3 +157,7 @@ La GUI usa Fusion, una paleta, fuentes e iconos empaquetados y controles de vent
 La disponibilidad de un wheel compatible no demuestra que la GUI funcione en cada escritorio. Las comprobaciones ejecutadas y las pendientes se registran en [VALIDATION.md](VALIDATION.md). Alpine/musl, Windows ARM64 y Linux ARM64 quedan fuera de esta primera matriz.
 
 Consulta [el entorno portable](docs/environment.md), [la arquitectura](docs/architecture.md), [la guía de contribución](CONTRIBUTING.md) y [el plan original](PLAN.md).
+
+## Licencia
+
+Este proyecto se distribuye bajo la licencia GPLv3. Consulta el archivo [LICENSE](LICENSE).
