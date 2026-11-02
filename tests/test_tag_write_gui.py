@@ -174,6 +174,7 @@ def test_pending_operation_is_only_reconciled_after_explicit_review(
         controller.check_tag_recovery()
         wait_until(qt_app, lambda: controller._recovery_dialog is not None)
         dialog = controller._recovery_dialog
+        assert not window.table.isEnabled()
         assert not dialog.confirm_button.isEnabled()
         QTest.mouseClick(dialog.review_button, Qt.MouseButton.LeftButton)
         wait_until(qt_app, lambda: not controller._tag_running)
@@ -183,6 +184,42 @@ def test_pending_operation_is_only_reconciled_after_explicit_review(
         wait_until(qt_app, lambda: not controller._tag_running)
         assert source.read_bytes() == written and files.pending() == ()
     finally:
+        teardown(window, controller)
+
+
+def test_startup_recovery_waits_for_active_catalogue_save(
+    qt_app, setup_tags, tmp_path, monkeypatch
+):
+    from test_tag_write import prepare_change
+
+    _, entry, preview = prepare_change(setup_tags, tmp_path)
+    _, _, _, _, files = setup_tags
+    files.journal(preview)
+    window, controller = open_window(qt_app, setup_tags, entry)
+    started, release = threading.Event(), threading.Event()
+    open_writer = controller._edit_factory.open_writer
+
+    def delayed(path):
+        started.set()
+        assert release.wait(5)
+        return open_writer(path)
+
+    monkeypatch.setattr(controller._edit_factory, "open_writer", delayed)
+    try:
+        QTest.mouseClick(window.edit_button, Qt.MouseButton.LeftButton)
+        wait_until(qt_app, lambda: controller._edit_snapshot is not None and not controller._jobs)
+        window.fields["title"].selectAll()
+        QTest.keyClicks(window.fields["title"], "Saved before recovery")
+        QTest.mouseClick(window.save_button, Qt.MouseButton.LeftButton)
+        wait_until(qt_app, started.is_set)
+        controller.check_tag_recovery()
+        QTest.qWait(300)
+        assert controller.saving and controller._recovery_dialog is None
+        release.set()
+        wait_until(qt_app, lambda: controller._recovery_dialog is not None)
+        assert not controller.saving and not window.table.isEnabled()
+    finally:
+        release.set()
         teardown(window, controller)
 
 

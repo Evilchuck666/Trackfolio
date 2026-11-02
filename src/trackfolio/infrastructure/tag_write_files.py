@@ -9,6 +9,7 @@ import os
 import re
 import shutil
 import stat
+import sys
 import tempfile
 from collections.abc import Callable
 from dataclasses import asdict
@@ -155,8 +156,22 @@ def _copy_windows_metadata(source: Path, target: Path) -> None:
         finally:
             kernel.LocalFree(value)
 
-    if security_text(source) != security_text(target):
-        raise TagWriteError("La copia no conserva propietario, grupo y DACL del original.")
+    original_security, copied_security = security_text(source), security_text(target)
+
+    def permissions(value: str) -> str:
+        # Windows may mark auto-inheritance as processed when assigning an identical
+        # ACL. These bookkeeping flags do not change any ACE or DACL protection.
+        return re.sub(
+            r"D:([A-Z]*)",
+            lambda match: "D:" + match[1].replace("AI", "").replace("AR", ""),
+            value,
+        )
+
+    if permissions(original_security) != permissions(copied_security):
+        raise TagWriteError(
+            "La copia no conserva propietario, grupo y DACL del original. "
+            f"Original: {original_security}; copia: {copied_security}"
+        )
 
     class StreamData(ctypes.Structure):
         _fields_ = [("size", ctypes.c_longlong), ("name", wintypes.WCHAR * 296)]
@@ -206,13 +221,88 @@ def _copy_windows_metadata(source: Path, target: Path) -> None:
         kernel.FindClose(handle)
 
 
+def _copy_macos_metadata(source: Path, target: Path) -> None:
+    """Darwin's Python lacks os.getxattr; copy ACLs and xattrs with libSystem."""
+    import ctypes
+
+    system = ctypes.CDLL("/usr/lib/libSystem.B.dylib", use_errno=True)
+    system.copyfile.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_void_p, ctypes.c_uint32]
+    if system.copyfile(os.fsencode(source), os.fsencode(target), None, 7):
+        raise OSError(ctypes.get_errno(), "No se pudieron conservar los metadatos de macOS.")
+    system.listxattr.argtypes = [ctypes.c_char_p, ctypes.c_void_p, ctypes.c_size_t, ctypes.c_int]
+    system.listxattr.restype = ctypes.c_ssize_t
+    system.getxattr.argtypes = [
+        ctypes.c_char_p,
+        ctypes.c_char_p,
+        ctypes.c_void_p,
+        ctypes.c_size_t,
+        ctypes.c_uint32,
+        ctypes.c_int,
+    ]
+    system.getxattr.restype = ctypes.c_ssize_t
+
+    def attributes(path: Path) -> dict[bytes, bytes]:
+        filename = os.fsencode(path)
+        length = system.listxattr(filename, None, 0, 1)
+        if length < 0:
+            raise OSError(ctypes.get_errno(), "No se pudieron leer los atributos de macOS.")
+        names = ctypes.create_string_buffer(length)
+        if system.listxattr(filename, names, length, 1) != length:
+            raise TagWriteError("Los atributos cambiaron mientras se verificaban.")
+        values = {}
+        for name in names.raw.split(b"\0"):
+            if not name:
+                continue
+            size = system.getxattr(filename, name, None, 0, 0, 1)
+            if size < 0:
+                raise OSError(ctypes.get_errno(), "No se pudo leer un atributo de macOS.")
+            # Resource forks can be large: compare bounded chunks via their file stream.
+            if name == b"com.apple.ResourceFork":
+                with (path / "..namedfork" / "rsrc").open("rb") as fork:
+                    values[name] = hashlib.file_digest(fork, "sha256").digest()
+                continue
+            if size > 16 * 1024 * 1024:
+                raise TagWriteError("Atributo de macOS demasiado grande para verificarlo.")
+            buffer = ctypes.create_string_buffer(size)
+            if system.getxattr(filename, name, buffer, size, 0, 1) != size:
+                raise TagWriteError("Un atributo de macOS cambió mientras se verificaba.")
+            values[name] = buffer.raw
+        return values
+
+    system.acl_get_file.argtypes = [ctypes.c_char_p, ctypes.c_int]
+    system.acl_get_file.restype = ctypes.c_void_p
+    system.acl_to_text.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+    system.acl_to_text.restype = ctypes.c_void_p
+    system.acl_free.argtypes = [ctypes.c_void_p]
+
+    def permissions(path: Path) -> bytes:
+        acl = system.acl_get_file(os.fsencode(path), 0x100)
+        if not acl:
+            raise OSError(ctypes.get_errno(), "No se pudo verificar la ACL de macOS.")
+        text = None
+        try:
+            text = system.acl_to_text(acl, None)
+            if not text:
+                raise OSError(ctypes.get_errno(), "No se pudo comparar la ACL de macOS.")
+            return ctypes.string_at(text)
+        finally:
+            if text:
+                system.acl_free(text)
+            system.acl_free(acl)
+
+    if attributes(source) != attributes(target) or permissions(source) != permissions(target):
+        raise TagWriteError("La copia no conserva atributos y ACL de macOS.")
+
+
 def _copy_metadata(source: Path, target: Path) -> None:
     shutil.copystat(source, target, follow_symlinks=False)
     original, copied = source.stat(), target.stat()
     if os.name == "posix":
         if (original.st_uid, original.st_gid) != (copied.st_uid, copied.st_gid):
             os.chown(target, original.st_uid, original.st_gid)
-        if hasattr(os, "listxattr"):
+        if sys.platform == "darwin":
+            _copy_macos_metadata(source, target)
+        elif hasattr(os, "listxattr"):
             for key in os.listxattr(source):
                 value = os.getxattr(source, key)
                 if os.getxattr(target, key) != value:

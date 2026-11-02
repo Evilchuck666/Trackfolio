@@ -248,7 +248,9 @@ class CatalogController(QObject):
 
     @property
     def tagging(self) -> bool:
-        return self._tag_dialog is not None or self._tag_running
+        return (
+            self._tag_dialog is not None or self._recovery_dialog is not None or self._tag_running
+        )
 
     @Slot()
     def choose_tag_write(self) -> None:
@@ -347,6 +349,9 @@ class CatalogController(QObject):
     def check_tag_recovery(self) -> None:
         if self._tag_writer is None or self._closed or self._tag_running:
             return
+        if self.importing or self.saving:
+            QTimer.singleShot(250, self.check_tag_recovery)
+            return
         if self._recovery_dialog is not None:
             self._recovery_dialog.show()
             self._recovery_dialog.raise_()
@@ -387,12 +392,17 @@ class CatalogController(QObject):
                 self.window.set_error(job.task.error)
                 return
             operations = cast(tuple[PendingTagOperation, ...], job.task.result)
+            if operations and (self.importing or self.saving):
+                # Startup discovery can finish after a user starts a catalogue writer.
+                QTimer.singleShot(250, self.check_tag_recovery)
+                return
             if operations and self._recovery_dialog is None:
                 dialog = TagRecoveryDialog(operations, self.window)
                 self._recovery_dialog = dialog
                 dialog.review_requested.connect(self.review_tag_operation)
                 dialog.cancel_requested.connect(lambda: self._tag_cancel.set())
                 dialog.finished.connect(self._recovery_closed)
+                self.window.set_writing_tags(True)
                 dialog.show()
             elif not operations and self._tag_dialog is not None:
                 self._tag_dialog.summary.setText("No hay operaciones pendientes de recuperación.")

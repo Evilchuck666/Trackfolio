@@ -1,6 +1,7 @@
 """Write real temporary containers through the catalogue and preserve their payload."""
 
 import os
+import sys
 from dataclasses import replace
 
 import pytest
@@ -716,6 +717,7 @@ def test_windows_delete_lock_and_named_stream_preservation(setup_tags, tmp_path)
     stream = str(source) + ":trackfolio-test"
     with open(stream, "wb") as output:
         output.write(b"independent Windows stream")
+    preview = PreviewTagWrites(catalog, codec, files).execute(preview.request)
     kernel = ctypes.WinDLL("kernel32", use_last_error=True)
     kernel.CreateFileW.restype = wintypes.HANDLE
     kernel.CreateFileW.argtypes = [
@@ -764,6 +766,32 @@ def test_file_permissions_and_extended_attributes_survive(setup_tags, tmp_path):
     assert source.stat().st_mode & 0o777 == 0o640
     assert os.getxattr(source, key) == b"unrelated attribute"
     assert os.getxattr(report.results[0].backup_path, key) == b"unrelated attribute"
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="macOS native attributes and ACL")
+def test_macos_attributes_resource_fork_and_acl_survive(setup_tags, tmp_path):
+    import subprocess
+
+    source, entry, preview = prepare_change(setup_tags, tmp_path)
+    _, _, catalog, codec, files = setup_tags
+    subprocess.run(["/bin/chmod", "+a", "everyone allow read", str(source)], check=True)
+    subprocess.run(
+        ["/usr/bin/xattr", "-w", "com.trackfolio.test", "attribute Ω", str(source)], check=True
+    )
+    fork = source / "..namedfork" / "rsrc"
+    fork.write_bytes(b"resource fork preserved")
+    original_acl = subprocess.check_output(["/bin/ls", "-le", str(source)]).splitlines()[1:]
+    preview = PreviewTagWrites(catalog, codec, files).execute(preview.request)
+    report = WriteTagWrites(catalog, codec, files).execute(preview, (entry.file_id,))
+    assert report.results[0].state == "confirmed", report
+    assert fork.read_bytes() == b"resource fork preserved"
+    assert (
+        subprocess.check_output(["/usr/bin/xattr", "-p", "com.trackfolio.test", str(source)])
+        .decode()
+        .strip()
+        == "attribute Ω"
+    )
+    assert subprocess.check_output(["/bin/ls", "-le", str(source)]).splitlines()[1:] == original_acl
 
 
 def test_unknown_id3_frames_survive_without_reconstruction_from_catalogue(setup_tags, tmp_path):
