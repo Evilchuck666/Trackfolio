@@ -65,6 +65,7 @@ def _plain_directory(path: Path) -> None:
     path.mkdir(mode=0o700, exist_ok=True)
     if not path.is_dir():
         raise TagWriteError(f"El directorio no es válido: {path}")
+    _sync_directory(path.parent)
 
 
 def _copy_windows_metadata(source: Path, target: Path) -> None:
@@ -103,29 +104,10 @@ def _copy_windows_metadata(source: Path, target: Path) -> None:
         raise TagWriteError("No se pudo leer la herencia de permisos del archivo.")
     # Keep a protected DACL protected, and inherited permissions inheritable.
     info |= 0x80000000 if control.value & 0x1000 else 0x20000000
-    owner, group, dacl = ctypes.c_void_p(), ctypes.c_void_p(), ctypes.c_void_p()
-    defaulted, present = wintypes.BOOL(), wintypes.BOOL()
-    for name, pointer in (("Owner", owner), ("Group", group)):
-        function = getattr(security, f"GetSecurityDescriptor{name}")
-        function.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p]
-        if not function(descriptor, ctypes.byref(pointer), ctypes.byref(defaulted)):
-            raise TagWriteError("No se pudo leer el propietario/grupo del archivo.")
-    security.GetSecurityDescriptorDacl.argtypes = [ctypes.c_void_p] * 4
-    if not security.GetSecurityDescriptorDacl(
-        descriptor, ctypes.byref(present), ctypes.byref(dacl), ctypes.byref(defaulted)
-    ):
-        raise TagWriteError("No se pudo leer la lista de permisos del archivo.")
-    security.SetNamedSecurityInfoW.argtypes = [
-        wintypes.LPWSTR,
-        wintypes.DWORD,
-        wintypes.DWORD,
-        ctypes.c_void_p,
-        ctypes.c_void_p,
-        ctypes.c_void_p,
-        ctypes.c_void_p,
-    ]
-    security.SetNamedSecurityInfoW.restype = wintypes.DWORD
-    if security.SetNamedSecurityInfoW(str(target), 1, info, owner, group, dacl, None):
+    # SetNamedSecurityInfo would merge parent ACEs into an unprotected DACL.
+    # This lower-level API applies the original descriptor without that merge.
+    security.SetFileSecurityW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, ctypes.c_void_p]
+    if not security.SetFileSecurityW(str(target), info, descriptor):
         raise TagWriteError("No se pudieron conservar propietario, grupo y ACL del archivo.")
 
     security.ConvertSecurityDescriptorToStringSecurityDescriptorW.argtypes = [
@@ -278,6 +260,10 @@ def _copy_macos_metadata(source: Path, target: Path) -> None:
     def permissions(path: Path) -> bytes:
         acl = system.acl_get_file(os.fsencode(path), 0x100)
         if not acl:
+            if ctypes.get_errno() == errno.ENOENT:
+                # Darwin also returns ENOENT when an existing file has no ACL.
+                path.stat()
+                return b""
             raise OSError(ctypes.get_errno(), "No se pudo verificar la ACL de macOS.")
         text = None
         try:
@@ -553,6 +539,7 @@ class FileTagAccess:
             raise TagJournalError(
                 "Esta vista previa ya se utilizó. Prepara otra antes de reintentar."
             ) from exc
+        _sync_directory(self.journal_root)
         journal = FileTagJournal(
             operation / "journal.json",
             {
@@ -662,7 +649,7 @@ class FileTagAccess:
         for path in sorted(self.journal_root.glob("*/journal.json")):
             try:
                 if path.is_symlink() or path.parent.is_symlink() or not path.is_file():
-                    raise TagJournalError("El registro fue sustituido por un enlace.")
+                    raise TagJournalError("El registro no es un archivo regular sin enlaces.")
                 # Completed operations remain historical even if their music is later moved.
                 data = json.loads(path.read_text(encoding="utf-8"))
                 if not isinstance(data, dict):

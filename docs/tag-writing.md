@@ -38,8 +38,10 @@ No se siguen enlaces simbólicos/junctions, no se reemplazan enlaces duros ni de
 fuera de su raíz importada. Un original ausente o de solo lectura queda bloqueado;
 esto no impide editar sus datos en SQLite.
 
-En POSIX se copian y comprueban modo, propietario/grupo y atributos extendidos
-expuestos por el sistema, incluidas las ACL que se representen mediante esos atributos.
+En Linux se copian y comprueban modo, propietario/grupo y atributos extendidos,
+incluidas las ACL que se representen mediante esos atributos. En macOS se utiliza
+`copyfile` de libSystem para conservar permisos, ACL y atributos, incluido el resource
+fork, y se comprueban mediante las API nativas.
 En Windows se copian propietario, grupo, DACL y streams con nombre mediante API nativa;
 no se copian reglas de auditoría SACL que requieren privilegios. Los archivos NTFS
 comprimidos o cifrados se rechazan. No se promete conservar metadatos que el sistema
@@ -113,3 +115,5 @@ Las comprobaciones locales y por plataforma se registran en [VALIDATION.md](../V
 Referencias de plataforma: [permisos y herencia en Windows](https://learn.microsoft.com/en-us/windows/win32/secauthz/security-information),
 [representación del descriptor de seguridad](https://learn.microsoft.com/en-us/windows/win32/api/sddl/nf-sddl-convertsecuritydescriptortostringsecuritydescriptorw)
 y [enumeración de streams](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-findfirststreamw).
+Para macOS: [copyfile y metadatos](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man3/copyfile.3.html)
+y [ACL](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man3/acl_get_file.3.html).

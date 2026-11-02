@@ -7,6 +7,7 @@ from dataclasses import replace
 import pytest
 from audio_samples import FLAC as REAL_FLAC
 from audio_samples import MP3 as REAL_MP3
+from mutagen.apev2 import APEv2
 from mutagen.flac import FLAC
 from mutagen.id3 import APIC, ID3, TALB, TCON, TDRC, TIT2, TPE1, TPOS, TRCK, TXXX, USLT
 from test_catalog_edit import edit
@@ -171,6 +172,10 @@ def test_actual_audio_frames_and_unknown_information_preserved(setup_tags, tmp_p
         tags.add(TXXX(encoding=3, desc="CUSTOM_KEY", text=["Unknown value", "Second value"]))
         tags.add(APIC(encoding=3, mime="image/png", type=3, desc="Front", data=png()))
         tags.save(source)
+        ape = APEv2()
+        ape["REPLAYGAIN_TRACK_GAIN"] = "-3 dB"
+        ape["UNKNOWN_BINARY"] = b"\0\1\2\xff"
+        ape.save(source)
     entry = repository.save(read_metadata(source), tmp_path, source.name)
     before = read_metadata(source)
     edit(database, entry.file_id, title="After")
@@ -186,6 +191,9 @@ def test_actual_audio_frames_and_unknown_information_preserved(setup_tags, tmp_p
         "Unknown value",
         "Second value",
     )
+    if kind == "mp3":
+        assert str(APEv2(source)["REPLAYGAIN_TRACK_GAIN"]) == "-3 dB"
+        assert bytes(APEv2(source)["UNKNOWN_BINARY"]) == b"\0\1\2\xff"
 
 
 @pytest.mark.parametrize("change", ["file", "catalogue", "same_stat"])
@@ -324,13 +332,17 @@ def test_date_precision_requires_explicit_choice(setup_tags, tmp_path):
     assert read_metadata(source).album_date == "1981"
 
 
-@pytest.mark.parametrize("legacy", ["id3v1", "id3v23_lists"])
+@pytest.mark.parametrize("legacy", ["id3v1", "id3v22", "id3v23_lists"])
 def test_legacy_profiles_are_explicitly_blocked(setup_tags, tmp_path, legacy):
     database, repository, catalog, codec, files = setup_tags
     source = make_source(tmp_path, "mp3")
     if legacy == "id3v1":
         with source.open("ab") as stream:
             stream.write(b"TAG" + b"\x00" * 125)
+    elif legacy == "id3v22":
+        value = b"\0Original"
+        frame = b"TT2" + len(value).to_bytes(3, "big") + value
+        source.write_bytes(b"ID3\x02\0\0\0\0\0" + bytes([len(frame)]) + frame + REAL_MP3)
     else:
         tags = ID3(source, translate=False)
         tags.save(source, v2_version=3)
@@ -709,6 +721,7 @@ def test_replace_failure_keeps_original_and_verified_backup(setup_tags, tmp_path
 @pytest.mark.skipif(os.name != "nt", reason="Windows sharing locks and NTFS streams")
 def test_windows_delete_lock_and_named_stream_preservation(setup_tags, tmp_path):
     import ctypes
+    import subprocess
     from ctypes import wintypes
 
     source, entry, preview = prepare_change(setup_tags, tmp_path)
@@ -718,6 +731,7 @@ def test_windows_delete_lock_and_named_stream_preservation(setup_tags, tmp_path)
     with open(stream, "wb") as output:
         output.write(b"independent Windows stream")
     preview = PreviewTagWrites(catalog, codec, files).execute(preview.request)
+    original_acl = subprocess.check_output(["icacls", str(source)])
     kernel = ctypes.WinDLL("kernel32", use_last_error=True)
     kernel.CreateFileW.restype = wintypes.HANDLE
     kernel.CreateFileW.argtypes = [
@@ -745,6 +759,7 @@ def test_windows_delete_lock_and_named_stream_preservation(setup_tags, tmp_path)
     assert report.results[0].state == "confirmed", report
     with open(stream, "rb") as incoming:
         assert incoming.read() == b"independent Windows stream"
+    assert subprocess.check_output(["icacls", str(source)]) == original_acl
 
 
 @pytest.mark.skipif(not hasattr(os, "setxattr"), reason="POSIX extended attributes")
