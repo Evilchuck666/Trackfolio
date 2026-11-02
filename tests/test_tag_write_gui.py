@@ -107,6 +107,13 @@ def test_gui_lists_songs_immediately_and_writes_all_saved_fields(qt_app, setup_t
             assert not (source.parent / ".trackfolio-backups").exists()
         assert "Escribiendo y verificando" in dialog.output.toPlainText()
         assert dialog.table.rowCount() == 2 and dialog._error_popup is None
+        assert not dialog.write_button.isEnabled()
+        assert dialog.close_button.isEnabled()
+        # A second click, including a programmatic request, cannot write again.
+        repeated = QSignalSpy(dialog.write_requested)
+        QTest.mouseClick(dialog.write_button, Qt.MouseButton.LeftButton)
+        dialog._request_write()
+        assert repeated.count() == 0 and len(reports) == 1
         dialog.reject()
         wait_until(qt_app, lambda: not controller._jobs)
         assert window.selected_file_ids() == tuple(entry.file_id for entry in entries)
@@ -130,6 +137,8 @@ def test_unchanged_songs_do_not_write_or_offer_a_report(qt_app, setup_tags, tmp_
         assert dialog.table.item(0, 3).text() == "Sin cambios"
         assert source.read_bytes() == original and not files.journal_root.exists()
         assert dialog._error_popup is None
+        assert not dialog.write_button.isEnabled()
+        assert dialog.close_button.isEnabled()
     finally:
         teardown(window, controller)
 
@@ -167,6 +176,16 @@ def test_errors_offer_export_in_popup_and_keep_successful_songs(qt_app, setup_ta
         stored = json.loads(destination.read_text())
         assert [item["state"] for item in stored["results"]] == ["confirmed", "excluded"]
         assert stored["results"][1]["message"]
+        assert dialog.write_button.isEnabled()
+        wait_until(qt_app, lambda: dialog._error_popup is None)
+        # Repair the missing file and retry from the same dialog.
+        make_source(tmp_path, "mp3")
+        QTest.mouseClick(dialog.write_button, Qt.MouseButton.LeftButton)
+        wait_until(qt_app, lambda: dialog._report is not None and not controller._tag_running)
+        assert [item.state for item in dialog._report.results] == ["unchanged", "confirmed"]
+        assert read_metadata(sources[1]).title == "Saved correction"
+        assert not dialog.write_button.isEnabled()
+        assert dialog.close_button.isEnabled()
     finally:
         teardown(window, controller)
 
@@ -192,6 +211,7 @@ def test_preparation_error_offers_a_report_without_touching_audio(
         assert "Catalogue unavailable" in dialog.output.toPlainText()
         assert source.read_bytes() == original and not files.journal_root.exists()
         assert any(button.text() == "Guardar informe…" for button in dialog._error_popup.buttons())
+        assert dialog.write_button.isEnabled()
     finally:
         teardown(window, controller)
 

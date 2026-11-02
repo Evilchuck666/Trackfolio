@@ -562,3 +562,14 @@ Validación local en Linux con CPython 3.13.15 y Qt 6.11.2:
 
 El workflow se actualiza para comprobar este resultado con el paquete instalado.
 La ejecución de esta revisión en CI queda pendiente.
+
+### Botón de escritura después de finalizar (2026-11-02)
+
+El botón **Escribir etiquetas** queda deshabilitado cuando todas las canciones han
+terminado confirmadas o sin cambios, sin errores ni cancelación. **Cerrar** permanece
+activo. Los errores y resultados pendientes permiten reintentar; al corregir un archivo
+y terminar correctamente ese reintento, el botón también queda deshabilitado.
+
+Validación local: las nueve pruebas de integración del diálogo pasan, incluido un
+segundo clic sin nueva escritura, archivos sin cambios y reintento tras reparar un
+archivo ausente. Ruff, formato, mypy y el diagnóstico GUI `offscreen` son correctos.

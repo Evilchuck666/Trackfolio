@@ -11,6 +11,10 @@ Cada canción conserva sus propios valores; los archivos sin diferencias se omit
 Los errores abren un pop-up que ofrece guardar el informe JSON; una operación correcta
 no muestra ese pop-up.
 
+Tras completar la escritura correctamente, **Escribir etiquetas** queda deshabilitado
+y **Cerrar** sigue disponible. También se deshabilita si todos los archivos estaban
+ya actualizados. Si hay errores o pendientes, permite reintentar en el mismo diálogo.
+
 ## Formatos y valores admitidos
 
 | Caso | Comportamiento |

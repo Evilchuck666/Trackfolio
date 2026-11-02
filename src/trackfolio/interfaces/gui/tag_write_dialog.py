@@ -72,6 +72,7 @@ class TagWriteDialog(QDialog):
         self._report: TagWriteReport | None = None
         self._error_message = ""
         self._busy = False
+        self._completed = False
         self._close_pending = False
         self._error_popup: QMessageBox | None = None
         layout = QVBoxLayout(self)
@@ -128,7 +129,7 @@ class TagWriteDialog(QDialog):
         layout.addLayout(buttons)
 
     def _request_write(self) -> None:
-        if self._busy or not self.file_ids:
+        if self._busy or self._completed or not self.file_ids:
             return
         self._report = None
         self._error_message = ""
@@ -144,7 +145,7 @@ class TagWriteDialog(QDialog):
 
     def set_busy(self, busy: bool) -> None:
         self._busy = busy
-        self.write_button.setEnabled(bool(self.file_ids) and not busy)
+        self.write_button.setEnabled(bool(self.file_ids) and not busy and not self._completed)
 
     def set_progress(self, progress: TagWriteProgress) -> None:
         names = {
@@ -165,12 +166,12 @@ class TagWriteDialog(QDialog):
         self.progress.setValue(progress.processed)
 
     def set_error(self, message: str, *, offer_report: bool = True) -> None:
-        self._busy = False
+        self._completed = False
+        self.set_busy(False)
         self._error_message = message
         self.output.appendPlainText(message)
         self.summary.setText("No se pudo completar la escritura.")
         self.progress.setRange(0, max(1, len(self.file_ids)))
-        self.write_button.setEnabled(True)
         if self._close_pending:
             super().reject()
         elif offer_report:
@@ -178,7 +179,13 @@ class TagWriteDialog(QDialog):
 
     def set_report(self, report: TagWriteReport, *, offer_report: bool = True) -> None:
         self._report = report
-        self._busy = False
+        self._completed = (
+            not report.cancelled
+            and not report.fatal_error
+            and {item.file_id for item in report.results} == set(self.file_ids)
+            and all(item.state in ("confirmed", "unchanged") for item in report.results)
+        )
+        self.set_busy(False)
         if report.fatal_error:
             self.output.appendPlainText(report.fatal_error)
         for item in report.results:
@@ -197,7 +204,6 @@ class TagWriteDialog(QDialog):
         )
         self.progress.setRange(0, max(1, len(self.file_ids)))
         self.progress.setValue(sum(item.state != "pending" for item in report.results))
-        self.write_button.setEnabled(True)
         if self._close_pending:
             super().reject()
         elif offer_report and (
