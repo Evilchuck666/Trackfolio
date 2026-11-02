@@ -24,6 +24,8 @@ from PySide6.QtWidgets import (
 from trackfolio.application.import_catalog import ImportProgress, ImportReport, ImportRequest
 from trackfolio.interfaces.gui.theme import icon
 
+DEFAULT_CATALOG_NAME = "database.tfo"
+
 
 def _label(text: str, parent: QWidget, *, name: str = "MutedLabel") -> QLabel:
     result = QLabel(text, parent)
@@ -104,7 +106,7 @@ class ImportDialog(QDialog):
         destination_row = QHBoxLayout()
         self.destination_edit = QLineEdit(destination_group)
         self.destination_edit.setAccessibleName("Archivo del catálogo nuevo")
-        self.destination_edit.setText(str(initial_directory / "Mi música.tfo"))
+        self.destination_edit.setText(str(initial_directory / DEFAULT_CATALOG_NAME))
         self.destination_edit.setCursorPosition(0)
         self.destination_button = QPushButton("Elegir archivo…", destination_group)
         self.destination_button.clicked.connect(self._choose_destination)
@@ -190,7 +192,7 @@ class ImportDialog(QDialog):
                 )
             )
         )
-        dialog.selectFile(destination.name or "Mi música.tfo")
+        dialog.selectFile(destination.name or DEFAULT_CATALOG_NAME)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             selected = dialog.selectedFiles()
             if selected:

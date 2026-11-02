@@ -10,6 +10,7 @@ import sys
 import textwrap
 import threading
 from contextlib import closing
+from pathlib import Path
 
 import pytest
 
@@ -28,9 +29,47 @@ from trackfolio.infrastructure.metadata import read_metadata
 from trackfolio.infrastructure.preferences import CatalogPreferences
 from trackfolio.infrastructure.session import open_catalog
 from trackfolio.interfaces.gui.controller import CatalogController
+from trackfolio.interfaces.gui.import_dialog import ImportDialog
 from trackfolio.interfaces.gui.lifecycle import dispose_window
 from trackfolio.interfaces.gui.window import MainWindow
 from trackfolio.startup import create_window
+
+
+@pytest.mark.parametrize("development", [False, True])
+@pytest.mark.parametrize("remembered_catalog", [False, True])
+def test_new_catalog_destination_uses_launch_mode_not_history(
+    qt_app, tmp_path, monkeypatch, development, remembered_catalog
+):
+    production = tmp_path / "user-data" / "Trackfolio"
+    monkeypatch.setattr("platformdirs.user_data_path", lambda *args, **kwargs: production)
+    preferences = CatalogPreferences(tmp_path / "settings.json")
+    if remembered_catalog:
+        previous = tmp_path / "other-library" / "previous.tfo"
+        previous.parent.mkdir()
+        previous.touch()
+        preferences.remember(previous)
+    project = tmp_path / "project with spaces"
+    project.mkdir()
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+    window, controller = create_window(preferences, dev_root=project if development else None)
+    destinations = []
+
+    def inspect_import():
+        dialog = window.findChild(ImportDialog)
+        destinations.append(Path(dialog.destination_edit.text()))
+        dialog.reject()
+
+    try:
+        QTimer.singleShot(0, inspect_import)
+        controller.choose_import()
+        expected = (project / "data" if development else production) / "database.tfo"
+        assert destinations == [expected]
+        assert not expected.parent.exists()
+    finally:
+        controller.shutdown()
+        dispose_window(window)
 
 
 def wait_until(app, predicate, timeout=5):

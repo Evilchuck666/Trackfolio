@@ -92,6 +92,14 @@ Para abrir una base concreta añade `--database "ruta/al/catalogo.tfo"`. La base
 
 Sin `--database`, se restaura el último catálogo abierto cuando sigue disponible. Para empezar sin restaurarlo, usa `--no-restore`. Puedes abrir otra base con **Abrir catálogo…** y recargar sus registros con **Actualizar**. Selecciona una canción para consultar su detalle; los textos permiten copiar datos y las líricas se muestran como texto plano.
 
+Los catálogos nuevos se proponen como `database.tfo` en la carpeta de datos del usuario:
+en Linux, normalmente `~/.local/share/Trackfolio/database.tfo` (se respeta `XDG_DATA_HOME`);
+en macOS y Windows se utiliza su ubicación equivalente mediante `platformdirs`.
+El último catálogo abierto no cambia este destino. Para desarrollar, añade
+`--dev-root "/ruta/al/proyecto"`: el destino será `<proyecto>/data/database.tfo`.
+Los lanzadores y tareas de GUI de VS Code incluyen este argumento; el arranque vacío
+también utiliza `--no-restore`. «Elegir carpeta…» empieza en la carpeta personal del usuario.
+
 La consulta abre SQLite en modo de sólo lectura; importar y guardar una edición utilizan escritores separados. Consultar y editar no requieren acceder al FLAC/MP3 original: también las imágenes están guardadas en el catálogo. Las fuentes, iconos y estilos se incluyen en el paquete y se cargan sin descargas durante el uso.
 
 En VS Code, ejecuta la tarea **Trackfolio: iniciar GUI con la muestra** o la configuración de depuración **Trackfolio: GUI con catálogo de ejemplo**. Consulta el [plan y su estado](docs/gui-plan.md) y los [resultados comprobados](VALIDATION.md).

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -12,6 +13,8 @@ if TYPE_CHECKING:
 
 def create_window(
     preferences: CatalogPreferences | None = None,
+    *,
+    dev_root: Path | None = None,
 ) -> tuple[MainWindow, CatalogController]:
     from platformdirs import user_data_path
 
@@ -25,9 +28,10 @@ def create_window(
     from trackfolio.interfaces.gui.window import MainWindow
 
     window = MainWindow()
-    previous = preferences.last_catalog() if preferences is not None else None
     directory = (
-        previous.parent if previous is not None else user_data_path("Trackfolio", appauthor=False)
+        dev_root.expanduser().resolve() / "data"
+        if dev_root is not None
+        else user_data_path("Trackfolio", appauthor=False)
     )
     controller = CatalogController(
         window,

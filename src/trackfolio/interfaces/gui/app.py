@@ -35,6 +35,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Trackfolio · catálogo de música")
     parser.add_argument("--database", type=Path, help="Catálogo SQLite existente.")
     parser.add_argument("--no-restore", action="store_true", help="Iniciar sin restaurar catálogo.")
+    parser.add_argument(
+        "--dev-root", type=Path, help="Proponer catálogos en data/ de este proyecto."
+    )
     args, qt_args = parser.parse_known_args(sys.argv[1:] if argv is None else argv)
     app = CatalogApplication(["Trackfolio", *qt_args])
     app.setApplicationName("Trackfolio")
@@ -42,7 +45,7 @@ def main(argv: list[str] | None = None) -> int:
     app.setApplicationVersion("0.1.0")
     apply_theme(app)
     preferences = CatalogPreferences()
-    window, controller = create_window(preferences)
+    window, controller = create_window(preferences, dev_root=args.dev_root)
     app.close_guard = controller.request_close
     # User window/shortcut closure is deferred during imports. If QApplication
     # itself quits, drain workers before Qt owners or the event loop disappear.

@@ -212,7 +212,7 @@ def test_missing_data_directory_uses_existing_parent_for_destination(qt_app, tmp
         QTimer.singleShot(0, cancel_picker)
         QTest.mouseClick(dialog.destination_button, Qt.MouseButton.LeftButton)
         assert directory == [tmp_path]
-        assert dialog.destination_edit.text() == str(suggested / "Mi música.tfo")
+        assert dialog.destination_edit.text() == str(suggested / "database.tfo")
         assert not suggested.exists()
     finally:
         dispose(dialog, qt_app)

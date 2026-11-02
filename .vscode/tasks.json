@@ -5,10 +5,10 @@
       "label": "Trackfolio: iniciar GUI con la muestra",
       "type": "process",
       "command": "bash",
-      "args": ["${workspaceFolder}/setup.sh", "--run-uv", "run", "--locked", "--extra", "gui", "python", "-m", "trackfolio.interfaces.gui", "--database", "${workspaceFolder}/data/database.tfo"],
+      "args": ["${workspaceFolder}/setup.sh", "--run-uv", "run", "--locked", "--extra", "gui", "python", "-m", "trackfolio.interfaces.gui", "--dev-root", "${workspaceFolder}", "--database", "${workspaceFolder}/data/database.tfo"],
       "windows": {
         "command": "powershell",
-        "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/setup.ps1", "--run-uv", "run", "--locked", "--extra", "gui", "python", "-m", "trackfolio.interfaces.gui", "--database", "${workspaceFolder}/data/database.tfo"]
+        "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/setup.ps1", "--run-uv", "run", "--locked", "--extra", "gui", "python", "-m", "trackfolio.interfaces.gui", "--dev-root", "${workspaceFolder}", "--database", "${workspaceFolder}/data/database.tfo"]
       },
       "options": { "cwd": "${workspaceFolder}" },
       "problemMatcher": []
@@ -17,10 +17,10 @@
       "label": "Trackfolio: iniciar GUI",
       "type": "process",
       "command": "bash",
-      "args": ["${workspaceFolder}/setup.sh", "--run-uv", "run", "--locked", "--extra", "gui", "python", "-m", "trackfolio.interfaces.gui"],
+      "args": ["${workspaceFolder}/setup.sh", "--run-uv", "run", "--locked", "--extra", "gui", "python", "-m", "trackfolio.interfaces.gui", "--dev-root", "${workspaceFolder}", "--no-restore"],
       "windows": {
         "command": "powershell",
-        "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/setup.ps1", "--run-uv", "run", "--locked", "--extra", "gui", "python", "-m", "trackfolio.interfaces.gui"]
+        "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/setup.ps1", "--run-uv", "run", "--locked", "--extra", "gui", "python", "-m", "trackfolio.interfaces.gui", "--dev-root", "${workspaceFolder}", "--no-restore"]
       },
       "options": { "cwd": "${workspaceFolder}" },
       "problemMatcher": []
