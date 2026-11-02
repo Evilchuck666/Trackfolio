@@ -219,7 +219,7 @@ class _SqliteCatalogEditSession:
         old_album = snapshot.album or {}
         title = changes.get("album", old_album.get("title"))
         year = changes.get("album_year", old_album.get("year"))
-        date = old_album.get("date")
+        date = changes.get("album_date", old_album.get("date"))
         disc_total = old_album.get("disc_total")
         credits = snapshot.album_credits
         if title is None and year is None and date is None and disc_total is None and not credits:

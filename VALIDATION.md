@@ -1,6 +1,6 @@
 # Validación de Trackfolio
 
-El registro conserva las comprobaciones de cada fase. La infraestructura inicial se validó el 6 de octubre de 2026; el catálogo y su primera GUI se implementaron el 7 de octubre. La edición de etiquetas queda para un incremento posterior.
+El registro conserva las comprobaciones de cada fase. La infraestructura inicial se validó el 6 de octubre de 2026; el catálogo y su primera GUI se implementaron el 7 de octubre. Las entregas posteriores, incluida la escritura de etiquetas, se registran a continuación.
 
 ## Comprobaciones locales
 

@@ -1,6 +1,6 @@
 # Arquitectura de Trackfolio
 
-El núcleo importa, consulta y edita un catálogo de archivos FLAC/MP3 mediante contratos independientes de Qt. La GUI utiliza estos contratos; las interfaces CLI/TUI y de servidor se mantienen como posibilidades futuras.
+El núcleo importa, consulta y edita un catálogo de archivos FLAC/MP3 y escribe sus etiquetas mediante contratos independientes de Qt. La GUI utiliza estos contratos; las interfaces CLI/TUI y de servidor se mantienen como posibilidades futuras.
 
 ## Dependencias entre capas
 
@@ -93,7 +93,29 @@ Las correcciones modifican SQLite. Reimportar sigue tomando los metadatos del ar
 como origen y reemplaza las correcciones del catálogo, conservando roles adicionales.
 La edición no añade tablas ni dependencias y reutiliza el respaldo de catálogos antiguos.
 
-La importación guarda cada archivo en una transacción y no modifica la música. La transacción de la base de datos no cubre automáticamente la edición de archivos musicales: los futuros casos de uso deberán definir cómo detectar, comunicar y recuperar fallos parciales.
+La importación guarda cada archivo en una transacción y no modifica la música.
+`PreviewTagWrites` compara los campos elegidos del catálogo con los archivos actuales,
+sin migraciones ni escrituras. `WriteTagWrites` coordina secuencialmente respaldo,
+edición en una copia, verificación, publicación y confirmación parcial en SQLite.
+`domain/tag_write.py` define solicitudes, instantáneas, diferencias, estados e informes;
+los contratos de aplicación no dependen de Mutagen, SQLAlchemy ni Qt.
+
+`infrastructure/tag_write.py` conserva familias de alias y versión ID3, verifica todos
+los valores semánticos y los metadatos ajenos, y compara hashes de audio FLAC/MPEG.
+`tag_write_files.py` proporciona copias exclusivas, huellas completas, reemplazo local
+y registros JSON sincronizados en el directorio de datos del usuario. Se registra el
+hash posterior antes del reemplazo para reconocer una publicación interrumpida.
+`tag_write_catalog.py` compara la instantánea musical y `raw_tags` bajo transacción;
+confirma únicamente las observaciones y la fecha física afectada, sin reimportar ni
+reemplazar otras correcciones del catálogo.
+
+`ReviewTagWrites` inspecciona el registro y los hashes. La confirmación explícita puede
+reconciliar SQLite y retirar un temporal propio verificado; nunca publica ni restaura
+música automáticamente. La atomicidad es por archivo, no por lote ni entre música y
+SQLite. Si el archivo se escribió y la confirmación falla, el informe conserva el estado
+**catálogo pendiente**. La GUI ejecuta revisión, escritura y recuperación en trabajadores,
+con cancelación cooperativa y cierre diferido. Véanse el [plan](tag-write-plan.md) y la
+[guía de formatos y recuperación](tag-writing.md).
 
 Se usan `pathlib`, una raíz de biblioteca configurable y rutas relativas para los archivos. La ruta identifica la ubicación importada, no la identidad musical de una grabación. El esquema separa pistas y archivos, pero el importador inicial crea una pista por cada archivo nuevo; la identificación entre ediciones y la reasignación de raíces al mover una biblioteca quedan pendientes.
 

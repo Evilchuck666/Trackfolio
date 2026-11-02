@@ -73,6 +73,12 @@ implementada: sustituye la reutilización contextual de artistas y añade la rev
 para consolidar catálogos existentes. Los párrafos anteriores describen el alcance original
 de esta importación.
 
+La [escritura de etiquetas](tag-write-plan.md) añade una acción explícita independiente
+de importar y guardar. Sus respaldos terminan en `.tfo-bak` y sus temporales en `.tmp`,
+para que el explorador FLAC/MP3 no los importe. Reimportar después de escribir recupera
+los campos publicados; las correcciones que solo permanecen en SQLite se sustituyen
+por los valores del archivo, según las reglas anteriores.
+
 La [edición de canciones](edit-plan.md), también implementada, añade aislamiento cuando
 varios archivos comparten una pista: al editar o reimportar uno se conserva `file_id` y se
 copia su pista, por lo que puede cambiar `track_id`. La importación conserva los créditos

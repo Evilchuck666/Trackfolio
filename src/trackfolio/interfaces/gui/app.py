@@ -51,6 +51,7 @@ def main(argv: list[str] | None = None) -> int:
     # itself quits, drain workers before Qt owners or the event loop disappear.
     app.aboutToQuit.connect(controller.shutdown)
     window.show()
+    QTimer.singleShot(0, controller.check_tag_recovery)
     database = args.database or (None if args.no_restore else preferences.last_catalog())
     if database is not None:
         QTimer.singleShot(0, lambda: controller.open_database(database))

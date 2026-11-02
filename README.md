@@ -11,7 +11,7 @@ Trackfolio es una aplicación multiplataforma para consultar y editar un catálo
 
 Trackfolio será una aplicación multiplataforma para administrar metadatos de bibliotecas FLAC y MP3. Usará Python, Qt 6 mediante PySide6 y SQLite mediante SQLAlchemy. El dominio y los casos de uso serán independientes de la GUI, para poder añadir interfaces CLI/TUI o un servidor con frontend web.
 
-La GUI importa carpetas FLAC/MP3 y permite editar canción, artistas, álbum, año, numeración, géneros y líricas en SQLite. Los campos ausentes quedan vacíos. El importador conserva las carátulas incrustadas o procedentes de `album.jpg`. Las ediciones se guardan en el catálogo; la escritura de etiquetas en la música queda para otra entrega.
+La GUI importa carpetas FLAC/MP3 y permite editar canción, artistas, álbum, año, numeración, géneros y líricas en SQLite. Los campos ausentes quedan vacíos. El importador conserva las carátulas incrustadas o procedentes de `album.jpg`. Las ediciones se guardan en el catálogo y pueden escribirse en los archivos mediante una acción explícita con vista previa y respaldo.
 
 ## Preparar un PC
 
@@ -129,6 +129,36 @@ indican en el editor y los campos sin marcar se conservan; aplicar un campo vac�
 borra en todo el grupo. Artistas y géneros sustituyen la lista completa por la elegida.
 El guardado es una única transacción: si una canción cambió externamente o falla la
 escritura, no se guarda ninguna y el borrador se conserva para revisarlo.
+
+## Escribir etiquetas en la música
+
+1. Guarda las correcciones en el catálogo y selecciona una o varias canciones.
+2. Pulsa **Escribir etiquetas…** y marca los campos que quieras publicar.
+3. Pulsa **Revisar diferencias**. Revisa los valores actuales y los guardados, los
+   borrados y las incidencias. Puedes desmarcar archivos para escribir un subconjunto.
+4. Pulsa **Escribir etiquetas**. Cada archivo recibe sus propios valores guardados;
+   la selección múltiple no iguala títulos ni numeración.
+
+Las casillas empiezan sin marcar. Un campo marcado cuyo valor está vacío se **borra**.
+La escritura conserva el audio, las portadas y los metadatos no elegidos; comprueba
+las copias antes de reemplazar cada original. Una fecha completa se conserva cuando
+es posible; reducirla al año o eliminarla requiere la opción explícita del diálogo.
+Con varias líricas ID3, elige su idioma/descripción y vuelve a revisar.
+
+Se admiten comentarios FLAC e ID3v2.4; ID3v2.3 se conserva cuando sus valores son
+representables sin unir listas. ID3v2.2, archivos con ID3v1 y combinaciones incompatibles
+aparecen bloqueados con su motivo. También se rechazan enlaces, archivos de solo lectura
+y destinos ajenos a la raíz importada. Consulta la [matriz y los límites](docs/tag-writing.md).
+
+Cada original se respalda en `.trackfolio-backups/<operación>/<id>-<nombre>.tfo-bak`,
+junto a su carpeta de música. Los respaldos se conservan y no se importan como canciones.
+Puedes cancelar: permanecen los archivos ya publicados. El informe permite copiar o
+exportar errores y rutas; el lote completo y SQLite no son una transacción única.
+
+Al arrancar se avisa de operaciones interrumpidas. **Operaciones pendientes…** permite
+revisarlas y confirmar en el catálogo lo que ya se escribió, sin reescribir música.
+Los conflictos se conservan para revisión manual. La [guía de recuperación](docs/tag-writing.md#recuperación)
+explica los registros, los temporales y la restauración manual de un respaldo.
 
 ## Importar música
 

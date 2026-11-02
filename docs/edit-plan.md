@@ -15,6 +15,11 @@ la música original no esté disponible. La escritura de etiquetas en FLAC/MP3 r
 otro adaptador y un diseño de recuperación entre archivos y SQLite; queda fuera de esta
 entrega.
 
+La entrega de [escritura de etiquetas](tag-write-plan.md) añade la acción independiente
+**Escribir etiquetas…** para publicar los valores guardados en FLAC/MP3, con revisión
+previa y respaldos. **Guardar** sigue confirmando únicamente SQLite; antes de escribir
+etiquetas se resuelve cualquier borrador con Guardar/Descartar/Cancelar.
+
 La unidad de edición será la fila seleccionada, identificada por `file_id`. Por ejemplo,
 cambiar **Abbath → Accept** reasignará el artista de esa canción al Accept existente,
 conservando los créditos de las demás canciones y la identidad de ambos artistas.

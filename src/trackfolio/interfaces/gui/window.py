@@ -249,6 +249,7 @@ class MainWindow(QMainWindow):
     track_selected = Signal(int)
     tracks_selected = Signal(object)
     edit_requested = Signal()
+    write_tags_requested = Signal()
     save_requested = Signal()
     cancel_edit_requested = Signal()
     dirty_changed = Signal(bool)
@@ -275,6 +276,8 @@ class MainWindow(QMainWindow):
         self._selected_file_ids: tuple[int, ...] = ()
         self._detail_loaded = False
         self._edit_enabled = False
+        self._tag_write_enabled = False
+        self._writing_tags = False
         self._editing = False
         self._saving = False
         self._updating_edit = False
@@ -495,6 +498,9 @@ class MainWindow(QMainWindow):
         self.edit_action = QAction("Editar", self)
         self.edit_action.setShortcut(QKeySequence("Ctrl+E"))
         self.edit_action.triggered.connect(self.edit_requested.emit)
+        self.write_tags_action = QAction("Escribir etiquetas…", self)
+        self.write_tags_action.triggered.connect(self.write_tags_requested.emit)
+        self.addAction(self.write_tags_action)
         self.save_action = QAction("Guardar", self)
         self.save_action.setShortcut(QKeySequence(QKeySequence.StandardKey.Save))
         self.save_action.triggered.connect(self.save_requested.emit)
@@ -515,6 +521,12 @@ class MainWindow(QMainWindow):
             button.clicked.connect(action.trigger)
             heading.addWidget(button)
         controls_layout.addLayout(heading)
+        self.write_tags_button = QPushButton("Escribir etiquetas…", controls)
+        self.write_tags_button.clicked.connect(self.write_tags_action.trigger)
+        tag_actions = QHBoxLayout()
+        tag_actions.addWidget(self.write_tags_button)
+        tag_actions.addStretch()
+        controls_layout.addLayout(tag_actions)
         self.edit_status = QLabel(panel)
         self.edit_status.setObjectName("MutedLabel")
         self.edit_status.setTextFormat(Qt.TextFormat.PlainText)
@@ -946,7 +958,7 @@ class MainWindow(QMainWindow):
         self._update_actions()
 
     def _update_actions(self) -> None:
-        navigating = not self._importing and not self._saving
+        navigating = not self._importing and not self._saving and not self._writing_tags
         self.open_button.setEnabled(navigating)
         self.import_button.setEnabled(navigating)
         self.import_action.setEnabled(navigating)
@@ -961,8 +973,20 @@ class MainWindow(QMainWindow):
             and navigating
             and not self._editing
         )
+        self.write_tags_action.setEnabled(
+            self._tag_write_enabled
+            and bool(self._selected_file_ids)
+            and not self._busy
+            and navigating
+        )
+        self.write_tags_button.setEnabled(self.write_tags_action.isEnabled())
+        self.write_tags_button.setVisible(self._tag_write_enabled)
         self.save_action.setEnabled(
-            self._editing and not self._saving and self._edit_valid and self.edit_dirty()
+            self._editing
+            and not self._saving
+            and not self._writing_tags
+            and self._edit_valid
+            and self.edit_dirty()
         )
         self.cancel_edit_action.setEnabled(self._editing and not self._saving)
         for action, button in (
@@ -1010,6 +1034,14 @@ class MainWindow(QMainWindow):
                 + self.edit_status.text()
                 + "\nMarca los campos que se reemplazarán en todas las seleccionadas."
             )
+
+    def set_tag_write_enabled(self, enabled: bool) -> None:
+        self._tag_write_enabled = enabled
+        self._update_actions()
+
+    def set_writing_tags(self, writing: bool) -> None:
+        self._writing_tags = writing
+        self._update_actions()
 
     def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)
