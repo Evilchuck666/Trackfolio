@@ -96,7 +96,33 @@ def test_draft_has_only_user_changes_and_preserves_plain_text(window):
     assert window.lyrics.toPlainText() == "<b>Another literal</b>"
 
 
-@pytest.mark.parametrize("invalid", ["0", "-2", "1.5", "year", "10000", "9" * 25])
+@pytest.mark.parametrize(
+    "key", ["album_year", "track_number", "track_total", "disc_number", "disc_total"]
+)
+def test_numeric_fields_only_accept_digits_and_can_be_cleared(window, qt_app, key):
+    window.begin_edit(load_detail(window))
+    field = window.fields[key]
+    replace_text(field, "123")
+    QTest.keyClicks(field, "abcABC-+., /:;_!?@#%&()[]=*")
+    assert field.text() == "123"
+    replace_text(field, "")
+    assert field.text() == ""
+
+    clipboard = qt_app.clipboard()
+    previous = clipboard.text()
+    try:
+        for invalid in ("abc", "-2", "+2", "1.5", "1,5", "1 2", "1/2", "１２", "١٢", "1\n2"):
+            clipboard.setText(invalid)
+            field.paste()
+            assert field.text() == "", invalid
+        clipboard.setText("1981")
+        field.paste()
+        assert field.text() == "1981"
+    finally:
+        clipboard.setText(previous)
+
+
+@pytest.mark.parametrize("invalid", ["0", "10000", "9" * 25])
 def test_invalid_year_keeps_draft_and_disables_save(window, invalid):
     window.begin_edit(load_detail(window))
     replace_text(window.fields["album_year"], invalid)

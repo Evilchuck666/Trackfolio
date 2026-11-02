@@ -6,7 +6,17 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import cast
 
-from PySide6.QtCore import QEvent, QModelIndex, QObject, QPoint, QRect, QSignalBlocker, Qt, Signal
+from PySide6.QtCore import (
+    QEvent,
+    QModelIndex,
+    QObject,
+    QPoint,
+    QRect,
+    QRegularExpression,
+    QSignalBlocker,
+    Qt,
+    Signal,
+)
 from PySide6.QtGui import (
     QAction,
     QCloseEvent,
@@ -15,6 +25,7 @@ from PySide6.QtGui import (
     QKeySequence,
     QMouseEvent,
     QPixmap,
+    QRegularExpressionValidator,
     QResizeEvent,
     QShortcut,
 )
@@ -400,6 +411,9 @@ class MainWindow(QMainWindow):
         caption = QLabel(label, container)
         caption.setObjectName("FieldLabel")
         value = QLineEdit(container)
+        if key in ("album_year", "track_number", "track_total", "disc_number", "disc_total"):
+            value.setValidator(QRegularExpressionValidator(QRegularExpression("[0-9]*"), value))
+            value.setInputMethodHints(Qt.InputMethodHint.ImhDigitsOnly)
         value.setObjectName("TrackTitle" if key == "title" else "MetadataField")
         value.setReadOnly(True)
         value.setAccessibleName(label)
