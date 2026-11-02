@@ -283,7 +283,7 @@ def _copy_macos_metadata(source: Path, target: Path) -> None:
 def _copy_metadata(source: Path, target: Path) -> None:
     shutil.copystat(source, target, follow_symlinks=False)
     original, copied = source.stat(), target.stat()
-    if os.name == "posix":
+    if sys.platform != "win32":
         if (original.st_uid, original.st_gid) != (copied.st_uid, copied.st_gid):
             os.chown(target, original.st_uid, original.st_gid)
         if sys.platform == "darwin":

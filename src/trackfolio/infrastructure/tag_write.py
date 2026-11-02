@@ -114,7 +114,7 @@ def _mp3_payload(path: Path) -> tuple[str, str]:
                 raise TagWriteError(
                     "ID3v1 presente: esta entrega conserva ese archivo sin escribir."
                 )
-        tail = b""
+        tail_hash = hashlib.sha256().hexdigest()
         if end >= 32:
             stream.seek(end - 32)
             footer = stream.read(32)
@@ -128,11 +128,11 @@ def _mp3_payload(path: Path) -> tuple[str, str]:
                     if stream.read(8) == b"APETAGEX":
                         end -= 32
                 stream.seek(end)
-                tail = stream.read()
+                tail_hash = _hash_stream(stream, size - end)
         if not 0 <= start <= end:
             raise TagWriteError("Segmentos MP3 no válidos.")
         stream.seek(start)
-        return _hash_stream(stream, end - start), hashlib.sha256(tail).hexdigest()
+        return _hash_stream(stream, end - start), tail_hash
 
 
 def _id3(path: Path) -> Any:

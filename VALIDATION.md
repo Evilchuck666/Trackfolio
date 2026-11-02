@@ -442,3 +442,44 @@ Solo cambian las pruebas y este registro.
 
 Validación local: **457 passed, 4 skipped** por falta de PowerShell; Ruff, formato y
 mypy correctos. La validación de esta corrección en GitHub Actions queda pendiente.
+
+## Escritura de etiquetas FLAC/MP3 (2026-11-02)
+
+La acción **Escribir etiquetas…** publica los campos guardados de la selección tras
+revisar diferencias y elegir campos y archivos. El núcleo prepara un respaldo completo,
+edita una copia, verifica audio y metadatos y publica por archivo; después confirma
+`raw_tags` y la fecha física afectada en SQLite sin sustituir otras correcciones.
+La [guía de uso y recuperación](docs/tag-writing.md) contiene la matriz exacta de
+formatos, los casos bloqueados y los límites del sistema de archivos.
+
+Comprobaciones locales en Linux x86-64, uv 0.13.4, CPython 3.13.15 y Qt 6.11.2:
+
+- Suite completa: **540 passed, 6 skipped**. Cuatro omisiones requieren PowerShell;
+  las otras corresponden a las pruebas nativas de Windows y macOS.
+- Ruff, formato y mypy: correctos; 52 módulos de fuentes comprobados por mypy.
+- Los diez campos y sus borrados se escriben y se recuperan al importar en un catálogo
+  nuevo. Se prueban alias, Unicode/listas, fechas y numeración parcial, ID3v2.3/v2.4,
+  USLT múltiples, portadas, frames desconocidos y audio real de silencio redistribuible.
+- Cambios externos incluso con tamaño/mtime idénticos, permisos, enlaces/destinos
+  duplicados, temporales ajenos, corrupción de la copia y fallo al reemplazar dejan
+  intacto el original. Se comprueba la conservación de atributos extendidos en Linux.
+- Fallos de registro y SQLite tras publicar quedan como catálogo pendiente. Se prueban
+  interrupciones en cinco transiciones y salida real de un subproceso en dos puntos;
+  la recuperación distingue original y resultado, respeta ediciones nuevas y no
+  reescribe música. Un registro dañado no oculta otras operaciones.
+- Disco lleno o desaparición del catálogo detienen los archivos restantes. Se prueban
+  cancelación, cierre receptivo, selección parcial, Guardar/Descartar/Cancelar,
+  exportación del informe y espera de la recuperación ante un guardado activo.
+- Diagnóstico gráfico `offscreen` y X11 `xcb`: cero errores, incluidos importación,
+  edición, escritura de etiquetas, respaldo y portada sobre muestras temporales.
+- Wheel y sdist construidos con el backend bloqueado. La comprobación de CI extraída
+  del workflow se ejecutó fuera del checkout: núcleo sin PySide6 y GUI con
+  `events=true`, `imported=true`, `edited=true`, `tags_written=true`.
+- Vista previa renderizada y revisada en 700×580 y 860×760 con `offscreen`.
+
+La matriz nueva se ejecuta en la rama `codex/tag-write-validation`. Las primeras
+ejecuciones pasaron Linux y detectaron diferencias de las API de atributos de macOS
+y de herencia de DACL en Windows; estas comprobaciones se mantuvieron y se corrigieron
+los adaptadores. Los resultados de la revisión final se registrarán al terminar CI.
+La revisión visual manual de Windows/macOS continúa pendiente; `offscreen` y el
+diagnóstico automático nativo no sustituyen esa revisión.

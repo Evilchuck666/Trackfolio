@@ -42,6 +42,8 @@ En Linux se copian y comprueban modo, propietario/grupo y atributos extendidos,
 incluidas las ACL que se representen mediante esos atributos. En macOS se utiliza
 `copyfile` de libSystem para conservar permisos, ACL y atributos, incluido el resource
 fork, y se comprueban mediante las API nativas.
+En macOS, un atributo distinto del resource fork que supere 16 MiB se bloquea para
+mantener acotada la memoria de verificación; el resource fork se compara por streaming.
 En Windows se copian propietario, grupo, DACL y streams con nombre mediante API nativa;
 no se copian reglas de auditoría SACL que requieren privilegios. Los archivos NTFS
 comprimidos o cifrados se rechazan. No se promete conservar metadatos que el sistema
