@@ -4,6 +4,12 @@
 entre sus diez campos editables guardados y los FLAC/MP3 seleccionados. Primero se
 resuelven los cambios sin guardar mediante Guardar/Descartar/Cancelar.
 
+**Escribir etiquetas de todo el catálogo…**, sobre el listado principal, abre el mismo
+flujo para todas las canciones del catálogo. No requiere selección y consulta la base
+de nuevo en segundo plano, incluyendo entradas añadidas desde que se abrió. Permanece
+deshabilitado sin catálogo, con un catálogo vacío o mientras otra operación está activa.
+La acción de escribir la selección sigue disponible junto al detalle de la canción.
+
 El diálogo muestra todas las canciones desde que se abre, la salida del progreso y
 únicamente **Cerrar** y **Escribir etiquetas**. Pulsar escribir prepara y verifica los
 cambios internamente, sin selección de campos ni revisión manual de diferencias.

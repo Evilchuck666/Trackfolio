@@ -573,3 +573,17 @@ y terminar correctamente ese reintento, el botón también queda deshabilitado.
 Validación local: las nueve pruebas de integración del diálogo pasan, incluido un
 segundo clic sin nueva escritura, archivos sin cambios y reintento tras reparar un
 archivo ausente. Ruff, formato, mypy y el diagnóstico GUI `offscreen` son correctos.
+
+### Escritura de etiquetas de todo el catálogo (2026-11-02)
+
+La acción **Escribir etiquetas de todo el catálogo…**, sobre el listado principal,
+consulta todas las canciones en un trabajador y abre el diálogo existente. Incluye
+entradas no seleccionadas y añadidas a la base después de cargar la ventana. Resuelve
+Guardar/Descartar/Cancelar antes de obtener la lista y mantiene la selección anterior.
+El botón se deshabilita sin catálogo, con un catálogo vacío o durante otras operaciones.
+
+Validación local: **562 passed, 6 skipped**. Las 17 pruebas del diálogo incluyen
+escritura real del catálogo completo, entradas nuevas no visibles, selección vacía,
+borradores, fallo de lectura y cierre seguro durante la consulta. Ruff, formato, mypy
+y diagnóstico GUI `offscreen` correctos. Ventana revisada a 960×640 y diálogo a 640×480.
+Esta revisión no incluye una ejecución nueva de CI.

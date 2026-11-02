@@ -59,10 +59,16 @@ class TagWriteDialog(QDialog):
     cancel_requested = Signal()
 
     def __init__(
-        self, database: Path, songs: tuple[CatalogSummary, ...], parent: QWidget | None = None
+        self,
+        database: Path,
+        songs: tuple[CatalogSummary, ...],
+        parent: QWidget | None = None,
+        *,
+        all_catalog: bool = False,
     ) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Escribir etiquetas en los archivos")
+        title = "Escribir etiquetas de todo el catálogo" if all_catalog else "Escribir etiquetas"
+        self.setWindowTitle(title)
         self.setModal(True)
         self.resize(800, 600)
         self.setMinimumSize(640, 480)
@@ -77,7 +83,7 @@ class TagWriteDialog(QDialog):
         self._error_popup: QMessageBox | None = None
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
-        heading = QLabel("Escribir etiquetas", self)
+        heading = QLabel(title, self)
         heading.setObjectName("PageTitle")
         layout.addWidget(heading)
         description = QLabel(

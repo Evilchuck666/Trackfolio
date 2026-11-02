@@ -121,6 +121,130 @@ def test_gui_lists_songs_immediately_and_writes_all_saved_fields(qt_app, setup_t
         teardown(window, controller)
 
 
+def test_catalogue_action_writes_every_saved_song_including_new_unlisted_entries(
+    qt_app, setup_tags, tmp_path
+):
+    database, repository, _, _, files = setup_tags
+    sources = [make_source(tmp_path, kind) for kind in ("flac", "mp3")]
+    entries = [
+        repository.save(read_metadata(source), source.parent, source.name) for source in sources
+    ]
+    window, controller = open_window(qt_app, setup_tags, entries[0])
+    try:
+        # A third entry added after opening must be included too, independently
+        # of the displayed rows and the single song currently selected.
+        extra = sources[0].with_name("new.flac")
+        extra.write_bytes(sources[0].read_bytes())
+        sources.append(extra)
+        entries.append(repository.save(read_metadata(extra), extra.parent, extra.name))
+        for index, entry in enumerate(entries):
+            edit(database, entry.file_id, title=f"All {index}", artists=("Catalog artist",))
+        assert window.model.rowCount() == 2
+        assert window.selected_file_ids() == (entries[0].file_id,)
+        QTest.mouseClick(window.write_all_tags_button, Qt.MouseButton.LeftButton)
+        wait_until(qt_app, lambda: controller._tag_dialog is not None)
+        dialog = controller._tag_dialog
+        assert set(dialog.file_ids) == {entry.file_id for entry in entries}
+        assert dialog.table.rowCount() == 3
+        assert "todo el catálogo" in dialog.windowTitle()
+        assert not window.write_all_tags_button.isEnabled()
+        assert not files.journal_root.exists()
+        reports = []
+        controller.tag_write_finished.connect(reports.append)
+        QTest.mouseClick(dialog.write_button, Qt.MouseButton.LeftButton)
+        wait_until(qt_app, lambda: bool(reports) and not controller._tag_running)
+        assert all(item.state == "confirmed" for item in reports[0].results)
+        for index, source in enumerate(sources):
+            metadata = read_metadata(source)
+            assert metadata.title == f"All {index}"
+            assert metadata.artists == ("Catalog artist",)
+            assert not (source.parent / ".trackfolio-backups").exists()
+        assert not dialog.write_button.isEnabled()
+        dialog.reject()
+        wait_until(qt_app, lambda: not controller._jobs)
+        assert window.model.rowCount() == 3
+        assert window.selected_file_ids() == (entries[0].file_id,)
+    finally:
+        teardown(window, controller)
+
+
+def test_catalogue_action_is_available_without_selecting_a_song(qt_app, setup_tags, tmp_path):
+    _, repository, _, _, _ = setup_tags
+    source = make_source(tmp_path, "flac")
+    entry = repository.save(read_metadata(source), source.parent, source.name)
+    window, controller = open_window(qt_app, setup_tags, entry)
+    try:
+        window.table.clearSelection()
+        wait_until(qt_app, lambda: not controller._jobs)
+        assert not window.selected_file_ids()
+        assert not window.write_tags_button.isEnabled()
+        assert window.write_all_tags_button.isEnabled()
+        QTest.mouseClick(window.write_all_tags_button, Qt.MouseButton.LeftButton)
+        wait_until(qt_app, lambda: controller._tag_dialog is not None)
+        assert controller._tag_dialog.file_ids == (entry.file_id,)
+        assert not window.selected_file_ids()
+    finally:
+        teardown(window, controller)
+
+
+def test_catalogue_action_is_disabled_without_a_nonempty_catalogue(qt_app, setup_tags):
+    database, _, catalog, codec, files = setup_tags
+    window = MainWindow()
+    controller = CatalogController(
+        window, open_catalog, tag_writer=TagWriteService(catalog, codec, files)
+    )
+    try:
+        window.show()
+        assert not window.write_all_tags_button.isEnabled()
+        controller.open_database(database)
+        wait_until(qt_app, lambda: controller._session is not None and not controller._jobs)
+        assert window.model.rowCount() == 0
+        assert not window.write_all_tags_button.isEnabled()
+    finally:
+        teardown(window, controller)
+
+
+@pytest.mark.parametrize("close_while_loading", [False, True])
+def test_catalogue_list_loading_error_and_close_are_safe(
+    qt_app, setup_tags, tmp_path, monkeypatch, close_while_loading
+):
+    _, repository, _, _, files = setup_tags
+    source = make_source(tmp_path, "flac")
+    original = source.read_bytes()
+    entry = repository.save(read_metadata(source), source.parent, source.name)
+    window, controller = open_window(qt_app, setup_tags, entry)
+    started, release = threading.Event(), threading.Event()
+    read = controller._session.list_summaries
+
+    def load():
+        started.set()
+        assert release.wait(5)
+        if close_while_loading:
+            return read()
+        raise OSError("Catalogue listing failed")
+
+    monkeypatch.setattr(controller._session, "list_summaries", load)
+    closed = QSignalSpy(window.closing)
+    try:
+        QTest.mouseClick(window.write_all_tags_button, Qt.MouseButton.LeftButton)
+        wait_until(qt_app, started.is_set)
+        assert not window.write_all_tags_button.isEnabled()
+        if close_while_loading:
+            assert not window.close() and closed.count() == 0
+        release.set()
+        wait_until(qt_app, lambda: not controller._tag_running)
+        if close_while_loading:
+            wait_until(qt_app, lambda: closed.count() == 1)
+        else:
+            assert "Catalogue listing failed" in window.error_label.text()
+            assert window.write_all_tags_button.isEnabled()
+        assert controller._tag_dialog is None
+        assert source.read_bytes() == original and not files.journal_root.exists()
+    finally:
+        release.set()
+        teardown(window, controller)
+
+
 def test_unchanged_songs_do_not_write_or_offer_a_report(qt_app, setup_tags, tmp_path):
     _, repository, _, _, files = setup_tags
     source = make_source(tmp_path, "flac")
@@ -253,8 +377,9 @@ def test_window_close_during_tag_write_cancels_cooperatively(
 
 
 @pytest.mark.parametrize("answer", ["Cancel", "Discard", "Save"])
+@pytest.mark.parametrize("all_catalog", [False, True])
 def test_write_action_resolves_unsaved_catalogue_draft(
-    qt_app, setup_tags, tmp_path, monkeypatch, answer
+    qt_app, setup_tags, tmp_path, monkeypatch, answer, all_catalog
 ):
     from PySide6.QtWidgets import QMessageBox
 
@@ -272,7 +397,8 @@ def test_write_action_resolves_unsaved_catalogue_draft(
         field = window.fields["title"]
         field.selectAll()
         QTest.keyClicks(field, "Unsaved title")
-        QTest.mouseClick(window.write_tags_button, Qt.MouseButton.LeftButton)
+        button = window.write_all_tags_button if all_catalog else window.write_tags_button
+        QTest.mouseClick(button, Qt.MouseButton.LeftButton)
         if answer == "Cancel":
             assert controller._tag_dialog is None and window.edit_dirty()
         else:

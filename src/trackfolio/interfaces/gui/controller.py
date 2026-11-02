@@ -144,6 +144,7 @@ _JobKind = Literal[
     "artists",
     "genres",
     "tag_write",
+    "tag_list",
 ]
 
 
@@ -236,6 +237,7 @@ class CatalogController(QObject):
         window.set_edit_enabled(edit_factory is not None)
         window.set_tag_write_enabled(tag_writer is not None)
         window.write_tags_requested.connect(self.choose_tag_write)
+        window.write_all_tags_requested.connect(self.choose_catalog_tag_write)
         self.tag_progress.connect(self._receive_tag_progress, Qt.ConnectionType.QueuedConnection)
 
     @property
@@ -263,7 +265,43 @@ class CatalogController(QObject):
         self._tag_changed = False
         selected = set(self.window.selected_file_ids())
         songs = tuple(song for song in self.window.model.summaries() if song.file_id in selected)
-        dialog = TagWriteDialog(self._session.database_path, songs, self.window)
+        self._open_tag_dialog(self._session.database_path, songs)
+
+    @Slot()
+    def choose_catalog_tag_write(self) -> None:
+        if (
+            self._closed
+            or self._close_pending
+            or self.importing
+            or self.saving
+            or self.tagging
+            or self._session is None
+            or self._tag_writer is None
+        ):
+            return
+        if not self._guard_edit(self.choose_catalog_tag_write):
+            return
+        self._list_token += 1
+        self._detail_token += 1
+        self._edit_token += 1
+        self._tag_changed = False
+        self._tag_running = True
+        self._tag_token += 1
+        self._tag_cancel = Event()
+        self.window.set_writing_tags(True)
+        self.window.set_error("")
+        self.window.set_status("Cargando todas las canciones del catálogo…")
+        self._submit(
+            ListTrackSummaries(self._session).execute,
+            "tag_list",
+            self._tag_token,
+            self._session,
+        )
+
+    def _open_tag_dialog(
+        self, database: Path, songs: tuple[CatalogSummary, ...], *, all_catalog: bool = False
+    ) -> None:
+        dialog = TagWriteDialog(database, songs, self.window, all_catalog=all_catalog)
         self._tag_dialog = dialog
         dialog.write_requested.connect(self.write_tags)
         dialog.cancel_requested.connect(lambda: self._tag_cancel.set())
@@ -314,6 +352,20 @@ class CatalogController(QObject):
 
     def _finish_tag_job(self, job: _Job) -> None:
         self._tag_running = False
+        if job.kind == "tag_list":
+            self.window.set_writing_tags(False)
+            if self._close_pending:
+                self._close_when_idle()
+            elif job.task.error:
+                self.window.set_error(job.task.error)
+                self.window.set_status("No se pudieron cargar las canciones del catálogo.")
+            else:
+                songs = cast(tuple[CatalogSummary, ...], job.task.result)
+                if songs and job.session is not None:
+                    self._open_tag_dialog(job.session.database_path, songs, all_catalog=True)
+                else:
+                    self.window.set_status("El catálogo no contiene canciones.")
+            return
         if job.task.error:
             if self._tag_dialog is not None:
                 self._tag_dialog.set_error(job.task.error, offer_report=not self._close_pending)
@@ -864,6 +916,7 @@ class CatalogController(QObject):
             "artists": self._artist_token,
             "genres": self._genre_token,
             "tag_write": self._tag_token,
+            "tag_list": self._tag_token,
         }
         return job.request_token == token[job.kind]
 
@@ -876,7 +929,7 @@ class CatalogController(QObject):
         if not self._is_current(job):
             if isinstance(result, _Opened):
                 result.session.close()
-        elif job.kind == "tag_write":
+        elif job.kind in ("tag_write", "tag_list"):
             self._finish_tag_job(job)
         elif job.kind == "save":
             self._finish_save(job)

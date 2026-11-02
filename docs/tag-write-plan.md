@@ -16,6 +16,10 @@ campos editables guardados y los archivos. Cada canción utiliza sus propios val
 la selección múltiple no iguala títulos, artistas ni numeración por sí misma. Un valor
 vacío guardado elimina su etiqueta. Los archivos sin diferencias se omiten.
 
+La acción **Escribir etiquetas de todo el catálogo…** utiliza el mismo flujo con todas
+las canciones, sin depender de la selección. Obtiene la lista completa de SQLite en un
+trabajador antes de mostrar el diálogo, tras resolver los borradores pendientes.
+
 No hay casillas de campos/archivos, revisión manual de diferencias, botones de informes
 ni gestor de operaciones pendientes. Si se produce un error, un pop-up ofrece guardar
 un informe JSON con los resultados y respaldos. El listado permanece visible durante

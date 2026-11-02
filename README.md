@@ -137,6 +137,11 @@ escritura, no se guarda ninguna y el borrador se conserva para revisarlo.
 3. Pulsa **Escribir etiquetas** para sobrescribir todas las etiquetas modificadas con
    los valores guardados de cada canción. Los archivos sin diferencias se omiten.
 
+Para escribir todas las etiquetas guardadas de todas las canciones, pulsa
+**Escribir etiquetas de todo el catálogo…**, sobre el listado de canciones.
+Incluye las canciones no seleccionadas y vuelve a consultar el catálogo completo.
+Revisa el listado y pulsa **Escribir etiquetas** en el diálogo para iniciar el lote.
+
 El diálogo contiene el listado, la salida del progreso y los botones **Cerrar** y
 **Escribir etiquetas**. Un valor guardado vacío elimina la etiqueta correspondiente.
 La selección múltiple conserva los valores particulares de cada canción. El audio,
