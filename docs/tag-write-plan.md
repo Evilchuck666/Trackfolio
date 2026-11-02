@@ -75,7 +75,10 @@ rutas que escapen de la raíz y destinos físicos duplicados.
 Los respaldos se conservan en
 `<carpeta del audio>/.trackfolio-backups/<operación>/<id>-<nombre>.tfo-bak`.
 Los temporales terminan en `.tmp`; ninguno se reimporta como música. No se utilizan
-hardlinks como respaldo ni se borran automáticamente los respaldos al terminar.
+hardlinks como respaldo. Tras confirmar y registrar todo el lote correctamente,
+sin errores ni cancelación, se elimina el directorio `.trackfolio-backups` completo
+de cada carpeta afectada, con todos los UUID que contenga. Ante errores se conservan
+las copias. Si falla la limpieza, se informa y se mantienen las rutas aún existentes.
 La [guía](tag-writing.md) registra los límites de ACL, atributos y streams por plataforma.
 
 La atomicidad es por archivo, no por lote ni entre música y SQLite. La revalidación

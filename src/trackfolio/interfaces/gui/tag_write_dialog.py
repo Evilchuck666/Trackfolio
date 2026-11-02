@@ -81,7 +81,7 @@ class TagWriteDialog(QDialog):
         layout.addWidget(heading)
         description = QLabel(
             "Se escribirán todas las etiquetas modificadas con los valores guardados "
-            "de cada canción. Se conservará un respaldo del original.",
+            "de cada canción. El respaldo se eliminará si todo termina correctamente.",
             self,
         )
         description.setWordWrap(True)
@@ -214,7 +214,7 @@ class TagWriteDialog(QDialog):
         popup = QMessageBox(self)
         popup.setWindowTitle("Error al escribir etiquetas")
         popup.setIcon(QMessageBox.Icon.Warning)
-        popup.setText("No se pudieron escribir todas las etiquetas.")
+        popup.setText("La operación terminó con errores.")
         popup.setInformativeText(
             "Puedes guardar el informe con los errores y las rutas de respaldo."
         )

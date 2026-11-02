@@ -104,7 +104,11 @@ los contratos de aplicación no dependen de Mutagen, SQLAlchemy ni Qt.
 `infrastructure/tag_write.py` conserva familias de alias y versión ID3, verifica todos
 los valores semánticos y los metadatos ajenos, y compara hashes de audio FLAC/MPEG.
 `tag_write_files.py` proporciona copias exclusivas, huellas completas, reemplazo local
-y registros JSON sincronizados en el directorio de datos del usuario. Se registra el
+y registros JSON sincronizados en el directorio de datos del usuario. Tras el éxito
+completo del lote y su confirmación persistida, elimina `.trackfolio-backups` entero
+en cada carpeta afectada; ante errores o cancelación conserva las copias. Los fallos
+de limpieza se incluyen en el resultado y se actualizan las rutas aún disponibles.
+Se registra el
 hash posterior antes del reemplazo para reconocer una publicación interrumpida.
 `tag_write_catalog.py` compara la instantánea musical y `raw_tags` bajo transacción;
 confirma únicamente las observaciones y la fecha física afectada, sin reimportar ni

@@ -477,6 +477,7 @@ class FileTagAccess:
     def __init__(self, journal_root: Path) -> None:
         self.journal_root = journal_root.expanduser().resolve()
         self._temporaries: dict[Path, tuple[int, int]] = {}
+        self._backup_directories: dict[Path, tuple[int, int]] = {}
 
     def identity(self, path: Path) -> tuple[int, int]:
         info = path.stat()
@@ -550,10 +551,16 @@ class FileTagAccess:
             },
         )
         journal._save()
+        self._backup_directories.clear()
         return journal
 
     def backup(self, item: TagWriteItem, path: Path, cancelled: Callable[[], bool]) -> None:
-        _plain_directory(path.parent.parent)
+        directory = path.parent.parent
+        _plain_directory(directory)
+        info = directory.stat(follow_symlinks=False)
+        identity = info.st_dev, info.st_ino
+        if self._backup_directories.setdefault(directory, identity) != identity:
+            raise TagWriteConflict("El directorio de respaldos fue sustituido.")
         _plain_directory(path.parent)
         _copy(item.path, path, cancelled)
         if (
@@ -562,6 +569,24 @@ class FileTagAccess:
         ):
             raise TagWriteConflict("El respaldo no coincide con el original confirmado.")
         _sync_directory(path.parent)
+
+    def discard_backups(self, directory: Path) -> None:
+        """Remove the entire backup directory only after a fully confirmed batch."""
+        if not directory.exists() and not directory.is_symlink():
+            return
+        info = directory.stat(follow_symlinks=False)
+        if (
+            directory.name != ".trackfolio-backups"
+            or directory.is_symlink()
+            or directory.is_junction()
+            or not stat.S_ISDIR(info.st_mode)
+            or directory.parent.resolve() != directory.parent
+            or self._backup_directories.get(directory) != (info.st_dev, info.st_ino)
+        ):
+            raise TagWriteConflict("El directorio de respaldos cambió; no se ha eliminado.")
+        shutil.rmtree(directory)
+        self._backup_directories.pop(directory, None)
+        _sync_directory(directory.parent)
 
     def temporary(self, backup: Path, temporary: Path, cancelled: Callable[[], bool]) -> None:
         def claim(info: os.stat_result) -> None:

@@ -88,7 +88,6 @@ def run_probe(argv: list[str]) -> dict[str, object]:
     with tempfile.TemporaryDirectory(prefix="trackfolio-gui-") as directory:
         database = Path(directory) / "catálogo portable.tfo"
         source = _audio_source(Path(directory))
-        original_audio = source.read_bytes()
         window, controller = create_window(tag_journal_root=Path(directory) / "tag-writes")
         app.close_guard = controller.request_close
         app.aboutToQuit.connect(controller.shutdown)
@@ -216,8 +215,8 @@ def run_probe(argv: list[str]) -> dict[str, object]:
             try:
                 assert len(report.results) == 1
                 assert report.results[0].state == "confirmed", report.results[0].message
-                backup = report.results[0].backup_path
-                assert backup is not None and backup.read_bytes() == original_audio
+                assert report.results[0].backup_path is None
+                assert not (source.parent / ".trackfolio-backups").exists()
                 actual = read_metadata(source)
                 assert actual.title == "Catalog correction" and actual.artists == ("Accept",)
                 assert actual.artwork is not None

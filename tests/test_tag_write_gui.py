@@ -103,7 +103,8 @@ def test_gui_lists_songs_immediately_and_writes_all_saved_fields(qt_app, setup_t
             assert metadata.track_number == 3 and metadata.track_total == 12
             assert metadata.disc_number == 2 and metadata.disc_total == 3
             assert metadata.genres == ("Rock",) and metadata.lyrics is None
-            assert reports[0].results[index].backup_path.read_bytes() == originals[index]
+            assert reports[0].results[index].backup_path is None
+            assert not (source.parent / ".trackfolio-backups").exists()
         assert "Escribiendo y verificando" in dialog.output.toPlainText()
         assert dialog.table.rowCount() == 2 and dialog._error_popup is None
         dialog.reject()

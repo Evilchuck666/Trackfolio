@@ -532,3 +532,33 @@ Validación local de esta revisión en Linux, CPython 3.13.15 y Qt 6.11.2:
 Los resultados de CI de la tabla anterior corresponden a `5dbc038` y al diálogo
 anterior; no acreditan esta simplificación. La nueva revisión multiplataforma y la
 revisión visual manual de Windows/macOS quedan pendientes.
+
+### Eliminación de respaldos tras una escritura correcta (2026-11-02)
+
+Cuando todos los archivos escritos y sus observaciones en SQLite están confirmados,
+el lote no tiene errores ni cancelación y el registro final se ha guardado, se elimina
+el directorio `.trackfolio-backups` completo en cada carpeta afectada. Esto incluye
+todos los UUID y copias anteriores contenidos en ese directorio. La limpieza espera
+al final del lote, sin eliminar copias al confirmar canciones individuales.
+
+Los lotes incompletos conservan sus respaldos. Un fallo de limpieza se incluye en el
+informe y ofrece el pop-up de exportación; las rutas de copias eliminadas se retiran
+del resultado y las restantes se conservan. No se borran directorios sustituidos por
+otros objetos o enlaces, ni las copias de carpetas ajenas al lote.
+
+Validación local en Linux con CPython 3.13.15 y Qt 6.11.2:
+
+- **554 passed, 6 skipped**; las omisiones corresponden a PowerShell y pruebas nativas
+  de Windows/macOS.
+- Ruff, formato y mypy correctos, incluido el análisis con plataformas `win32` y `darwin`.
+- Eliminación del directorio completo con UUID anteriores, dos canciones en una misma
+  carpeta y canciones en carpetas distintas, después de todas las confirmaciones.
+- Respaldos conservados ante error parcial, cancelación, fallo de SQLite o del registro.
+  Fallos de limpieza y sustitución del directorio comunicados sin borrar datos ajenos.
+- Informe actualizado si una carpeta se limpia y otra falla; reintento correcto en la
+  misma sesión después de trasladar manualmente un directorio de copias anterior.
+- Diagnóstico GUI `offscreen`: cero errores. El probe y la comprobación del wheel
+  verifican la ausencia de `.trackfolio-backups` al terminar correctamente.
+
+El workflow se actualiza para comprobar este resultado con el paquete instalado.
+La ejecución de esta revisión en CI queda pendiente.

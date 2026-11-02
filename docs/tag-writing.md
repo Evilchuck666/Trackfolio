@@ -85,7 +85,15 @@ Antes de editar una copia se crea un respaldo completo junto a cada original:
 
 Los temporales propios están en la carpeta del original:
 `.trackfolio-<operación>-<id>.tmp`. Estos sufijos evitan reimportarlos como música.
-Los respaldos no se eliminan automáticamente, incluso cuando todo termina bien.
+Después de escribir y confirmar todo el lote sin errores ni cancelación, se elimina
+el directorio `.trackfolio-backups` completo en cada carpeta donde se crearon copias,
+incluidos los UUID y respaldos anteriores que contenga. La limpieza espera al final
+del lote y al registro de su confirmación; no se realiza por canción. Los resultados
+sin cambios no crean copias ni borran respaldos antiguos por sí solos.
+
+Si hay un fallo, conflicto, catálogo pendiente o cancelación, se conservan las copias
+del lote. Si falla la propia limpieza, el informe indica el error y mantiene las rutas
+de las copias que sigan presentes; otras carpetas pueden haberse eliminado ya.
 
 El registro persistente está en la carpeta de datos del usuario, en
 `Trackfolio/tag-writes/<operación>/journal.json`. En Linux normalmente es
@@ -93,7 +101,8 @@ El registro persistente está en la carpeta de datos del usuario, en
 se utiliza el equivalente de `platformdirs`. El registro guarda rutas, valores
 confirmados, hashes y estados, sin incluir las portadas binarias.
 
-Los registros y respaldos se conservan como evidencia para recuperación manual.
+Los registros se conservan como historial. Los respaldos que permanecen después de un
+lote incompleto permiten recuperación manual.
 La GUI no presenta un gestor de operaciones pendientes ni reanuda escrituras al arrancar.
 El caso de uso técnico `ReviewTagWrites` sigue disponible para inspeccionar hashes y
 reconciliar observaciones del catálogo mediante sus contratos Python, sin reescribir

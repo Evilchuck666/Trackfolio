@@ -104,6 +104,8 @@ class TagFiles(Protocol):
 
     def discard_temporary(self, path: Path) -> None: ...
 
+    def discard_backups(self, directory: Path) -> None: ...
+
     def discard_recovery_temporary(self, path: Path, state: TagRecoveryState) -> None: ...
 
     def pending(self) -> tuple[PendingTagOperation, ...]: ...
@@ -348,6 +350,36 @@ class WriteTagWrites:
             journal.finish(report)
         except Exception as exc:
             report = replace(report, fatal_error=f"No se pudo cerrar el informe: {exc}")
+        if is_cancelled():
+            report = replace(report, cancelled=True)
+        if (
+            not report.cancelled
+            and not report.fatal_error
+            and all(item.state in ("confirmed", "unchanged") for item in report.results)
+        ):
+            directories = sorted(
+                {item.backup_path.parent.parent for item in report.results if item.backup_path}
+            )
+            for directory in directories:
+                try:
+                    self.files.discard_backups(directory)
+                except Exception as exc:
+                    report = replace(
+                        report, fatal_error=f"No se pudieron eliminar los respaldos: {exc}"
+                    )
+                    break
+            remaining: list[TagWriteResult] = []
+            for result in report.results:
+                try:
+                    removed = result.backup_path is not None and not result.backup_path.is_file()
+                except OSError:
+                    removed = False  # Keep its location if access cannot be checked.
+                remaining.append(replace(result, backup_path=None) if removed else result)
+            report = replace(report, results=tuple(remaining))
+            try:
+                journal.finish(report)
+            except Exception as exc:
+                report = replace(report, fatal_error=f"No se pudo cerrar el informe: {exc}")
         on_progress(TagWriteProgress("finished", len(preview.items), len(preview.items)))
         return report
 

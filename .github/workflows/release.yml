@@ -387,7 +387,8 @@ jobs:
               TagWriteRequest(target, (imported.file_id,), ("title",)))
           written = WriteTagWrites(tag_catalog, codec, tag_files).execute(preview, (imported.file_id,))
           assert written.results[0].state == "confirmed", written
-          assert written.results[0].backup_path.read_bytes() == original_audio
+          assert written.results[0].backup_path is None
+          assert not (audio.parent / ".trackfolio-backups").exists()
           assert read_metadata(audio).title == "Written from installed core"
           assert find_spec("PySide6") is None
           legacy = target.with_name("legacy.tfo")

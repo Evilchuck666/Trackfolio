@@ -147,7 +147,10 @@ representables sin unir listas. Los archivos incompatibles se indican como incid
 Consulta la [matriz y los límites](docs/tag-writing.md).
 
 Cada original se respalda en `.trackfolio-backups/<operación>/<id>-<nombre>.tfo-bak`,
-junto a su carpeta de música. Los respaldos se conservan y no se importan como canciones.
+junto a su carpeta de música. Tras escribir y confirmar todo el lote correctamente,
+se elimina el directorio `.trackfolio-backups` completo en cada carpeta afectada,
+incluidos los UUID anteriores que contenga. Si hay errores o cancelación, se conservan
+las copias para recuperación. No se importan como canciones.
 **Cerrar** durante la escritura solicita la cancelación y espera un punto seguro;
 los archivos ya escritos se mantienen.
 

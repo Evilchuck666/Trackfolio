@@ -101,7 +101,8 @@ def test_write_and_import_into_new_catalogue(setup_tags, tmp_path, kind):
     assert not files.journal_root.exists()
     report = WriteTagWrites(catalog, codec, files).execute(preview, (entry.file_id,))
     assert report.results[0].state == "confirmed", report.results[0].message
-    assert report.results[0].backup_path.read_bytes() == original
+    assert report.results[0].backup_path is None
+    assert not (source.parent / ".trackfolio-backups").exists()
     actual = read_metadata(source)
     for field, value in changed.items():
         assert getattr(actual, field) == value
@@ -862,7 +863,8 @@ def test_file_permissions_and_extended_attributes_survive(setup_tags, tmp_path):
     assert report.results[0].state == "confirmed", report
     assert source.stat().st_mode & 0o777 == 0o640
     assert os.getxattr(source, key) == b"unrelated attribute"
-    assert os.getxattr(report.results[0].backup_path, key) == b"unrelated attribute"
+    assert report.results[0].backup_path is None
+    assert not (source.parent / ".trackfolio-backups").exists()
 
 
 @pytest.mark.skipif(sys.platform != "darwin", reason="macOS native attributes and ACL")
