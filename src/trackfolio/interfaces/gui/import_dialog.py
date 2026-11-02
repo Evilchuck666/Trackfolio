@@ -166,7 +166,7 @@ class ImportDialog(QDialog):
         dialog.setOption(QFileDialog.Option.DontUseNativeDialog, True)
         dialog.setOption(QFileDialog.Option.ShowDirsOnly, True)
         dialog.setFileMode(QFileDialog.FileMode.Directory)
-        suggested = Path(self.root_edit.text().strip() or self._initial_directory)
+        suggested = Path(self.root_edit.text().strip() or Path.home())
         dialog.setDirectory(str(_picker_directory(suggested)))
         if dialog.exec() == QDialog.DialogCode.Accepted:
             selected = dialog.selectedFiles()

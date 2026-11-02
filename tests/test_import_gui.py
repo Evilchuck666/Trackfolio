@@ -166,7 +166,37 @@ def test_cancelled_pickers_and_form_leave_fields_and_files_untouched(import_dial
     assert not Path(initial_destination).exists()
 
 
-def test_missing_data_directory_uses_existing_parent_in_picker(qt_app, tmp_path):
+@pytest.mark.parametrize("root_text", ["", "~", "selected"])
+def test_music_picker_starts_at_home_or_selected_folder(qt_app, tmp_path, monkeypatch, root_text):
+    home = tmp_path / "Usuario Ω"
+    home.mkdir()
+    data = tmp_path / "application-data"
+    data.mkdir()
+    music = home / "Música"
+    music.mkdir()
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    dialog = ImportDialog(None, None, data)
+    root = str(music) if root_text == "selected" else root_text
+    dialog.root_edit.setText(root)
+    directories = []
+
+    def cancel_picker():
+        chooser = dialog.findChildren(QFileDialog)[-1]
+        directories.append(Path(chooser.directory().absolutePath()))
+        chooser.reject()
+
+    try:
+        QTimer.singleShot(0, cancel_picker)
+        QTest.mouseClick(dialog.folder_button, Qt.MouseButton.LeftButton)
+        assert directories == [music if root_text == "selected" else home]
+        assert dialog.root_edit.text() == root
+    finally:
+        dispose(dialog, qt_app)
+
+
+def test_missing_data_directory_uses_existing_parent_for_destination(qt_app, tmp_path):
     suggested = tmp_path / "not-created" / "Trackfolio"
     dialog = ImportDialog(None, None, suggested)
     dialog.show()
@@ -180,10 +210,8 @@ def test_missing_data_directory_uses_existing_parent_in_picker(qt_app, tmp_path)
 
     try:
         QTimer.singleShot(0, cancel_picker)
-        QTest.mouseClick(dialog.folder_button, Qt.MouseButton.LeftButton)
-        QTimer.singleShot(0, cancel_picker)
         QTest.mouseClick(dialog.destination_button, Qt.MouseButton.LeftButton)
-        assert directory == [tmp_path, tmp_path]
+        assert directory == [tmp_path]
         assert dialog.destination_edit.text() == str(suggested / "Mi música.tfo")
         assert not suggested.exists()
     finally:
