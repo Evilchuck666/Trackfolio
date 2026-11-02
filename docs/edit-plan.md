@@ -16,8 +16,8 @@ otro adaptador y un diseño de recuperación entre archivos y SQLite; queda fuer
 entrega.
 
 La entrega de [escritura de etiquetas](tag-write-plan.md) añade la acción independiente
-**Escribir etiquetas…** para publicar los valores guardados en FLAC/MP3, con revisión
-previa y respaldos. **Guardar** sigue confirmando únicamente SQLite; antes de escribir
+**Escribir etiquetas…** para publicar todas las etiquetas modificadas en FLAC/MP3,
+con preparación interna y respaldos. **Guardar** sigue confirmando únicamente SQLite; antes de escribir
 etiquetas se resuelve cualquier borrador con Guardar/Descartar/Cancelar.
 
 La unidad de edición será la fila seleccionada, identificada por `file_id`. Por ejemplo,

@@ -104,6 +104,8 @@ class TagFiles(Protocol):
 
     def discard_temporary(self, path: Path) -> None: ...
 
+    def discard_backups(self, directory: Path) -> None: ...
+
     def discard_recovery_temporary(self, path: Path, state: TagRecoveryState) -> None: ...
 
     def pending(self) -> tuple[PendingTagOperation, ...]: ...
@@ -348,6 +350,36 @@ class WriteTagWrites:
             journal.finish(report)
         except Exception as exc:
             report = replace(report, fatal_error=f"No se pudo cerrar el informe: {exc}")
+        if is_cancelled():
+            report = replace(report, cancelled=True)
+        if (
+            not report.cancelled
+            and not report.fatal_error
+            and all(item.state in ("confirmed", "unchanged") for item in report.results)
+        ):
+            directories = sorted(
+                {item.backup_path.parent.parent for item in report.results if item.backup_path}
+            )
+            for directory in directories:
+                try:
+                    self.files.discard_backups(directory)
+                except Exception as exc:
+                    report = replace(
+                        report, fatal_error=f"No se pudieron eliminar los respaldos: {exc}"
+                    )
+                    break
+            remaining: list[TagWriteResult] = []
+            for result in report.results:
+                try:
+                    removed = result.backup_path is not None and not result.backup_path.is_file()
+                except OSError:
+                    removed = False  # Keep its location if access cannot be checked.
+                remaining.append(replace(result, backup_path=None) if removed else result)
+            report = replace(report, results=tuple(remaining))
+            try:
+                journal.finish(report)
+            except Exception as exc:
+                report = replace(report, fatal_error=f"No se pudo cerrar el informe: {exc}")
         on_progress(TagWriteProgress("finished", len(preview.items), len(preview.items)))
         return report
 
@@ -476,3 +508,56 @@ class TagWriteService:
         self.writer = WriteTagWrites(catalog, codec, files)
         self.reviewer = ReviewTagWrites(catalog, codec, files)
         self.files = files
+
+    def execute(
+        self,
+        database: Path,
+        file_ids: tuple[int, ...],
+        *,
+        is_cancelled: Callable[[], bool] = _never_cancel,
+        on_progress: Callable[[TagWriteProgress], None] = _ignore_progress,
+    ) -> TagWriteReport:
+        """Publish every saved difference in one action, with internal verification."""
+        request = TagWriteRequest(database, file_ids, EDIT_FIELDS, allow_date_loss=True)
+        try:
+            preview = self.previewer.execute(
+                request, is_cancelled=is_cancelled, on_progress=on_progress
+            )
+            # The catalogue exposes the first USLT text. Update that same version,
+            # preserving the remaining languages without requiring another UI choice.
+            lyrics = tuple(
+                (item.file_id, item.tags.lyrics_keys[0])
+                for item in preview.items
+                if item.tags is not None
+                and len(item.tags.lyrics_keys) > 1
+                and item.tags.selected_lyrics is None
+            )
+            if lyrics:
+                preview = self.previewer.execute(
+                    replace(request, lyrics_keys=lyrics),
+                    is_cancelled=is_cancelled,
+                    on_progress=on_progress,
+                )
+        except TagWriteCancelled:
+            return TagWriteReport(uuid4().hex, (), cancelled=True)
+        ready = tuple(item.file_id for item in preview.items if item.state == "ready")
+        if ready:
+            return self.writer.execute(
+                preview, ready, is_cancelled=is_cancelled, on_progress=on_progress
+            )
+        return TagWriteReport(
+            preview.operation_id,
+            tuple(
+                TagWriteResult(
+                    item.file_id,
+                    item.path,
+                    "unchanged"
+                    if item.state == "unchanged"
+                    else "conflict"
+                    if item.state == "conflict"
+                    else "failed",
+                    item.message,
+                )
+                for item in preview.items
+            ),
+        )

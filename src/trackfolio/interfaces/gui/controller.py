@@ -37,14 +37,11 @@ from trackfolio.application.write_tags import TagWriteService
 from trackfolio.domain.catalog import CatalogEntry, CatalogSummary
 from trackfolio.domain.catalog_edit import ArtistChoice, EditableTrack, TrackEditPatch
 from trackfolio.domain.tag_write import (
-    PendingTagOperation,
-    TagWritePreview,
     TagWriteProgress,
     TagWriteReport,
-    TagWriteRequest,
 )
 from trackfolio.interfaces.gui.import_dialog import ImportDialog, ImportProgressDialog
-from trackfolio.interfaces.gui.tag_write_dialog import TagRecoveryDialog, TagWriteDialog
+from trackfolio.interfaces.gui.tag_write_dialog import TagWriteDialog
 from trackfolio.interfaces.gui.window import MainWindow
 
 
@@ -146,10 +143,8 @@ _JobKind = Literal[
     "save",
     "artists",
     "genres",
-    "tag_preview",
     "tag_write",
-    "tag_pending",
-    "tag_review",
+    "tag_list",
 ]
 
 
@@ -190,11 +185,9 @@ class CatalogController(QObject):
         self._edit_factory = edit_factory
         self._tag_writer = tag_writer
         self._tag_dialog: TagWriteDialog | None = None
-        self._recovery_dialog: TagRecoveryDialog | None = None
         self._tag_running = False
         self._tag_changed = False
         self._tag_token = 0
-        self._recovery_token = 0
         self._tag_cancel = Event()
         self._edit_snapshot: EditableTrack | None = None
         self._batch_snapshots: tuple[EditableTrack, ...] = ()
@@ -244,13 +237,12 @@ class CatalogController(QObject):
         window.set_edit_enabled(edit_factory is not None)
         window.set_tag_write_enabled(tag_writer is not None)
         window.write_tags_requested.connect(self.choose_tag_write)
+        window.write_all_tags_requested.connect(self.choose_catalog_tag_write)
         self.tag_progress.connect(self._receive_tag_progress, Qt.ConnectionType.QueuedConnection)
 
     @property
     def tagging(self) -> bool:
-        return (
-            self._tag_dialog is not None or self._recovery_dialog is not None or self._tag_running
-        )
+        return self._tag_dialog is not None or self._tag_running
 
     @Slot()
     def choose_tag_write(self) -> None:
@@ -271,14 +263,48 @@ class CatalogController(QObject):
         self._detail_token += 1
         self._edit_token += 1
         self._tag_changed = False
-        dialog = TagWriteDialog(
-            self._session.database_path, self.window.selected_file_ids(), self.window
+        selected = set(self.window.selected_file_ids())
+        songs = tuple(song for song in self.window.model.summaries() if song.file_id in selected)
+        self._open_tag_dialog(self._session.database_path, songs)
+
+    @Slot()
+    def choose_catalog_tag_write(self) -> None:
+        if (
+            self._closed
+            or self._close_pending
+            or self.importing
+            or self.saving
+            or self.tagging
+            or self._session is None
+            or self._tag_writer is None
+        ):
+            return
+        if not self._guard_edit(self.choose_catalog_tag_write):
+            return
+        self._list_token += 1
+        self._detail_token += 1
+        self._edit_token += 1
+        self._tag_changed = False
+        self._tag_running = True
+        self._tag_token += 1
+        self._tag_cancel = Event()
+        self.window.set_writing_tags(True)
+        self.window.set_error("")
+        self.window.set_status("Cargando todas las canciones del catálogo…")
+        self._submit(
+            ListTrackSummaries(self._session).execute,
+            "tag_list",
+            self._tag_token,
+            self._session,
         )
+
+    def _open_tag_dialog(
+        self, database: Path, songs: tuple[CatalogSummary, ...], *, all_catalog: bool = False
+    ) -> None:
+        dialog = TagWriteDialog(database, songs, self.window, all_catalog=all_catalog)
         self._tag_dialog = dialog
-        dialog.preview_requested.connect(self.preview_tags)
         dialog.write_requested.connect(self.write_tags)
         dialog.cancel_requested.connect(lambda: self._tag_cancel.set())
-        dialog.recovery_requested.connect(self.check_tag_recovery)
         dialog.finished.connect(self._tag_dialog_closed)
         self.window.set_writing_tags(True)
         dialog.show()
@@ -297,8 +323,8 @@ class CatalogController(QObject):
         self._tag_token += 1
         self._submit(operation, kind, self._tag_token)
 
-    @Slot(object)
-    def preview_tags(self, request: TagWriteRequest) -> None:
+    @Slot()
+    def write_tags(self) -> None:
         if (
             self._tag_writer is None
             or self._tag_dialog is None
@@ -306,34 +332,13 @@ class CatalogController(QObject):
             or self._closed
         ):
             return
-        service = self._tag_writer
+        service, dialog = self._tag_writer, self._tag_dialog
         self._tag_cancel = Event()
         token = self._tag_token + 1
         self._tag_operation(
-            lambda: service.previewer.execute(
-                request,
-                is_cancelled=self._tag_cancel.is_set,
-                on_progress=lambda progress: self.tag_progress.emit(token, progress),
-            ),
-            "tag_preview",
-        )
-
-    @Slot(object, object)
-    def write_tags(self, preview: TagWritePreview, selected_ids: tuple[int, ...]) -> None:
-        if (
-            self._tag_writer is None
-            or self._tag_dialog is None
-            or self._tag_running
-            or self._closed
-        ):
-            return
-        service = self._tag_writer
-        self._tag_cancel = Event()
-        token = self._tag_token + 1
-        self._tag_operation(
-            lambda: service.writer.execute(
-                preview,
-                selected_ids,
+            lambda: service.execute(
+                dialog.database_path,
+                dialog.file_ids,
                 is_cancelled=self._tag_cancel.is_set,
                 on_progress=lambda progress: self.tag_progress.emit(token, progress),
             ),
@@ -345,85 +350,32 @@ class CatalogController(QObject):
         if not self._closed and token == self._tag_token and self._tag_dialog is not None:
             self._tag_dialog.set_progress(progress)
 
-    @Slot()
-    def check_tag_recovery(self) -> None:
-        if self._tag_writer is None or self._closed or self._tag_running:
-            return
-        if self.importing or self.saving:
-            QTimer.singleShot(250, self.check_tag_recovery)
-            return
-        if self._recovery_dialog is not None:
-            self._recovery_dialog.show()
-            self._recovery_dialog.raise_()
-            return
-        self._recovery_token += 1
-        self._submit(self._tag_writer.files.pending, "tag_pending", self._recovery_token)
-
-    @Slot(object, bool)
-    def review_tag_operation(self, path: Path, reconcile: bool) -> None:
-        if self._tag_writer is None or self._tag_running or self._closed:
-            return
-        service = self._tag_writer
-        self._tag_cancel = Event()
-        self._tag_operation(
-            lambda: service.reviewer.execute(
-                path, reconcile=reconcile, is_cancelled=self._tag_cancel.is_set
-            ),
-            "tag_review",
-        )
-        self.window.set_writing_tags(True)
-
-    def _recovery_closed(self, _result: int) -> None:
-        dialog, self._recovery_dialog = self._recovery_dialog, None
-        if dialog is not None:
-            dialog.deleteLater()
-        self.window.set_writing_tags(self._tag_dialog is not None)
-        if (
-            self._tag_changed
-            and self._tag_dialog is None
-            and not self._closed
-            and not self._close_pending
-        ):
-            self.refresh()
-
     def _finish_tag_job(self, job: _Job) -> None:
-        if job.kind == "tag_pending":
-            if job.task.error:
-                self.window.set_error(job.task.error)
-                return
-            operations = cast(tuple[PendingTagOperation, ...], job.task.result)
-            if operations and (self.importing or self.saving):
-                # Startup discovery can finish after a user starts a catalogue writer.
-                QTimer.singleShot(250, self.check_tag_recovery)
-                return
-            if operations and self._recovery_dialog is None:
-                dialog = TagRecoveryDialog(operations, self.window)
-                self._recovery_dialog = dialog
-                dialog.review_requested.connect(self.review_tag_operation)
-                dialog.cancel_requested.connect(lambda: self._tag_cancel.set())
-                dialog.finished.connect(self._recovery_closed)
-                self.window.set_writing_tags(True)
-                dialog.show()
-            elif not operations and self._tag_dialog is not None:
-                self._tag_dialog.summary.setText("No hay operaciones pendientes de recuperación.")
-            return
         self._tag_running = False
+        if job.kind == "tag_list":
+            self.window.set_writing_tags(False)
+            if self._close_pending:
+                self._close_when_idle()
+            elif job.task.error:
+                self.window.set_error(job.task.error)
+                self.window.set_status("No se pudieron cargar las canciones del catálogo.")
+            else:
+                songs = cast(tuple[CatalogSummary, ...], job.task.result)
+                if songs and job.session is not None:
+                    self._open_tag_dialog(job.session.database_path, songs, all_catalog=True)
+                else:
+                    self.window.set_status("El catálogo no contiene canciones.")
+            return
         if job.task.error:
-            if job.kind == "tag_review" and self._recovery_dialog is not None:
-                self._recovery_dialog.set_error(job.task.error)
-            elif self._tag_dialog is not None:
-                self._tag_dialog.set_error(job.task.error)
-        elif job.kind == "tag_preview" and self._tag_dialog is not None:
-            self._tag_dialog.set_preview(cast(TagWritePreview, job.task.result))
-        elif job.kind in ("tag_write", "tag_review"):
+            if self._tag_dialog is not None:
+                self._tag_dialog.set_error(job.task.error, offer_report=not self._close_pending)
+        else:
             report = cast(TagWriteReport, job.task.result)
             self._tag_changed = self._tag_changed or any(
                 item.state in ("confirmed", "catalog_pending") for item in report.results
             )
-            if job.kind == "tag_review" and self._recovery_dialog is not None:
-                self._recovery_dialog.set_report(report)
-            elif self._tag_dialog is not None:
-                self._tag_dialog.set_report(report)
+            if self._tag_dialog is not None:
+                self._tag_dialog.set_report(report, offer_report=not self._close_pending)
             self.tag_write_finished.emit(report)
         if self._close_pending:
             self._close_when_idle()
@@ -808,8 +760,6 @@ class CatalogController(QObject):
             return False
         if self._tag_dialog is not None:
             self._tag_dialog.reject()
-        if self._recovery_dialog is not None:
-            self._recovery_dialog.reject()
         if self.saving:
             self._close_pending = True
             return False
@@ -955,8 +905,6 @@ class CatalogController(QObject):
     def _is_current(self, job: _Job) -> bool:
         if self._closed:
             return False
-        if job.kind == "tag_pending":
-            return job.request_token == self._recovery_token
         if job.catalog_token != self._catalog_token:
             return False
         token = {
@@ -967,9 +915,8 @@ class CatalogController(QObject):
             "save": self._save_token,
             "artists": self._artist_token,
             "genres": self._genre_token,
-            "tag_preview": self._tag_token,
             "tag_write": self._tag_token,
-            "tag_review": self._tag_token,
+            "tag_list": self._tag_token,
         }
         return job.request_token == token[job.kind]
 
@@ -982,7 +929,7 @@ class CatalogController(QObject):
         if not self._is_current(job):
             if isinstance(result, _Opened):
                 result.session.close()
-        elif job.kind in ("tag_preview", "tag_write", "tag_pending", "tag_review"):
+        elif job.kind in ("tag_write", "tag_list"):
             self._finish_tag_job(job)
         elif job.kind == "save":
             self._finish_save(job)
@@ -1144,7 +1091,7 @@ class CatalogController(QObject):
         if not self._closed:
             self.window.set_busy(
                 any(
-                    self._is_current(job) and job.kind not in ("artists", "genres", "tag_pending")
+                    self._is_current(job) and job.kind not in ("artists", "genres")
                     for job in self._jobs.values()
                 )
             )
@@ -1174,9 +1121,6 @@ class CatalogController(QObject):
         if self._tag_dialog is not None:
             self._tag_dialog.set_busy(False)
             self._tag_dialog.reject()
-        if self._recovery_dialog is not None:
-            self._recovery_dialog.set_error("Acceso cerrado.")
-            self._recovery_dialog.reject()
         if self._import_task is not None:
             self._import_task.signals.deleteLater()
         self._import_task = None

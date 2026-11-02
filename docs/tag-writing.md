@@ -1,29 +1,46 @@
 # Escritura de etiquetas y recuperación
 
-**Guardar** edita el catálogo. **Escribir etiquetas…** publica los campos elegidos
-desde ese catálogo en los FLAC/MP3 seleccionados. Primero se resuelven los cambios sin
-guardar, se revisan las diferencias y se confirma el subconjunto escribible.
+**Guardar** edita el catálogo. **Escribir etiquetas…** publica todas las diferencias
+entre sus diez campos editables guardados y los FLAC/MP3 seleccionados. Primero se
+resuelven los cambios sin guardar mediante Guardar/Descartar/Cancelar.
+
+**Escribir etiquetas de todo el catálogo…**, sobre el listado principal, abre el mismo
+flujo para todas las canciones del catálogo. No requiere selección y consulta la base
+de nuevo en segundo plano, incluyendo entradas añadidas desde que se abrió. Permanece
+deshabilitado sin catálogo, con un catálogo vacío o mientras otra operación está activa.
+La acción de escribir la selección sigue disponible junto al detalle de la canción.
+
+El diálogo muestra todas las canciones desde que se abre, la salida del progreso y
+únicamente **Cerrar** y **Escribir etiquetas**. Pulsar escribir prepara y verifica los
+cambios internamente, sin selección de campos ni revisión manual de diferencias.
+Cada canción conserva sus propios valores; los archivos sin diferencias se omiten.
+Los errores abren un pop-up que ofrece guardar el informe JSON; una operación correcta
+no muestra ese pop-up.
+
+Tras completar la escritura correctamente, **Escribir etiquetas** queda deshabilitado
+y **Cerrar** sigue disponible. También se deshabilita si todos los archivos estaban
+ya actualizados. Si hay errores o pendientes, permite reintentar en el mismo diálogo.
 
 ## Formatos y valores admitidos
 
 | Caso | Comportamiento |
 | --- | --- |
-| FLAC | Modifica comentarios Vorbis elegidos; conserva imágenes, otros bloques y audio. |
+| FLAC | Modifica los comentarios Vorbis que difieren del catálogo; conserva imágenes, otros bloques y audio. |
 | MP3 con ID3v2.4 | Conserva v2.4 y las listas de artistas/géneros con orden y Unicode. |
 | MP3 con ID3v2.3 | Conserva v2.3; bloquea listas que se unirían al guardar. No convierte a v2.4. |
 | MP3 sin ID3 | Crea ID3v2.4. |
 | ID3v2.2 o ID3v1 coexistente | Bloqueado; esta entrega no convierte ni descarta etiquetas legadas. |
-| Pista/disco y totales | Permite editar cada mitad conservando la otra desde el archivo. Un total sin número vuelve a leerse como número ausente. |
-| Fechas completas | Cambia el año conservando la precisión válida y representable. Vaciar o reducir una fecha requiere permiso explícito en el diálogo. |
-| Varias líricas USLT | Exige elegir idioma/descripción; conserva las otras versiones. El importador puede mostrar otra versión restante, porque solo expone un texto de líricas. |
-| Alias y TXXX | Retira o actualiza la familia del campo elegido para que un alias antiguo no prevalezca. La vista previa muestra las etiquetas afectadas. |
+| Pista/disco y totales | Escribe los números y totales guardados. Un total sin número vuelve a leerse como número ausente. |
+| Fechas completas | Cambia el año conservando la precisión válida y representable. Si la fecha resultante es inválida o no representable, guarda solo el año; vaciarlo elimina la fecha. |
+| Varias líricas USLT | Actualiza la primera versión de líricas que expone el lector y conserva las demás. El importador puede mostrar otra versión restante, porque solo expone un texto de líricas. |
+| Alias y TXXX | Retira o actualiza la familia del campo modificado para que un alias antiguo no prevalezca. |
 | Metadatos ajenos | Verifica comentarios, frames conocidos/desconocidos, imágenes y etiquetas APEv2 finales; si no puede preservarlos, no publica. |
 
 Los números se serializan sin inventar valores; los años utilizan cuatro dígitos en
 el intervalo 1–9999. La escritura no divide nombres por comas, punto y coma ni `/`.
-Un campo vacío marcado se elimina. Las listas vacías eliminan la familia elegida.
+Un campo guardado vacío elimina su etiqueta. Las listas vacías eliminan su familia de etiquetas.
 Con ID3v2.3 se admiten fechas con precisión de año, día o minuto; otras precisiones
-requieren reducir explícitamente al año. La vista previa explica cada caso bloqueado.
+se reducen al año cuando este cambia. El progreso indica cada archivo incompatible.
 
 Los hashes del audio comparan los bytes situados después de los bloques de metadatos
 FLAC o entre las etiquetas iniciales/finales de MP3. No se recodifica ni se verifica
@@ -33,7 +50,7 @@ reabriendo la copia modificada antes de reemplazar el original.
 ## Archivos, permisos y espacio
 
 Cada archivo necesita espacio para un respaldo completo y una copia temporal. Se
-procesan secuencialmente: la estimación suma todos los respaldos y el mayor temporal.
+procesan secuencialmente: reserva espacio para todos los respaldos y el mayor temporal.
 No se siguen enlaces simbólicos/junctions, no se reemplazan enlaces duros ni destinos
 fuera de su raíz importada. Un original ausente o de solo lectura queda bloqueado;
 esto no impide editar sus datos en SQLite.
@@ -59,12 +76,11 @@ comprobaciones no impiden todas las carreras con otros programas que editen mús
 ## Resultados y cancelación
 
 Cada archivo puede quedar confirmado, escrito con catálogo pendiente, sin cambios,
-excluido, en conflicto, fallido o pendiente. El informe muestra errores y respaldos,
-y permite copiar texto o exportar JSON. Se conserva cualquier corrección del catálogo
-que no se haya elegido para escribir.
+excluido, en conflicto, fallido o pendiente. La salida muestra errores y respaldos. Si hay errores, el pop-up permite exportar el
+informe JSON. La escritura no cambia los valores musicales guardados en el catálogo.
 
-Cancelar espera un punto seguro y conserva lo ya publicado. Cerrar durante un trabajo
-solicita la cancelación y mantiene el bucle de eventos hasta recibir el resultado.
+**Cerrar** durante un trabajo solicita la cancelación, espera un punto seguro y
+cierra el diálogo conservando lo ya publicado. El bucle de eventos sigue respondiendo.
 Un fallo aislado permite continuar con otros archivos; la pérdida del catálogo o del
 registro y fallos esenciales de almacenamiento detienen los pendientes. No hay una
 transacción global entre los archivos y SQLite, ni un deshacer automático del lote.
@@ -79,7 +95,15 @@ Antes de editar una copia se crea un respaldo completo junto a cada original:
 
 Los temporales propios están en la carpeta del original:
 `.trackfolio-<operación>-<id>.tmp`. Estos sufijos evitan reimportarlos como música.
-Los respaldos no se eliminan automáticamente, incluso cuando todo termina bien.
+Después de escribir y confirmar todo el lote sin errores ni cancelación, se elimina
+el directorio `.trackfolio-backups` completo en cada carpeta donde se crearon copias,
+incluidos los UUID y respaldos anteriores que contenga. La limpieza espera al final
+del lote y al registro de su confirmación; no se realiza por canción. Los resultados
+sin cambios no crean copias ni borran respaldos antiguos por sí solos.
+
+Si hay un fallo, conflicto, catálogo pendiente o cancelación, se conservan las copias
+del lote. Si falla la propia limpieza, el informe indica el error y mantiene las rutas
+de las copias que sigan presentes; otras carpetas pueden haberse eliminado ya.
 
 El registro persistente está en la carpeta de datos del usuario, en
 `Trackfolio/tag-writes/<operación>/journal.json`. En Linux normalmente es
@@ -87,19 +111,13 @@ El registro persistente está en la carpeta de datos del usuario, en
 se utiliza el equivalente de `platformdirs`. El registro guarda rutas, valores
 confirmados, hashes y estados, sin incluir las portadas binarias.
 
-Al iniciar se avisa de los registros incompletos. Desde **Operaciones pendientes…**:
-
-1. Pulsa **Revisar** para comparar los archivos con los hashes anterior y posterior.
-   Esta revisión no modifica la música ni SQLite.
-2. Si el archivo coincide con el resultado verificado, puedes confirmar su observación
-   en SQLite. Solo se hace si el catálogo y su instantánea siguen siendo válidos; una
-   confirmación ya aplicada se reconoce sin duplicarla.
-3. Si coincide con el original, no se reanuda la escritura. La confirmación explícita
-   puede retirar un temporal propio cuya identidad y hash estén verificados. Para
-   escribir ese archivo prepara una vista previa nueva.
-4. Si no coincide con ninguna versión, falta el archivo o el catálogo cambió, conserva
-   el informe y revisa el conflicto manualmente. No se restaura ni sobrescribe música
-   automáticamente. Un registro dañado se muestra sin ocultar otras operaciones.
+Los registros se conservan como historial. Los respaldos que permanecen después de un
+lote incompleto permiten recuperación manual.
+La GUI no presenta un gestor de operaciones pendientes ni reanuda escrituras al arrancar.
+El caso de uso técnico `ReviewTagWrites` sigue disponible para inspeccionar hashes y
+reconciliar observaciones del catálogo mediante sus contratos Python, sin reescribir
+ni restaurar audio. Una confirmación requiere que el catálogo y su instantánea sigan
+siendo válidos; las ediciones posteriores se conservan como conflictos.
 
 Para restaurar manualmente, cierra los programas que usen el archivo, conserva una
 copia de su versión actual y comprueba la ruta de respaldo en el informe. Copia el

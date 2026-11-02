@@ -254,17 +254,32 @@ class MutagenTagCodec:
                 version = f"ID3v2.{mp3_version}"
                 keys = tuple(tags.keys())
                 candidates = tuple(key for key in keys if key.startswith("USLT:"))
+                # The reader skips empty texts when choosing its primary lyrics.
+                candidates = tuple(
+                    sorted(candidates, key=lambda key: not str(tags[key].text).strip())
+                )
                 selected = dict(request.lyrics_keys).get(snapshot.file_id)
                 if "lyrics" in request.fields:
                     if selected is not None and selected not in candidates:
                         raise TagWriteError("La versión de letras elegida ya no existe.")
-                    if len(candidates) > 1 and selected is None:
+                    explicit_lyrics = selected is not None
+                    if (
+                        len(candidates) > 1
+                        and selected is None
+                        and before.lyrics != snapshot.values.lyrics
+                    ):
                         raise TagWriteError(
                             "Hay varias versiones de letras. Elige idioma y descripción."
                         )
                     selected = selected or (candidates[0] if candidates else "USLT::und")
-                    if selected in tags and len(candidates) > 1:
-                        before = replace(before, lyrics=str(tags[selected].text))
+                    if selected in tags and len(candidates) > 1 and explicit_lyrics:
+                        selected_text = str(tags[selected].text)
+                        # A matching USLT may still be overridden by an obsolete alias.
+                        if (
+                            selected_text != snapshot.values.lyrics
+                            or before.lyrics == snapshot.values.lyrics
+                        ):
+                            before = replace(before, lyrics=selected_text)
                         after = before
                 if mp3_version == 3 and any(
                     isinstance(getattr(frame, "text", None), list) and len(frame.text) > 1

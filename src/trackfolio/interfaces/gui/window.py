@@ -250,6 +250,7 @@ class MainWindow(QMainWindow):
     tracks_selected = Signal(object)
     edit_requested = Signal()
     write_tags_requested = Signal()
+    write_all_tags_requested = Signal()
     save_requested = Signal()
     cancel_edit_requested = Signal()
     dirty_changed = Signal(bool)
@@ -389,6 +390,19 @@ class MainWindow(QMainWindow):
         header_layout.addStretch()
         header_layout.addWidget(self.count_label)
         layout.addWidget(header)
+        self.write_all_tags_action = QAction("Escribir etiquetas de todo el catálogo…", self)
+        self.write_all_tags_action.triggered.connect(self.write_all_tags_requested.emit)
+        self.addAction(self.write_all_tags_action)
+        self.write_all_tags_button = QPushButton(self.write_all_tags_action.text(), panel)
+        self.write_all_tags_button.setToolTip(
+            "Escribir todas las etiquetas guardadas de todas las canciones del catálogo"
+        )
+        self.write_all_tags_button.clicked.connect(self.write_all_tags_action.trigger)
+        catalog_actions = QHBoxLayout()
+        catalog_actions.setContentsMargins(16, 0, 16, 12)
+        catalog_actions.addWidget(self.write_all_tags_button)
+        catalog_actions.addStretch()
+        layout.addLayout(catalog_actions)
         self.model = CatalogTableModel(self)
         self.table = QTableView(panel)
         self.table.setObjectName("CatalogTable")
@@ -981,6 +995,15 @@ class MainWindow(QMainWindow):
         )
         self.write_tags_button.setEnabled(self.write_tags_action.isEnabled())
         self.write_tags_button.setVisible(self._tag_write_enabled)
+        self.write_all_tags_action.setEnabled(
+            self._tag_write_enabled
+            and self._catalog_path is not None
+            and self.model.rowCount() > 0
+            and not self._busy
+            and navigating
+        )
+        self.write_all_tags_button.setEnabled(self.write_all_tags_action.isEnabled())
+        self.write_all_tags_button.setVisible(self._tag_write_enabled)
         self.save_action.setEnabled(
             self._editing
             and not self._saving

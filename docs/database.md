@@ -90,7 +90,7 @@ los valores leídos en `raw_tags`. Cambiar una entidad del catálogo no reescrib
 solo las etiquetas musicales.
 
 La acción **Escribir etiquetas…** compara los valores guardados con el archivo y publica
-solo los campos elegidos. Su confirmación utiliza una instantánea que incluye `raw_tags`
+todas las diferencias de sus campos editables. Su confirmación utiliza una instantánea que incluye `raw_tags`
 y actualiza esta observación con la lectura verificada. Si cambia la fecha física al
 escribir el año, actualiza también `album_date`, aislando las relaciones compartidas.
 Las demás correcciones guardadas, los roles y las carátulas permanecen intactos.

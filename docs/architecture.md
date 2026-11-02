@@ -94,7 +94,8 @@ como origen y reemplaza las correcciones del catálogo, conservando roles adicio
 La edición no añade tablas ni dependencias y reutiliza el respaldo de catálogos antiguos.
 
 La importación guarda cada archivo en una transacción y no modifica la música.
-`PreviewTagWrites` compara los campos elegidos del catálogo con los archivos actuales,
+`TagWriteService.execute` calcula todas las diferencias guardadas y ejecuta la escritura.
+`PreviewTagWrites` prepara internamente el plan contra los archivos actuales,
 sin migraciones ni escrituras. `WriteTagWrites` coordina secuencialmente respaldo,
 edición en una copia, verificación, publicación y confirmación parcial en SQLite.
 `domain/tag_write.py` define solicitudes, instantáneas, diferencias, estados e informes;
@@ -103,7 +104,11 @@ los contratos de aplicación no dependen de Mutagen, SQLAlchemy ni Qt.
 `infrastructure/tag_write.py` conserva familias de alias y versión ID3, verifica todos
 los valores semánticos y los metadatos ajenos, y compara hashes de audio FLAC/MPEG.
 `tag_write_files.py` proporciona copias exclusivas, huellas completas, reemplazo local
-y registros JSON sincronizados en el directorio de datos del usuario. Se registra el
+y registros JSON sincronizados en el directorio de datos del usuario. Tras el éxito
+completo del lote y su confirmación persistida, elimina `.trackfolio-backups` entero
+en cada carpeta afectada; ante errores o cancelación conserva las copias. Los fallos
+de limpieza se incluyen en el resultado y se actualizan las rutas aún disponibles.
+Se registra el
 hash posterior antes del reemplazo para reconocer una publicación interrumpida.
 `tag_write_catalog.py` compara la instantánea musical y `raw_tags` bajo transacción;
 confirma únicamente las observaciones y la fecha física afectada, sin reimportar ni
@@ -113,8 +118,10 @@ reemplazar otras correcciones del catálogo.
 reconciliar SQLite y retirar un temporal propio verificado; nunca publica ni restaura
 música automáticamente. La atomicidad es por archivo, no por lote ni entre música y
 SQLite. Si el archivo se escribió y la confirmación falla, el informe conserva el estado
-**catálogo pendiente**. La GUI ejecuta revisión, escritura y recuperación en trabajadores,
-con cancelación cooperativa y cierre diferido. Véanse el [plan](tag-write-plan.md) y la
+**catálogo pendiente**. La GUI ejecuta la preparación y escritura en un trabajador,
+con cancelación cooperativa y cierre diferido. Muestra siempre las canciones y el progreso;
+los dos botones son Cerrar y Escribir etiquetas. Los errores ofrecen exportar el informe
+en un pop-up. La revisión técnica de registros se conserva en el núcleo y no tiene GUI. Véanse el [plan](tag-write-plan.md) y la
 [guía de formatos y recuperación](tag-writing.md).
 
 Se usan `pathlib`, una raíz de biblioteca configurable y rutas relativas para los archivos. La ruta identifica la ubicación importada, no la identidad musical de una grabación. El esquema separa pistas y archivos, pero el importador inicial crea una pista por cada archivo nuevo; la identificación entre ediciones y la reasignación de raíces al mover una biblioteca quedan pendientes.

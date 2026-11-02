@@ -480,6 +480,110 @@ Comprobaciones locales en Linux x86-64, uv 0.13.4, CPython 3.13.15 y Qt 6.11.2:
 La matriz nueva se ejecuta en la rama `codex/tag-write-validation`. Las primeras
 ejecuciones pasaron Linux y detectaron diferencias de las API de atributos de macOS
 y de herencia de DACL en Windows; estas comprobaciones se mantuvieron y se corrigieron
-los adaptadores. Los resultados de la revisión final se registrarán al terminar CI.
+los adaptadores.
+
+La [ejecución final 41497096830](https://github.com/Evilchuck666/Trackfolio/actions/runs/41497096830)
+valida el commit `5dbc038` con estos resultados:
+
+| Plataforma | Núcleo sin Qt | Suite con GUI | Resultado del job |
+| --- | --- | --- | --- |
+| Linux x86-64 | 430 passed, 9 skipped | 544 passed, 2 skipped | Correcto |
+| Windows x86-64 | 418 passed, 21 skipped | 532 passed, 14 skipped | Correcto |
+| macOS Intel | 430 passed, 9 skipped | 544 passed, 2 skipped | Correcto |
+| macOS Apple Silicon | Pendiente de runner | Pendiente | En cola |
+
+Los siete módulos GUI se omiten en el entorno sin Qt. Las omisiones restantes
+corresponden a pruebas de otros sistemas y a los lanzadores Unix en Windows.
+Los jobs finalizados pasan Ruff, formato, mypy, el diagnóstico `offscreen` y nativo,
+la construcción y la comprobación del wheel instalado sin checkout, con y sin Qt.
+
 La revisión visual manual de Windows/macOS continúa pendiente; `offscreen` y el
 diagnóstico automático nativo no sustituyen esa revisión.
+
+### Simplificación del diálogo de escritura (2026-11-02)
+
+Esta revisión sustituye la selección granular de la primera entrega. El diálogo
+muestra inmediatamente todas las canciones seleccionadas, la salida del progreso y
+solo **Cerrar** y **Escribir etiquetas**. La escritura calcula internamente las
+diferencias de los diez campos guardados y las aplica en una acción, incluidas las
+eliminaciones. Los archivos sin diferencias se omiten. Una fecha incompatible se
+reduce al año guardado y, con varias USLT, se actualiza la primera versión expuesta
+por el lector, conservando las otras.
+
+Los informes se ofrecen en un pop-up únicamente si se produce un error, incluidas
+incidencias de archivos individuales y fallos al preparar el catálogo. Se retiran
+el gestor gráfico de operaciones pendientes y su apertura al iniciar; los respaldos,
+registros y contratos de recuperación del núcleo permanecen disponibles.
+
+Validación local de esta revisión en Linux, CPython 3.13.15 y Qt 6.11.2:
+
+- **545 passed, 6 skipped**; PowerShell y pruebas nativas de otros sistemas explican
+  las seis omisiones.
+- Ruff, formato y mypy correctos.
+- Escritura directa de los diez campos en FLAC/MP3, borrado de líricas, fechas,
+  listas, numeración y valores particulares por canción; respaldo íntegro verificado.
+- Listado visible antes de cualquier trabajo, progreso, archivos sin cambios sin
+  respaldos nuevos ni pop-up, informe de error exportado y cierre cooperativo.
+- Diagnóstico `offscreen` con importación, edición y escritura: cero errores.
+- Wheel y sdist reconstruidos y verificados fuera del checkout, con núcleo sin Qt
+  y probe GUI `tags_written=true`.
+- Diálogo renderizado y revisado a 640×480: listado, salida y ambos botones visibles.
+
+Los resultados de CI de la tabla anterior corresponden a `5dbc038` y al diálogo
+anterior; no acreditan esta simplificación. La nueva revisión multiplataforma y la
+revisión visual manual de Windows/macOS quedan pendientes.
+
+### Eliminación de respaldos tras una escritura correcta (2026-11-02)
+
+Cuando todos los archivos escritos y sus observaciones en SQLite están confirmados,
+el lote no tiene errores ni cancelación y el registro final se ha guardado, se elimina
+el directorio `.trackfolio-backups` completo en cada carpeta afectada. Esto incluye
+todos los UUID y copias anteriores contenidos en ese directorio. La limpieza espera
+al final del lote, sin eliminar copias al confirmar canciones individuales.
+
+Los lotes incompletos conservan sus respaldos. Un fallo de limpieza se incluye en el
+informe y ofrece el pop-up de exportación; las rutas de copias eliminadas se retiran
+del resultado y las restantes se conservan. No se borran directorios sustituidos por
+otros objetos o enlaces, ni las copias de carpetas ajenas al lote.
+
+Validación local en Linux con CPython 3.13.15 y Qt 6.11.2:
+
+- **554 passed, 6 skipped**; las omisiones corresponden a PowerShell y pruebas nativas
+  de Windows/macOS.
+- Ruff, formato y mypy correctos, incluido el análisis con plataformas `win32` y `darwin`.
+- Eliminación del directorio completo con UUID anteriores, dos canciones en una misma
+  carpeta y canciones en carpetas distintas, después de todas las confirmaciones.
+- Respaldos conservados ante error parcial, cancelación, fallo de SQLite o del registro.
+  Fallos de limpieza y sustitución del directorio comunicados sin borrar datos ajenos.
+- Informe actualizado si una carpeta se limpia y otra falla; reintento correcto en la
+  misma sesión después de trasladar manualmente un directorio de copias anterior.
+- Diagnóstico GUI `offscreen`: cero errores. El probe y la comprobación del wheel
+  verifican la ausencia de `.trackfolio-backups` al terminar correctamente.
+
+El workflow se actualiza para comprobar este resultado con el paquete instalado.
+La ejecución de esta revisión en CI queda pendiente.
+
+### Botón de escritura después de finalizar (2026-11-02)
+
+El botón **Escribir etiquetas** queda deshabilitado cuando todas las canciones han
+terminado confirmadas o sin cambios, sin errores ni cancelación. **Cerrar** permanece
+activo. Los errores y resultados pendientes permiten reintentar; al corregir un archivo
+y terminar correctamente ese reintento, el botón también queda deshabilitado.
+
+Validación local: las nueve pruebas de integración del diálogo pasan, incluido un
+segundo clic sin nueva escritura, archivos sin cambios y reintento tras reparar un
+archivo ausente. Ruff, formato, mypy y el diagnóstico GUI `offscreen` son correctos.
+
+### Escritura de etiquetas de todo el catálogo (2026-11-02)
+
+La acción **Escribir etiquetas de todo el catálogo…**, sobre el listado principal,
+consulta todas las canciones en un trabajador y abre el diálogo existente. Incluye
+entradas no seleccionadas y añadidas a la base después de cargar la ventana. Resuelve
+Guardar/Descartar/Cancelar antes de obtener la lista y mantiene la selección anterior.
+El botón se deshabilita sin catálogo, con un catálogo vacío o durante otras operaciones.
+
+Validación local: **562 passed, 6 skipped**. Las 17 pruebas del diálogo incluyen
+escritura real del catálogo completo, entradas nuevas no visibles, selección vacía,
+borradores, fallo de lectura y cierre seguro durante la consulta. Ruff, formato, mypy
+y diagnóstico GUI `offscreen` correctos. Ventana revisada a 960×640 y diálogo a 640×480.
+Esta revisión no incluye una ejecución nueva de CI.

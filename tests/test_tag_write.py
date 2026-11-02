@@ -13,7 +13,12 @@ from mutagen.id3 import APIC, ID3, TALB, TCON, TDRC, TIT2, TPE1, TPOS, TRCK, TXX
 from test_catalog_edit import edit
 from test_metadata import png, write_flac, write_mp3
 
-from trackfolio.application.write_tags import PreviewTagWrites, ReviewTagWrites, WriteTagWrites
+from trackfolio.application.write_tags import (
+    PreviewTagWrites,
+    ReviewTagWrites,
+    TagWriteService,
+    WriteTagWrites,
+)
 from trackfolio.domain.catalog_edit import EDIT_FIELDS
 from trackfolio.domain.tag_write import TagWriteRequest
 from trackfolio.infrastructure.catalog import SqliteCatalogRepository
@@ -96,7 +101,8 @@ def test_write_and_import_into_new_catalogue(setup_tags, tmp_path, kind):
     assert not files.journal_root.exists()
     report = WriteTagWrites(catalog, codec, files).execute(preview, (entry.file_id,))
     assert report.results[0].state == "confirmed", report.results[0].message
-    assert report.results[0].backup_path.read_bytes() == original
+    assert report.results[0].backup_path is None
+    assert not (source.parent / ".trackfolio-backups").exists()
     actual = read_metadata(source)
     for field, value in changed.items():
         assert getattr(actual, field) == value
@@ -126,6 +132,83 @@ def test_only_selected_field_written_other_catalogue_corrections_survive(setup_t
     assert actual.title == "Original" and actual.track_number == 4 and actual.track_total == 10
     metadata = repository.get(entry.file_id).metadata
     assert metadata.title == "Catalog-only" and metadata.track_total == 20
+
+
+def test_automatic_write_updates_primary_lyrics_preserving_other_languages(setup_tags, tmp_path):
+    database, repository, catalog, codec, files = setup_tags
+    source = make_source(tmp_path, "mp3")
+    tags = ID3(source)
+    tags.add(USLT(encoding=3, lang="spa", desc="Translation", text="Traducción"))
+    tags.save(source)
+    original = ID3(source).getall("USLT")
+    primary = original[0].HashKey
+    untouched = {frame.HashKey: frame.text for frame in original[1:]}
+    entry = repository.save(read_metadata(source), source.parent, source.name)
+    edit(database, entry.file_id, lyrics="Modified lyrics", album_year=1981)
+    report = TagWriteService(catalog, codec, files).execute(database, (entry.file_id,))
+    assert report.results[0].state == "confirmed", report
+    actual = ID3(source)
+    assert actual[primary].text == "Modified lyrics"
+    assert {key: actual[key].text for key in untouched} == untouched
+    assert read_metadata(source).album_date == "1981"
+
+
+def test_automatic_preparation_cancellation_does_not_offer_an_error(setup_tags, tmp_path):
+    database, repository, catalog, codec, files = setup_tags
+    source = make_source(tmp_path, "flac")
+    original = source.read_bytes()
+    entry = repository.save(read_metadata(source), source.parent, source.name)
+    edit(database, entry.file_id, title="Modified")
+    cancelled = False
+
+    def progress(_value):
+        nonlocal cancelled
+        cancelled = True
+
+    report = TagWriteService(catalog, codec, files).execute(
+        database, (entry.file_id,), is_cancelled=lambda: cancelled, on_progress=progress
+    )
+    assert report.cancelled and report.fatal_error is None
+    assert source.read_bytes() == original and not files.journal_root.exists()
+
+
+@pytest.mark.parametrize("change_lyrics", [False, True])
+def test_automatic_write_skips_empty_uslt_when_choosing_primary(
+    setup_tags, tmp_path, change_lyrics
+):
+    database, repository, catalog, codec, files = setup_tags
+    source = make_source(tmp_path, "mp3")
+    tags = ID3(source)
+    for frame in tags.getall("USLT"):
+        frame.text = ""
+    tags.add(USLT(encoding=3, lang="spa", desc="Primary", text="Original lyrics"))
+    tags.save(source)
+    entry = repository.save(read_metadata(source), source.parent, source.name)
+    changes = {"title": "Modified title"}
+    if change_lyrics:
+        changes["lyrics"] = "Modified lyrics"
+    edit(database, entry.file_id, **changes)
+    report = TagWriteService(catalog, codec, files).execute(database, (entry.file_id,))
+    assert report.results[0].state == "confirmed", report
+    assert read_metadata(source).lyrics == (
+        "Modified lyrics" if change_lyrics else "Original lyrics"
+    )
+    assert ID3(source)["USLT:Original:eng"].text == ""
+
+
+def test_automatic_write_removes_alias_overriding_an_already_matching_uslt(setup_tags, tmp_path):
+    database, repository, catalog, codec, files = setup_tags
+    source = make_source(tmp_path, "mp3")
+    tags = ID3(source)
+    tags.add(USLT(encoding=3, lang="spa", desc="Translation", text="Traducción"))
+    tags.add(TXXX(encoding=3, desc="LYRICS", text=["Obsolete alias"]))
+    tags.save(source)
+    entry = repository.save(read_metadata(source), source.parent, source.name)
+    edit(database, entry.file_id, lyrics="Old lyrics")
+    report = TagWriteService(catalog, codec, files).execute(database, (entry.file_id,))
+    assert report.results[0].state == "confirmed", report
+    assert read_metadata(source).lyrics == "Old lyrics"
+    assert "TXXX:LYRICS" not in ID3(source)
 
 
 def prepare_change(setup_tags, tmp_path, *, kind="flac", fields=("title",), **changes):
@@ -780,7 +863,8 @@ def test_file_permissions_and_extended_attributes_survive(setup_tags, tmp_path):
     assert report.results[0].state == "confirmed", report
     assert source.stat().st_mode & 0o777 == 0o640
     assert os.getxattr(source, key) == b"unrelated attribute"
-    assert os.getxattr(report.results[0].backup_path, key) == b"unrelated attribute"
+    assert report.results[0].backup_path is None
+    assert not (source.parent / ".trackfolio-backups").exists()
 
 
 @pytest.mark.skipif(sys.platform != "darwin", reason="macOS native attributes and ACL")

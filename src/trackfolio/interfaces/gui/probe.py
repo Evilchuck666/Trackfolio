@@ -88,7 +88,6 @@ def run_probe(argv: list[str]) -> dict[str, object]:
     with tempfile.TemporaryDirectory(prefix="trackfolio-gui-") as directory:
         database = Path(directory) / "catálogo portable.tfo"
         source = _audio_source(Path(directory))
-        original_audio = source.read_bytes()
         window, controller = create_window(tag_journal_root=Path(directory) / "tag-writes")
         app.close_guard = controller.request_close
         app.aboutToQuit.connect(controller.shutdown)
@@ -207,33 +206,17 @@ def run_probe(argv: list[str]) -> dict[str, object]:
                 QTest.mouseClick(window.write_tags_button, Qt.MouseButton.LeftButton)
                 dialog = controller._tag_dialog
                 assert dialog is not None
-                dialog.fields["title"].setChecked(True)
-                dialog.fields["artists"].setChecked(True)
-                QTest.mouseClick(dialog.preview_button, Qt.MouseButton.LeftButton)
-                tag_poll.start(10)
+                assert dialog.table.rowCount() == 1
+                QTest.mouseClick(dialog.write_button, Qt.MouseButton.LeftButton)
             except Exception as exc:
                 fail(str(exc) or type(exc).__name__)
-
-        def publish_tags() -> None:
-            dialog = controller._tag_dialog
-            if dialog is None:
-                return
-            if dialog.error.isVisible():
-                fail(dialog.error.text())
-            if dialog._preview is not None and not controller._tag_running:
-                tag_poll.stop()
-                try:
-                    assert dialog.write_button.isEnabled(), dialog.summary.text()
-                    QTest.mouseClick(dialog.write_button, Qt.MouseButton.LeftButton)
-                except Exception as exc:
-                    fail(str(exc) or type(exc).__name__)
 
         def inspect_tags(report: TagWriteReport) -> None:
             try:
                 assert len(report.results) == 1
                 assert report.results[0].state == "confirmed", report.results[0].message
-                backup = report.results[0].backup_path
-                assert backup is not None and backup.read_bytes() == original_audio
+                assert report.results[0].backup_path is None
+                assert not (source.parent / ".trackfolio-backups").exists()
                 actual = read_metadata(source)
                 assert actual.title == "Catalog correction" and actual.artists == ("Accept",)
                 assert actual.artwork is not None
@@ -245,8 +228,6 @@ def run_probe(argv: list[str]) -> dict[str, object]:
             except Exception as exc:
                 fail(str(exc) or type(exc).__name__)
 
-        tag_poll = QTimer()
-        tag_poll.timeout.connect(publish_tags)
         controller.tag_write_finished.connect(inspect_tags)
         timeout = QTimer()
         timeout.setSingleShot(True)
@@ -258,7 +239,6 @@ def run_probe(argv: list[str]) -> dict[str, object]:
         )
         exit_code = app.exec()
         timeout.stop()
-        tag_poll.stop()
         controller.shutdown()
         app.close_guard = None
         dispose_window(window)
