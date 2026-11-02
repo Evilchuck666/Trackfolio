@@ -33,9 +33,15 @@ from trackfolio.application.import_catalog import (
     ImportReport,
     ImportRequest,
 )
+from trackfolio.application.write_tags import TagWriteService
 from trackfolio.domain.catalog import CatalogEntry, CatalogSummary
 from trackfolio.domain.catalog_edit import ArtistChoice, EditableTrack, TrackEditPatch
+from trackfolio.domain.tag_write import (
+    TagWriteProgress,
+    TagWriteReport,
+)
 from trackfolio.interfaces.gui.import_dialog import ImportDialog, ImportProgressDialog
+from trackfolio.interfaces.gui.tag_write_dialog import TagWriteDialog
 from trackfolio.interfaces.gui.window import MainWindow
 
 
@@ -129,7 +135,16 @@ class _ImportTask(QRunnable):
             self.signals.completed.emit(self.identifier)
 
 
-_JobKind = Literal["open", "list", "detail", "edit", "save", "artists", "genres"]
+_JobKind = Literal[
+    "open",
+    "list",
+    "detail",
+    "edit",
+    "save",
+    "artists",
+    "genres",
+    "tag_write",
+]
 
 
 @dataclass(slots=True)
@@ -148,6 +163,8 @@ class CatalogController(QObject):
     import_finished = Signal(object)
     edit_started = Signal(int)
     edit_finished = Signal(object)
+    tag_progress = Signal(int, object)
+    tag_write_finished = Signal(object)
 
     def __init__(
         self,
@@ -157,6 +174,7 @@ class CatalogController(QObject):
         importer: ImportCatalog | None = None,
         import_directory: Path | None = None,
         edit_factory: CatalogEditSessionFactory | None = None,
+        tag_writer: TagWriteService | None = None,
     ) -> None:
         super().__init__(window)
         self.window = window
@@ -164,6 +182,12 @@ class CatalogController(QObject):
         self._remember = remember
         self._importer = importer
         self._edit_factory = edit_factory
+        self._tag_writer = tag_writer
+        self._tag_dialog: TagWriteDialog | None = None
+        self._tag_running = False
+        self._tag_changed = False
+        self._tag_token = 0
+        self._tag_cancel = Event()
         self._edit_snapshot: EditableTrack | None = None
         self._batch_snapshots: tuple[EditableTrack, ...] = ()
         self._edit_path: Path | None = None
@@ -210,6 +234,99 @@ class CatalogController(QObject):
         window.cancel_edit_requested.connect(self.cancel_edit)
         window.suggestions_requested.connect(self.find_suggestions)
         window.set_edit_enabled(edit_factory is not None)
+        window.set_tag_write_enabled(tag_writer is not None)
+        window.write_tags_requested.connect(self.choose_tag_write)
+        self.tag_progress.connect(self._receive_tag_progress, Qt.ConnectionType.QueuedConnection)
+
+    @property
+    def tagging(self) -> bool:
+        return self._tag_dialog is not None or self._tag_running
+
+    @Slot()
+    def choose_tag_write(self) -> None:
+        if (
+            self._closed
+            or self._close_pending
+            or self.importing
+            or self.saving
+            or self.tagging
+            or self._session is None
+            or self._tag_writer is None
+            or not self.window.selected_file_ids()
+        ):
+            return
+        if not self._guard_edit(self.choose_tag_write):
+            return
+        self._list_token += 1
+        self._detail_token += 1
+        self._edit_token += 1
+        self._tag_changed = False
+        selected = set(self.window.selected_file_ids())
+        songs = tuple(song for song in self.window.model.summaries() if song.file_id in selected)
+        dialog = TagWriteDialog(self._session.database_path, songs, self.window)
+        self._tag_dialog = dialog
+        dialog.write_requested.connect(self.write_tags)
+        dialog.cancel_requested.connect(lambda: self._tag_cancel.set())
+        dialog.finished.connect(self._tag_dialog_closed)
+        self.window.set_writing_tags(True)
+        dialog.show()
+
+    @Slot(int)
+    def _tag_dialog_closed(self, _result: int) -> None:
+        dialog, self._tag_dialog = self._tag_dialog, None
+        if dialog is not None:
+            dialog.deleteLater()
+        self.window.set_writing_tags(False)
+        if self._tag_changed and not self._closed and not self._close_pending:
+            self.refresh()
+
+    def _tag_operation(self, operation: Callable[[], object], kind: _JobKind) -> None:
+        self._tag_running = True
+        self._tag_token += 1
+        self._submit(operation, kind, self._tag_token)
+
+    @Slot()
+    def write_tags(self) -> None:
+        if (
+            self._tag_writer is None
+            or self._tag_dialog is None
+            or self._tag_running
+            or self._closed
+        ):
+            return
+        service, dialog = self._tag_writer, self._tag_dialog
+        self._tag_cancel = Event()
+        token = self._tag_token + 1
+        self._tag_operation(
+            lambda: service.execute(
+                dialog.database_path,
+                dialog.file_ids,
+                is_cancelled=self._tag_cancel.is_set,
+                on_progress=lambda progress: self.tag_progress.emit(token, progress),
+            ),
+            "tag_write",
+        )
+
+    @Slot(int, object)
+    def _receive_tag_progress(self, token: int, progress: TagWriteProgress) -> None:
+        if not self._closed and token == self._tag_token and self._tag_dialog is not None:
+            self._tag_dialog.set_progress(progress)
+
+    def _finish_tag_job(self, job: _Job) -> None:
+        self._tag_running = False
+        if job.task.error:
+            if self._tag_dialog is not None:
+                self._tag_dialog.set_error(job.task.error, offer_report=not self._close_pending)
+        else:
+            report = cast(TagWriteReport, job.task.result)
+            self._tag_changed = self._tag_changed or any(
+                item.state in ("confirmed", "catalog_pending") for item in report.results
+            )
+            if self._tag_dialog is not None:
+                self._tag_dialog.set_report(report, offer_report=not self._close_pending)
+            self.tag_write_finished.emit(report)
+        if self._close_pending:
+            self._close_when_idle()
 
     @property
     def saving(self) -> bool:
@@ -270,10 +387,10 @@ class CatalogController(QObject):
         return False
 
     def _allow_selection(self, file_id: int) -> bool:
-        return self._guard_edit(lambda: self.window.select_file(file_id))
+        return not self.tagging and self._guard_edit(lambda: self.window.select_file(file_id))
 
     def _allow_group_selection(self, file_ids: tuple[int, ...]) -> bool:
-        return self._guard_edit(lambda: self.window.select_files(file_ids))
+        return not self.tagging and self._guard_edit(lambda: self.window.select_files(file_ids))
 
     def _request_window_close(self) -> None:
         self.window.close()
@@ -286,6 +403,7 @@ class CatalogController(QObject):
             self._closed
             or self._close_pending
             or self.importing
+            or self.tagging
             or self.saving
             or self._session is None
             or self._edit_factory is None
@@ -341,6 +459,7 @@ class CatalogController(QObject):
             self._closed
             or self._close_pending
             or self.importing
+            or self.tagging
             or self.saving
             or self._edit_snapshot is None
             or self._edit_path is None
@@ -445,6 +564,7 @@ class CatalogController(QObject):
             self._closed
             or self._close_pending
             or self.importing
+            or self.tagging
             or self.saving
             or self._importer is None
         ):
@@ -466,6 +586,7 @@ class CatalogController(QObject):
             self._closed
             or self._close_pending
             or self.importing
+            or self.tagging
             or self.saving
             or self._importer is None
         ):
@@ -581,6 +702,12 @@ class CatalogController(QObject):
     def request_close(self) -> bool:
         if self._closed:
             return True
+        if self._tag_running:
+            self._close_pending = True
+            self._tag_cancel.set()
+            return False
+        if self._tag_dialog is not None:
+            self._tag_dialog.reject()
         if self.saving:
             self._close_pending = True
             return False
@@ -595,7 +722,13 @@ class CatalogController(QObject):
     def _close_when_idle(self) -> None:
         if self._closed:
             return
-        if self._pool.activeThreadCount() or self._jobs or self.importing or self.saving:
+        if (
+            self._pool.activeThreadCount()
+            or self._jobs
+            or self.importing
+            or self.saving
+            or self._tag_running
+        ):
             QTimer.singleShot(10, self._close_when_idle)
         else:
             self.window.close()
@@ -618,7 +751,7 @@ class CatalogController(QObject):
 
     @Slot()
     def choose_catalog(self) -> None:
-        if self._closed or self._close_pending or self.importing or self.saving:
+        if self._closed or self._close_pending or self.importing or self.saving or self.tagging:
             return
         if not self._guard_edit(self.choose_catalog):
             return
@@ -638,7 +771,7 @@ class CatalogController(QObject):
     def open_database(
         self, path: Path, *, selected_id: int | None = None, error_prefix: str = ""
     ) -> None:
-        if self._closed or self._close_pending or self.importing or self.saving:
+        if self._closed or self._close_pending or self.importing or self.saving or self.tagging:
             return
         if not self._guard_edit(
             lambda: self.open_database(path, selected_id=selected_id, error_prefix=error_prefix)
@@ -673,7 +806,7 @@ class CatalogController(QObject):
 
     @Slot()
     def refresh(self) -> None:
-        if self._closed or self.importing or self.saving or self._session is None:
+        if self._closed or self.importing or self.saving or self.tagging or self._session is None:
             return
         if not self._guard_edit(self.refresh):
             return
@@ -696,7 +829,7 @@ class CatalogController(QObject):
 
     @Slot(int)
     def select_track(self, file_id: int) -> None:
-        if self._closed or self.importing or self.saving or self._session is None:
+        if self._closed or self.importing or self.saving or self.tagging or self._session is None:
             return
         if not self._guard_edit(lambda: self.window.select_file(file_id)):
             return
@@ -718,7 +851,9 @@ class CatalogController(QObject):
         self._submit(load, "detail", token, session, file_id)
 
     def _is_current(self, job: _Job) -> bool:
-        if self._closed or job.catalog_token != self._catalog_token:
+        if self._closed:
+            return False
+        if job.catalog_token != self._catalog_token:
             return False
         token = {
             "open": self._catalog_token,
@@ -728,6 +863,7 @@ class CatalogController(QObject):
             "save": self._save_token,
             "artists": self._artist_token,
             "genres": self._genre_token,
+            "tag_write": self._tag_token,
         }
         return job.request_token == token[job.kind]
 
@@ -740,6 +876,8 @@ class CatalogController(QObject):
         if not self._is_current(job):
             if isinstance(result, _Opened):
                 result.session.close()
+        elif job.kind == "tag_write":
+            self._finish_tag_job(job)
         elif job.kind == "save":
             self._finish_save(job)
         elif job.task.error is not None:
@@ -920,11 +1058,16 @@ class CatalogController(QObject):
             return
         self._closed = True
         self._cancellation.set()
+        self._tag_cancel.set()
         # This synchronous drain is for final teardown after the event loop has stopped.
         # Normal window closure during import uses request_close and keeps events flowing.
         self._pool.clear()
         # Queries have a bounded SQLite timeout. Keep QObject owners alive until work ends.
         self._pool.waitForDone()
+        self._tag_running = False
+        if self._tag_dialog is not None:
+            self._tag_dialog.set_busy(False)
+            self._tag_dialog.reject()
         if self._import_task is not None:
             self._import_task.signals.deleteLater()
         self._import_task = None

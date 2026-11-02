@@ -214,6 +214,12 @@ jobs:
                   "trackfolio/domain/catalog_edit.py",
                   "trackfolio/application/import_catalog.py",
                   "trackfolio/application/edit_catalog.py",
+                  "trackfolio/application/write_tags.py",
+                  "trackfolio/domain/tag_write.py",
+                  "trackfolio/infrastructure/tag_write.py",
+                  "trackfolio/infrastructure/tag_write_files.py",
+                  "trackfolio/infrastructure/tag_write_catalog.py",
+                  "trackfolio/interfaces/gui/tag_write_dialog.py",
                   "trackfolio/infrastructure/audio_scan.py",
                   "trackfolio/infrastructure/catalog_edit.py",
                   "trackfolio/infrastructure/catalog.py",
@@ -291,6 +297,12 @@ jobs:
           from trackfolio.infrastructure.catalog import SqliteCatalogRepository
           from trackfolio.infrastructure.catalog_edit import SqliteCatalogEditSessionFactory
           from trackfolio.infrastructure.schema import REVISION
+          from trackfolio.application.write_tags import PreviewTagWrites, WriteTagWrites
+          from trackfolio.domain.tag_write import TagWriteRequest
+          from trackfolio.infrastructure.metadata import read_metadata
+          from trackfolio.infrastructure.tag_write import MutagenTagCodec
+          from trackfolio.infrastructure.tag_write_catalog import SqliteTagCatalog
+          from trackfolio.infrastructure.tag_write_files import FileTagAccess
 
           assert Path(database.__file__).resolve().is_relative_to(Path(sys.argv[2]).resolve())
           assert find_spec("PySide6") is None
@@ -346,6 +358,37 @@ jobs:
               assert persisted.values.artists == ("Abbath",)
           finally:
               reader.close()
+          assert find_spec("PySide6") is None
+          # Redistributable encoded silence; this core check uses no GUI or encoder.
+          import base64
+          import zlib
+          audio = target.parent / "silence.flac"
+          original_audio = zlib.decompress(base64.b64decode(
+              b"eJxL80l0ZmBgUBJgEABS3AwMvFxHHD4wMAhavSqPXPZC8Nl9nYjaoO1TF5q1MDBoKADVFKWmpRal5iWnKuRkJrn5OD"
+              b"orGOqZ6hkoGBkYmRoYGRoClTD8/3GSg2EqkKG49/+PSg5GRssNQM5XNgBswB7O"))
+          audio.write_bytes(original_audio)
+          engine = database.create_engine(target)
+          try:
+              imported = SqliteCatalogRepository(engine).save(read_metadata(audio), audio.parent, audio.name)
+          finally:
+              engine.dispose()
+          reader = edit_factory.open_reader(target)
+          try:
+              snapshot = reader.get_editable(imported.file_id)
+          finally:
+              reader.close()
+          assert snapshot is not None
+          UpdateCatalogTrack(edit_factory).execute(target, snapshot, TrackEditPatch((
+              FieldChange("title", "Written from installed core"),
+          )))
+          tag_catalog, codec = SqliteTagCatalog(), MutagenTagCodec()
+          tag_files = FileTagAccess(target.parent / "tag-writes")
+          preview = PreviewTagWrites(tag_catalog, codec, tag_files).execute(
+              TagWriteRequest(target, (imported.file_id,), ("title",)))
+          written = WriteTagWrites(tag_catalog, codec, tag_files).execute(preview, (imported.file_id,))
+          assert written.results[0].state == "confirmed", written
+          assert written.results[0].backup_path.read_bytes() == original_audio
+          assert read_metadata(audio).title == "Written from installed core"
           assert find_spec("PySide6") is None
           legacy = target.with_name("legacy.tfo")
           with sqlite3.connect(legacy) as connection:
@@ -424,6 +467,7 @@ jobs:
           assert report["events"] is True and report["style"].lower() == "fusion", report
           assert report["imported"] is True, report
           assert report["edited"] is True, report
+          assert report["tags_written"] is True, report
           print("Wheel GUI instalado fuera del checkout:", report)
           """
               subprocess.run(

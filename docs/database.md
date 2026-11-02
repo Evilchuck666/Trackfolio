@@ -89,6 +89,19 @@ importación elimina duplicados exactos en las relaciones normalizadas, conserva
 los valores leídos en `raw_tags`. Cambiar una entidad del catálogo no reescribe por sí
 solo las etiquetas musicales.
 
+La acción **Escribir etiquetas…** compara los valores guardados con el archivo y publica
+todas las diferencias de sus campos editables. Su confirmación utiliza una instantánea que incluye `raw_tags`
+y actualiza esta observación con la lectura verificada. Si cambia la fecha física al
+escribir el año, actualiza también `album_date`, aislando las relaciones compartidas.
+Las demás correcciones guardadas, los roles y las carátulas permanecen intactos.
+
+El registro recuperable se guarda fuera de SQLite, en la carpeta de datos de usuario
+`Trackfolio/tag-writes/<operación>/journal.json`; no añade tablas ni revisiones al esquema
+`002`. Publicar música y confirmar SQLite son pasos separados. Un resultado **catálogo
+pendiente** conserva el archivo ya escrito y requiere revisar su confirmación; no se
+revierte el audio ni se reemplaza una edición más reciente a ciegas. Véase la
+[guía de recuperación](tag-writing.md#recuperación).
+
 ## Carátulas
 
 Se utiliza primero una imagen incrustada reconocible, con preferencia por la portada

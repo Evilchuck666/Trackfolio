@@ -13,6 +13,8 @@ from PySide6.QtTest import QTest
 
 from trackfolio.application.edit_catalog import CatalogEditOutcome
 from trackfolio.application.import_catalog import ImportReport, ImportRequest
+from trackfolio.domain.tag_write import TagWriteReport
+from trackfolio.infrastructure.metadata import read_metadata
 from trackfolio.infrastructure.session import open_catalog
 from trackfolio.interfaces.gui.app import CatalogApplication
 from trackfolio.interfaces.gui.lifecycle import dispose_window
@@ -86,7 +88,8 @@ def run_probe(argv: list[str]) -> dict[str, object]:
     with tempfile.TemporaryDirectory(prefix="trackfolio-gui-") as directory:
         database = Path(directory) / "catálogo portable.tfo"
         source = _audio_source(Path(directory))
-        window, controller = create_window()
+        original_audio = source.read_bytes()
+        window, controller = create_window(tag_journal_root=Path(directory) / "tag-writes")
         app.close_guard = controller.request_close
         app.aboutToQuit.connect(controller.shutdown)
         state: dict[str, object] = {"events": False, "failure": "La ventana no cargó el detalle."}
@@ -114,6 +117,8 @@ def run_probe(argv: list[str]) -> dict[str, object]:
                 fail(str(exc) or type(exc).__name__)
 
         def inspect_detail(file_id: int) -> None:
+            if state.get("edited"):
+                return
             expected = {
                 "title": "Canción de prueba",
                 "artists": "Artista de prueba",
@@ -188,12 +193,43 @@ def run_probe(argv: list[str]) -> dict[str, object]:
                 finally:
                     session.close()
                 state["edited"] = True
-                state["failure"] = ""
-                QTimer.singleShot(100, app.quit)
+                state["failure"] = "La ventana no confirmó la escritura de etiquetas."
+                _audio_source(Path(directory))
+                QTimer.singleShot(0, request_tags)
             except Exception as exc:
                 fail(str(exc) or type(exc).__name__)
 
         controller.edit_finished.connect(inspect_saved)
+
+        def request_tags() -> None:
+            try:
+                assert window.write_tags_button.isEnabled()
+                QTest.mouseClick(window.write_tags_button, Qt.MouseButton.LeftButton)
+                dialog = controller._tag_dialog
+                assert dialog is not None
+                assert dialog.table.rowCount() == 1
+                QTest.mouseClick(dialog.write_button, Qt.MouseButton.LeftButton)
+            except Exception as exc:
+                fail(str(exc) or type(exc).__name__)
+
+        def inspect_tags(report: TagWriteReport) -> None:
+            try:
+                assert len(report.results) == 1
+                assert report.results[0].state == "confirmed", report.results[0].message
+                backup = report.results[0].backup_path
+                assert backup is not None and backup.read_bytes() == original_audio
+                actual = read_metadata(source)
+                assert actual.title == "Catalog correction" and actual.artists == ("Accept",)
+                assert actual.artwork is not None
+                state["tags_written"] = True
+                state["failure"] = ""
+                if controller._tag_dialog is not None:
+                    controller._tag_dialog.reject()
+                QTimer.singleShot(100, app.quit)
+            except Exception as exc:
+                fail(str(exc) or type(exc).__name__)
+
+        controller.tag_write_finished.connect(inspect_tags)
         timeout = QTimer()
         timeout.setSingleShot(True)
         timeout.timeout.connect(lambda: fail(str(state["failure"])))
@@ -207,7 +243,7 @@ def run_probe(argv: list[str]) -> dict[str, object]:
         controller.shutdown()
         app.close_guard = None
         dispose_window(window)
-        if exit_code != 0 or not state["events"] or not state.get("edited"):
+        if exit_code != 0 or not state["events"] or not state.get("tags_written"):
             raise RuntimeError(str(state["failure"]))
         return {
             "platform": app.platformName(),
@@ -216,4 +252,5 @@ def run_probe(argv: list[str]) -> dict[str, object]:
             "events": True,
             "imported": bool(state.get("imported")),
             "edited": bool(state.get("edited")),
+            "tags_written": bool(state.get("tags_written")),
         }

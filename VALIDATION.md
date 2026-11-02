@@ -1,6 +1,6 @@
 # Validación de Trackfolio
 
-El registro conserva las comprobaciones de cada fase. La infraestructura inicial se validó el 6 de octubre de 2026; el catálogo y su primera GUI se implementaron el 7 de octubre. La edición de etiquetas queda para un incremento posterior.
+El registro conserva las comprobaciones de cada fase. La infraestructura inicial se validó el 6 de octubre de 2026; el catálogo y su primera GUI se implementaron el 7 de octubre. Las entregas posteriores, incluida la escritura de etiquetas, se registran a continuación.
 
 ## Comprobaciones locales
 
@@ -442,3 +442,93 @@ Solo cambian las pruebas y este registro.
 
 Validación local: **457 passed, 4 skipped** por falta de PowerShell; Ruff, formato y
 mypy correctos. La validación de esta corrección en GitHub Actions queda pendiente.
+
+## Escritura de etiquetas FLAC/MP3 (2026-11-02)
+
+La acción **Escribir etiquetas…** publica los campos guardados de la selección tras
+revisar diferencias y elegir campos y archivos. El núcleo prepara un respaldo completo,
+edita una copia, verifica audio y metadatos y publica por archivo; después confirma
+`raw_tags` y la fecha física afectada en SQLite sin sustituir otras correcciones.
+La [guía de uso y recuperación](docs/tag-writing.md) contiene la matriz exacta de
+formatos, los casos bloqueados y los límites del sistema de archivos.
+
+Comprobaciones locales en Linux x86-64, uv 0.13.4, CPython 3.13.15 y Qt 6.11.2:
+
+- Suite completa: **540 passed, 6 skipped**. Cuatro omisiones requieren PowerShell;
+  las otras corresponden a las pruebas nativas de Windows y macOS.
+- Ruff, formato y mypy: correctos; 52 módulos de fuentes comprobados por mypy.
+- Los diez campos y sus borrados se escriben y se recuperan al importar en un catálogo
+  nuevo. Se prueban alias, Unicode/listas, fechas y numeración parcial, ID3v2.3/v2.4,
+  USLT múltiples, portadas, frames desconocidos y audio real de silencio redistribuible.
+- Cambios externos incluso con tamaño/mtime idénticos, permisos, enlaces/destinos
+  duplicados, temporales ajenos, corrupción de la copia y fallo al reemplazar dejan
+  intacto el original. Se comprueba la conservación de atributos extendidos en Linux.
+- Fallos de registro y SQLite tras publicar quedan como catálogo pendiente. Se prueban
+  interrupciones en cinco transiciones y salida real de un subproceso en dos puntos;
+  la recuperación distingue original y resultado, respeta ediciones nuevas y no
+  reescribe música. Un registro dañado no oculta otras operaciones.
+- Disco lleno o desaparición del catálogo detienen los archivos restantes. Se prueban
+  cancelación, cierre receptivo, selección parcial, Guardar/Descartar/Cancelar,
+  exportación del informe y espera de la recuperación ante un guardado activo.
+- Diagnóstico gráfico `offscreen` y X11 `xcb`: cero errores, incluidos importación,
+  edición, escritura de etiquetas, respaldo y portada sobre muestras temporales.
+- Wheel y sdist construidos con el backend bloqueado. La comprobación de CI extraída
+  del workflow se ejecutó fuera del checkout: núcleo sin PySide6 y GUI con
+  `events=true`, `imported=true`, `edited=true`, `tags_written=true`.
+- Vista previa renderizada y revisada en 700×580 y 860×760 con `offscreen`.
+
+La matriz nueva se ejecuta en la rama `codex/tag-write-validation`. Las primeras
+ejecuciones pasaron Linux y detectaron diferencias de las API de atributos de macOS
+y de herencia de DACL en Windows; estas comprobaciones se mantuvieron y se corrigieron
+los adaptadores.
+
+La [ejecución final 41497096830](https://github.com/Evilchuck666/Trackfolio/actions/runs/41497096830)
+valida el commit `5dbc038` con estos resultados:
+
+| Plataforma | Núcleo sin Qt | Suite con GUI | Resultado del job |
+| --- | --- | --- | --- |
+| Linux x86-64 | 430 passed, 9 skipped | 544 passed, 2 skipped | Correcto |
+| Windows x86-64 | 418 passed, 21 skipped | 532 passed, 14 skipped | Correcto |
+| macOS Intel | 430 passed, 9 skipped | 544 passed, 2 skipped | Correcto |
+| macOS Apple Silicon | Pendiente de runner | Pendiente | En cola |
+
+Los siete módulos GUI se omiten en el entorno sin Qt. Las omisiones restantes
+corresponden a pruebas de otros sistemas y a los lanzadores Unix en Windows.
+Los jobs finalizados pasan Ruff, formato, mypy, el diagnóstico `offscreen` y nativo,
+la construcción y la comprobación del wheel instalado sin checkout, con y sin Qt.
+
+La revisión visual manual de Windows/macOS continúa pendiente; `offscreen` y el
+diagnóstico automático nativo no sustituyen esa revisión.
+
+### Simplificación del diálogo de escritura (2026-11-02)
+
+Esta revisión sustituye la selección granular de la primera entrega. El diálogo
+muestra inmediatamente todas las canciones seleccionadas, la salida del progreso y
+solo **Cerrar** y **Escribir etiquetas**. La escritura calcula internamente las
+diferencias de los diez campos guardados y las aplica en una acción, incluidas las
+eliminaciones. Los archivos sin diferencias se omiten. Una fecha incompatible se
+reduce al año guardado y, con varias USLT, se actualiza la primera versión expuesta
+por el lector, conservando las otras.
+
+Los informes se ofrecen en un pop-up únicamente si se produce un error, incluidas
+incidencias de archivos individuales y fallos al preparar el catálogo. Se retiran
+el gestor gráfico de operaciones pendientes y su apertura al iniciar; los respaldos,
+registros y contratos de recuperación del núcleo permanecen disponibles.
+
+Validación local de esta revisión en Linux, CPython 3.13.15 y Qt 6.11.2:
+
+- **545 passed, 6 skipped**; PowerShell y pruebas nativas de otros sistemas explican
+  las seis omisiones.
+- Ruff, formato y mypy correctos.
+- Escritura directa de los diez campos en FLAC/MP3, borrado de líricas, fechas,
+  listas, numeración y valores particulares por canción; respaldo íntegro verificado.
+- Listado visible antes de cualquier trabajo, progreso, archivos sin cambios sin
+  respaldos nuevos ni pop-up, informe de error exportado y cierre cooperativo.
+- Diagnóstico `offscreen` con importación, edición y escritura: cero errores.
+- Wheel y sdist reconstruidos y verificados fuera del checkout, con núcleo sin Qt
+  y probe GUI `tags_written=true`.
+- Diálogo renderizado y revisado a 640×480: listado, salida y ambos botones visibles.
+
+Los resultados de CI de la tabla anterior corresponden a `5dbc038` y al diálogo
+anterior; no acreditan esta simplificación. La nueva revisión multiplataforma y la
+revisión visual manual de Windows/macOS quedan pendientes.
