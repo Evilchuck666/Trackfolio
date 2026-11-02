@@ -421,3 +421,24 @@ Validación local en GNU/Linux x86-64, CPython 3.13.15 y Qt 6.11.2 con backend
 
 Esta comprobación no incluye una ejecución nueva de CI ni una revisión de escritorio
 nativo en Windows/macOS para la edición en grupo.
+
+### Espera de navegación tras guardar en grupo (2026-11-02)
+
+La [ejecución 41446589402](https://github.com/Evilchuck666/Trackfolio/actions/runs/41446589402)
+falló únicamente en Windows en la prueba de guardar y cambiar de selección. Linux y
+ambos macOS pasaron. El mismo commit `d7e40ad` había superado antes las cuatro plataformas
+en la [ejecución 41445291706](https://github.com/Evilchuck666/Trackfolio/actions/runs/41445291706).
+
+La prueba podía detectar un estado sin trabajos pendientes después de guardar, antes
+de que la navegación diferida creara la consulta de detalle. Si esa consulta empezaba
+antes de que retornara el bucle de espera, la comprobación final fallaba. Se reprodujo
+el mismo error en Linux controlando la entrega de esa continuación con Qt y SQLite
+reales, sin agotar el timeout.
+
+La espera comprueba ahora la selección de destino y su señal `detail_loaded`, además
+del final del guardado y de los trabajos pendientes. Se conserva el límite de cinco
+segundos y se añade un caso de regresión que fuerza el orden de eventos problemático.
+Solo cambian las pruebas y este registro.
+
+Validación local: **457 passed, 4 skipped** por falta de PowerShell; Ruff, formato y
+mypy correctos. La validación de esta corrección en GitHub Actions queda pendiente.

@@ -12,7 +12,7 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import QEventLoop, Qt, QTimer
 from PySide6.QtTest import QSignalSpy, QTest
 from PySide6.QtWidgets import QMessageBox
 from test_catalog_edit import legacy_catalog
@@ -144,35 +144,82 @@ def test_batch_save_updates_all_selected_rows_and_preserves_selection(qt_app, ed
         teardown(window, controller)
 
 
-@pytest.mark.parametrize("answer", ["Cancel", "Discard", "Save"])
+@pytest.mark.parametrize(
+    "answer,deferred_navigation",
+    [("Cancel", False), ("Discard", False), ("Save", False), ("Save", True)],
+)
 def test_batch_unsaved_navigation_preserves_or_saves_whole_selection(
-    qt_app, edit_catalog, monkeypatch, answer
+    qt_app, edit_catalog, monkeypatch, answer, deferred_navigation
 ):
     database, first, second = edit_catalog
     window, controller = create_window()
     monkeypatch.setattr(
         controller, "_confirm_unsaved", lambda: getattr(QMessageBox.StandardButton, answer)
     )
+    if deferred_navigation:
+        # Model delivery after the wait loop decides to quit, before exec() returns.
+        # The old idle predicate can be true before navigation creates its detail job.
+        pending = []
+        delivered = []
+        single_shot = QTimer.singleShot
+        exec_loop = QEventLoop.exec
+
+        def deliver_navigation():
+            if pending:
+                pending.pop(0)()
+                delivered.append(True)
+
+        def schedule(interval, callback):
+            if getattr(callback, "__name__", "") == "continue_if_current":
+                pending.append(callback)
+                single_shot(20, deliver_navigation)
+            else:
+                single_shot(interval, callback)
+
+        def run_loop(loop, *args):
+            result = exec_loop(loop, *args)
+            deliver_navigation()
+            return result
+
+        monkeypatch.setattr(QTimer, "singleShot", staticmethod(schedule))
+        monkeypatch.setattr(QEventLoop, "exec", run_loop)
     try:
         open_ready(qt_app, window, controller, database)
         begin_batch(qt_app, window, controller, (first.file_id, second.file_id))
         # Mixed artists are left blank; explicitly applying that field clears both.
         window.batch_fields["artists"].setChecked(True)
+        loaded = QSignalSpy(controller.detail_loaded)
         window.select_files((second.file_id,))
-        wait_until(qt_app, lambda: not controller._jobs and not controller.saving)
+        # Saving can become idle before its deferred navigation starts another job.
+        # Wait for the destination detail as well, so the condition stays true.
+        wait_until(
+            qt_app,
+            lambda: (
+                not controller._jobs
+                and not controller.saving
+                and (
+                    answer == "Cancel"
+                    or (
+                        window.selected_file_ids() == (second.file_id,)
+                        and loaded.count() > 0
+                        and loaded.at(loaded.count() - 1) == [second.file_id]
+                    )
+                )
+            ),
+        )
         if answer == "Cancel":
             assert window.selected_file_ids() == (first.file_id, second.file_id)
             assert window.edit_dirty()
             assert window.batch_fields["artists"].isChecked()
             controller.cancel_edit()
             wait_until(qt_app, lambda: not controller._jobs)
-        else:
-            wait_until(qt_app, lambda: window.selected_file_ids() == (second.file_id,))
         for entry in (first, second):
             actual = read_entry(database, entry.file_id)
             assert actual.metadata == (
                 replace(entry.metadata, artists=()) if answer == "Save" else entry.metadata
             )
+        if deferred_navigation:
+            assert delivered == [True]
     finally:
         teardown(window, controller)
 
