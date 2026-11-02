@@ -1,7 +1,5 @@
 # Trackfolio
 
-Trackfolio es una aplicación multiplataforma para consultar y editar un catálogo de bibliotecas FLAC y MP3. Usa Python, Qt 6 mediante PySide6 y SQLite mediante SQLAlchemy. El dominio y los casos de uso son independientes de la GUI, para poder añadir interfaces CLI/TUI o un servidor con frontend web.
-=======
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20GNU%2FLinux%20%7C%20macOS-blue)
 ![Python](https://img.shields.io/badge/python-3.13-blue)
 ![PySide6](https://img.shields.io/badge/PySide6-6.11.2-blue)
@@ -9,7 +7,7 @@ Trackfolio es una aplicación multiplataforma para consultar y editar un catálo
 [![License](https://img.shields.io/badge/license-GPLv3-green)](LICENSE)
 [![Build and tests](https://github.com/Evilchuck666/Trackfolio/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/Evilchuck666/Trackfolio/actions/workflows/release.yml)
 
-Trackfolio será una aplicación multiplataforma para administrar metadatos de bibliotecas FLAC y MP3. Usará Python, Qt 6 mediante PySide6 y SQLite mediante SQLAlchemy. El dominio y los casos de uso serán independientes de la GUI, para poder añadir interfaces CLI/TUI o un servidor con frontend web.
+Trackfolio es una aplicación multiplataforma para consultar y editar un catálogo de bibliotecas FLAC y MP3. Usa Python, Qt 6 mediante PySide6 y SQLite mediante SQLAlchemy. El dominio y los casos de uso son independientes de la GUI, para poder añadir interfaces CLI/TUI o un servidor con frontend web.
 
 La GUI importa carpetas FLAC/MP3 y permite editar canción, artistas, álbum, año, numeración, géneros y líricas en SQLite. Los campos ausentes quedan vacíos. El importador conserva las carátulas incrustadas o procedentes de `album.jpg`. Las ediciones se guardan en el catálogo y pueden escribirse en los archivos mediante una acción explícita con vista previa y respaldo.
 
