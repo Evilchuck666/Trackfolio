@@ -400,3 +400,24 @@ El workflow se renombra de `checks.yml` a `release.yml`, con uv 0.13.4 en
 las cuatro plataformas. La preparación inicial de Linux y Windows comprueba
 las versiones de ambos binarios locales. La ejecución de esta revisión en
 GitHub Actions y la revisión visual manual de Windows/macOS siguen pendientes.
+
+## Selección y edición en grupo (2026-11-02)
+
+Validación local en GNU/Linux x86-64, CPython 3.13.15 y Qt 6.11.2 con backend
+`offscreen`:
+
+- Suite completa: **456 passed, 4 skipped**; las cuatro omisiones requieren PowerShell.
+- Ruff, formato y mypy: correctos.
+- Diagnóstico `doctor.py --gui --platform offscreen`: cero errores, incluidos recursos,
+  importación y edición del catálogo.
+- Selección múltiple con Ctrl/Cmd y Mayús, edición de álbum/artistas/año/géneros,
+  valores distintos, borrado explícito y campos individuales deshabilitados.
+- Guardado con SQLite real: cambios limitados a la selección, pistas compartidas,
+  detección de conflictos antes de escribir y rollback ante un fallo posterior.
+- Guardar/Descartar/Cancelar al navegar, selección conservada al guardar y actualizar,
+  y salida del editor cuando no hay cambios efectivos.
+- Renderizados revisados a 960×640 y 1320×840; acciones de guardado fuera del área
+  desplazable y pruebas de geometría para evitar recortes de los controles de grupo.
+
+Esta comprobación no incluye una ejecución nueva de CI ni una revisión de escritorio
+nativo en Windows/macOS para la edición en grupo.

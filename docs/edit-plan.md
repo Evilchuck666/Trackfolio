@@ -33,8 +33,16 @@ conservando los créditos de las demás canciones y la identidad de ambos artist
 Son los diez campos que muestra actualmente el detalle. Fecha y artistas de álbum,
 portada, rutas y propiedades técnicas conservarán sus valores. El año se tratará como
 un dato explícito del catálogo: cambiarlo no reescribirá la fecha de álbum importada.
-La edición por lotes, el renombrado global de artistas y la gestión de álbumes completos
-quedan para entregas posteriores.
+La edición por lotes se añadió posteriormente: permite seleccionar varios `file_id` y
+aplicar álbum, artistas, año y géneros mediante `UpdateCatalogTracks`. La GUI muestra
+los valores comunes y distingue los diferentes; únicamente se aplican los campos
+marcados, incluidas las eliminaciones explícitas. Título, numeración y líricas quedan
+deshabilitados. El adaptador comprueba todas las instantáneas antes de escribir y guarda
+el grupo en una única transacción, preservando los archivos no seleccionados aunque
+compartan pista o álbum. La selección se mantiene al guardar y actualizar; los borradores
+se protegen al navegar, importar, abrir otro catálogo y cerrar.
+El renombrado global de artistas y la gestión de álbumes completos quedan para entregas
+posteriores.
 
 ## 1. Reglas de edición y validación
 

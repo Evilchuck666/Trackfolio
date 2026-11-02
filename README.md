@@ -121,6 +121,15 @@ Las correcciones se guardan sólo en SQLite. **Reimportar la música sustituye l
 del catálogo por las etiquetas de los archivos**, incluidas las correcciones manuales.
 Consulta el [plan de edición implementado](docs/edit-plan.md).
 
+Para editar en grupo, selecciona varias canciones con **Ctrl/Cmd + clic**, **Mayús + clic**
+o **Ctrl/Cmd + A** y pulsa **Editar N canciones**. Puedes cambiar **Álbum, Artista(s), Año
+y Género(s)**; los campos individuales quedan deshabilitados. Marca **Aplicar** en los
+campos que quieras reemplazar en todas las seleccionadas. Los valores distintos se
+indican en el editor y los campos sin marcar se conservan; aplicar un campo vacío lo
+borra en todo el grupo. Artistas y géneros sustituyen la lista completa por la elegida.
+El guardado es una única transacción: si una canción cambió externamente o falla la
+escritura, no se guarda ninguna y el borrador se conserva para revisarlo.
+
 ## Importar música
 
 1. Pulsa **Importar música…** (`Ctrl+I`).

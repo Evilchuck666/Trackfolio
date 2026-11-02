@@ -152,6 +152,82 @@ def test_number_total_validation_does_not_block_unrelated_edits(window):
     assert window.edit_patch().as_dict()["track_total"] is None
 
 
+def test_batch_draft_only_applies_checked_fields_and_can_clear_mixed_values(window):
+    window.begin_batch_edit(
+        (
+            EditableValues(album="First", artists=("A",), album_year=1981, genres=("Metal",)),
+            EditableValues(album="Second", artists=("B",), album_year=1981, genres=("Rock",)),
+        )
+    )
+    assert window.edit_patch().empty
+    assert not window.save_button.isEnabled()
+    for key in ("title", "track_number", "track_total", "disc_number", "disc_total"):
+        assert not window.fields[key].isEnabled()
+    assert not window.lyrics.isEnabled()
+    assert window.fields["album_year"].text() == "1981"
+    assert window.fields["album"].placeholderText() == "Valores distintos"
+    assert "Valores distintos" in window.batch_fields["artists"].toolTip()
+    window.batch_fields["album"].setChecked(True)
+    assert window.fields["album"].isEnabled()
+    assert window.edit_patch().as_dict() == {"album": None}
+    window.batch_fields["artists"].setChecked(True)
+    assert window.edit_patch().as_dict() == {"album": None, "artists": ()}
+    window.batch_fields["album"].setChecked(False)
+    assert window.edit_patch().as_dict() == {"artists": ()}
+    assert window.save_button.isEnabled()
+    window.set_edit_state(False)
+    window.begin_edit(EditableValues(title="Individual"))
+    assert window.fields["title"].isEnabled()
+    assert window.lyrics.isEnabled()
+    assert window.batch_fields["album"].isHidden()
+    assert window.fields["album"].placeholderText() == ""
+
+
+def test_ctrl_and_shift_allow_multiple_song_selection(window):
+    load_detail(window)
+    second = window.table.visualRect(window.model.index(1, 0)).center()
+    QTest.mouseClick(
+        window.table.viewport(),
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.ControlModifier,
+        second,
+    )
+    assert window.selected_file_ids() == (1, 2)
+
+    assert "2 canciones" in window.edit_button.text()
+    # Clicking without modifiers restores an individual selection.
+    QTest.mouseClick(window.table.viewport(), Qt.MouseButton.LeftButton, pos=second)
+    assert window.selected_file_ids() == (2,)
+    first = window.table.visualRect(window.model.index(0, 0)).center()
+    QTest.mouseClick(
+        window.table.viewport(),
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.ShiftModifier,
+        first,
+    )
+    assert window.selected_file_ids() == (1, 2)
+
+
+@pytest.mark.parametrize("size", [(960, 640), (1320, 840)])
+def test_batch_editor_keeps_actions_visible_while_scrolling(window, qt_app, size):
+    window.resize(*size)
+    load_detail(window)
+    window.select_files((1, 2))
+    window.begin_batch_edit((EditableValues(artists=("A",)), EditableValues(artists=("B",))))
+    qt_app.processEvents()
+    scroll = window._detail_scroll
+    scroll.verticalScrollBar().setValue(scroll.verticalScrollBar().maximum())
+    qt_app.processEvents()
+    for button in (window.save_button, window.cancel_edit_button):
+        assert button.isVisible()
+        assert window.rect().contains(button.mapTo(window, button.rect().center()))
+    viewport = scroll.viewport()
+    add = window.ordered_labels["artists"].add_button
+    assert add.mapTo(viewport, add.rect().topRight()).x() < viewport.width()
+    year = window.fields["album_year"]
+    assert year.mapTo(viewport, year.rect().topRight()).x() < viewport.width()
+
+
 def test_ordered_labels_add_remove_and_move_complete_exact_names(qt_app):
     widget = OrderedLabels("Artista(s)")
     widget.show()

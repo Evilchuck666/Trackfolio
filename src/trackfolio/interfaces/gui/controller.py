@@ -18,10 +18,13 @@ from trackfolio.application.edit_catalog import (
     CatalogEditOutcome,
     CatalogEditSessionFactory,
     CatalogEditValidationError,
+    CatalogRecordMissing,
     FindArtists,
     FindGenres,
     GetEditableTrack,
     UpdateCatalogTrack,
+    UpdateCatalogTracks,
+    validate_batch_edit,
     validate_edit_patch,
 )
 from trackfolio.application.import_catalog import (
@@ -162,6 +165,7 @@ class CatalogController(QObject):
         self._importer = importer
         self._edit_factory = edit_factory
         self._edit_snapshot: EditableTrack | None = None
+        self._batch_snapshots: tuple[EditableTrack, ...] = ()
         self._edit_path: Path | None = None
         self._displayed_entry: CatalogEntry | None = None
         self._edit_token = 0
@@ -169,7 +173,9 @@ class CatalogController(QObject):
         self._artist_token = 0
         self._genre_token = 0
         self._saving = False
-        self._pending_save: tuple[Path, EditableTrack, TrackEditPatch] | None = None
+        self._pending_save: (
+            tuple[Path, EditableTrack | tuple[EditableTrack, ...], TrackEditPatch] | None
+        ) = None
         self._after_save: Callable[[], None] | None = None
         self._import_directory = import_directory or Path.home()
         self._pending_import: ImportRequest | None = None
@@ -193,11 +199,12 @@ class CatalogController(QObject):
         self._closed = False
         window.open_requested.connect(self.choose_catalog)
         window.refresh_requested.connect(self.refresh)
-        window.track_selected.connect(self.select_track)
+        window.tracks_selected.connect(self.select_tracks)
         window.closing.connect(self.shutdown)
         window.import_requested.connect(self.choose_import)
         window.close_guard = self.request_close
         window.selection_guard = self._allow_selection
+        window.selection_group_guard = self._allow_group_selection
         window.edit_requested.connect(self.start_edit)
         window.save_requested.connect(self.save_edit)
         window.cancel_edit_requested.connect(self.cancel_edit)
@@ -213,6 +220,7 @@ class CatalogController(QObject):
         self._artist_token += 1
         self._genre_token += 1
         self._edit_snapshot = None
+        self._batch_snapshots = ()
         self._edit_path = None
         self.window.set_edit_state(False)
         self.window.set_detail(self._displayed_entry)
@@ -220,7 +228,11 @@ class CatalogController(QObject):
     def _confirm_unsaved(self) -> QMessageBox.StandardButton:
         dialog = QMessageBox(self.window)
         dialog.setWindowTitle("Cambios sin guardar")
-        dialog.setText("Hay cambios sin guardar en esta canción.")
+        dialog.setText(
+            "Hay cambios sin guardar en estas canciones."
+            if self._batch_snapshots
+            else "Hay cambios sin guardar en esta canción."
+        )
         dialog.setInformativeText("Puedes guardarlos, descartarlos o seguir editando.")
         dialog.setStandardButtons(
             QMessageBox.StandardButton.Save
@@ -260,12 +272,16 @@ class CatalogController(QObject):
     def _allow_selection(self, file_id: int) -> bool:
         return self._guard_edit(lambda: self.window.select_file(file_id))
 
+    def _allow_group_selection(self, file_ids: tuple[int, ...]) -> bool:
+        return self._guard_edit(lambda: self.window.select_files(file_ids))
+
     def _request_window_close(self) -> None:
         self.window.close()
 
     @Slot()
     def start_edit(self) -> None:
         file_id = self.window.current_file_id()
+        file_ids = self.window.selected_file_ids()
         if (
             self._closed
             or self._close_pending
@@ -288,10 +304,20 @@ class CatalogController(QObject):
         self.window.set_error("")
         self.window.set_status("Preparando edición…")
 
-        def load() -> EditableTrack | None:
+        def load() -> EditableTrack | tuple[EditableTrack, ...] | None:
             session = factory.open_reader(path)
             try:
-                return GetEditableTrack(session).execute(file_id)
+                if len(file_ids) <= 1:
+                    return GetEditableTrack(session).execute(file_id)
+                originals = []
+                for selected_id in file_ids:
+                    item = GetEditableTrack(session).execute(selected_id)
+                    if item is None:
+                        raise CatalogRecordMissing(
+                            "Una canción ya no existe. Actualiza el catálogo."
+                        )
+                    originals.append(item)
+                return tuple(originals)
             finally:
                 session.close()
 
@@ -322,7 +348,11 @@ class CatalogController(QObject):
         ):
             return
         try:
-            patch = validate_edit_patch(self._edit_snapshot.values, self.window.edit_patch())
+            if self._batch_snapshots:
+                patch = self.window.edit_patch()
+                validate_batch_edit(self._batch_snapshots, patch)
+            else:
+                patch = validate_edit_patch(self._edit_snapshot.values, self.window.edit_patch())
         except CatalogEditValidationError as exc:
             self.window.set_field_errors({error.field: error.message for error in exc.errors})
             self.window.set_error(str(exc))
@@ -333,7 +363,7 @@ class CatalogController(QObject):
                 continuation()
             return
         self._after_save = continuation
-        self._pending_save = (self._edit_path, self._edit_snapshot, patch)
+        self._pending_save = (self._edit_path, self._batch_snapshots or self._edit_snapshot, patch)
         self._saving = True
         self._save_token += 1
         self._list_token += 1
@@ -358,13 +388,22 @@ class CatalogController(QObject):
         path, original, patch = self._pending_save
         self._pending_save = None
         assert self._edit_factory is not None
-        updater = UpdateCatalogTrack(self._edit_factory)
-        self._submit(
-            lambda: updater.execute(path, original, patch),
-            "save",
-            self._save_token,
-            selected_id=original.file_id,
-        )
+        if isinstance(original, tuple):
+            batch_updater = UpdateCatalogTracks(self._edit_factory)
+            self._submit(
+                lambda: batch_updater.execute(path, original, patch),
+                "save",
+                self._save_token,
+                selected_id=original[0].file_id,
+            )
+        else:
+            updater = UpdateCatalogTrack(self._edit_factory)
+            self._submit(
+                lambda: updater.execute(path, original, patch),
+                "save",
+                self._save_token,
+                selected_id=original.file_id,
+            )
 
     @Slot(str, str)
     def find_suggestions(self, field: str, query: str) -> None:
@@ -645,6 +684,16 @@ class CatalogController(QObject):
         self.window.set_status("Actualizando catálogo…")
         self._submit(ListTrackSummaries(session).execute, "list", self._list_token, session)
 
+    @Slot(object)
+    def select_tracks(self, file_ids: tuple[int, ...]) -> None:
+        if file_ids:
+            self.select_track(file_ids[0])
+        else:
+            self._edit_token += 1
+            self._detail_token += 1
+            self._displayed_entry = None
+            self.window.set_detail(None)
+
     @Slot(int)
     def select_track(self, file_id: int) -> None:
         if self._closed or self.importing or self.saving or self._session is None:
@@ -724,7 +773,10 @@ class CatalogController(QObject):
             self._count = len(summaries)
             self.window.set_status(self._status())
             self.window.set_catalog(
-                self._session.database_path, summaries, self.window.current_file_id()
+                self._session.database_path,
+                summaries,
+                self.window.current_file_id(),
+                selected_file_ids=self.window.selected_file_ids(),
             )
             self.catalog_loaded.emit()
         elif job.kind == "detail":
@@ -737,6 +789,16 @@ class CatalogController(QObject):
                 else "El registro ya no está disponible. Actualiza el catálogo."
             )
             self.detail_loaded.emit(job.selected_id)
+        elif job.kind == "edit" and isinstance(result, tuple) and self._session is not None:
+            originals = cast(tuple[EditableTrack, ...], result)
+            self._batch_snapshots = originals
+            self._edit_snapshot = originals[0]
+            self._edit_path = self._session.database_path
+            self.window.begin_batch_edit(tuple(item.values for item in originals))
+            self.window.set_status(f"Editando {len(originals)} canciones · Cambios en el catálogo")
+            self.edit_started.emit(originals[0].file_id)
+            self.find_suggestions("artists", "")
+            self.find_suggestions("genres", "")
         elif job.kind == "edit" and isinstance(result, EditableTrack) and self._session is not None:
             self._edit_snapshot = result
             self._edit_path = self._session.database_path
@@ -776,18 +838,33 @@ class CatalogController(QObject):
             self.window.set_status("No se guardaron los cambios. El borrador se conserva.")
             self.edit_finished.emit(None)
             return
-        outcome = cast(CatalogEditOutcome | None, job.task.result)
+        result = job.task.result
+        outcomes = (
+            cast(tuple[CatalogEditOutcome, ...], result)
+            if isinstance(result, tuple)
+            else (result,)
+            if isinstance(result, CatalogEditOutcome)
+            else ()
+        )
         self._reset_edit()
-        if outcome is not None:
-            self._displayed_entry = outcome.entry
-            self.window.model.update_summary(outcome.summary)
-            self.window.set_detail(outcome.entry)
-            self.window.set_error(outcome.warning or "")
-            self.window.set_status(
-                f"Cambios guardados. Respaldo anterior: {outcome.backup_path}"
-                if outcome.backup_path is not None
+        for saved in outcomes:
+            self.window.model.update_summary(saved.summary)
+        if outcomes:
+            first = outcomes[0]
+            self._displayed_entry = first.entry
+            self.window.set_detail(first.entry)
+            self.window.set_error(next((item.warning for item in outcomes if item.warning), ""))
+            message = (
+                f"Cambios guardados en {len(outcomes)} canciones."
+                if len(outcomes) > 1
                 else "Cambios guardados en el catálogo."
             )
+            if first.backup_path is not None:
+                message += f" Respaldo anterior: {first.backup_path}"
+            self.window.set_status(message)
+        else:
+            self.window.set_status("No hay cambios que guardar.")
+        outcome = result
         if self._close_pending:
             self._close_when_idle()
         generation = (

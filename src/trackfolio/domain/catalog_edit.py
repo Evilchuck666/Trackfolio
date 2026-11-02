@@ -32,6 +32,7 @@ EDIT_FIELDS: tuple[EditField, ...] = (
     "genres",
     "lyrics",
 )
+BATCH_EDIT_FIELDS: tuple[EditField, ...] = ("album", "artists", "album_year", "genres")
 
 
 @dataclass(frozen=True, slots=True)

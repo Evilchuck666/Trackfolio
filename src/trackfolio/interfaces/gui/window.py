@@ -8,6 +8,7 @@ from typing import cast
 
 from PySide6.QtCore import (
     QEvent,
+    QItemSelectionModel,
     QModelIndex,
     QObject,
     QPoint,
@@ -31,6 +32,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QCheckBox,
     QFrame,
     QGridLayout,
     QHBoxLayout,
@@ -50,7 +52,13 @@ from PySide6.QtWidgets import (
 )
 
 from trackfolio.domain.catalog import CatalogEntry, CatalogSummary
-from trackfolio.domain.catalog_edit import EditableValues, EditField, FieldChange, TrackEditPatch
+from trackfolio.domain.catalog_edit import (
+    BATCH_EDIT_FIELDS,
+    EditableValues,
+    EditField,
+    FieldChange,
+    TrackEditPatch,
+)
 from trackfolio.interfaces.gui.catalog_model import CatalogTableModel
 from trackfolio.interfaces.gui.ordered_labels import OrderedLabels
 from trackfolio.interfaces.gui.theme import icon
@@ -239,6 +247,7 @@ class MainWindow(QMainWindow):
     import_requested = Signal()
     refresh_requested = Signal()
     track_selected = Signal(int)
+    tracks_selected = Signal(object)
     edit_requested = Signal()
     save_requested = Signal()
     cancel_edit_requested = Signal()
@@ -261,13 +270,17 @@ class MainWindow(QMainWindow):
         self._importing = False
         self.close_guard: Callable[[], bool] | None = None
         self.selection_guard: Callable[[int], bool] | None = None
+        self.selection_group_guard: Callable[[tuple[int, ...]], bool] | None = None
         self._current_file_id: int | None = None
+        self._selected_file_ids: tuple[int, ...] = ()
         self._detail_loaded = False
         self._edit_enabled = False
         self._editing = False
         self._saving = False
         self._updating_edit = False
         self._edit_values: EditableValues | None = None
+        self._batch_count = 0
+        self.batch_fields: dict[str, QCheckBox] = {}
         self._edit_valid = True
         self._dirty = False
         self._system_frame = False
@@ -378,7 +391,7 @@ class MainWindow(QMainWindow):
         self.table.setObjectName("CatalogTable")
         self.table.setModel(self.model)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setAlternatingRowColors(False)
         self.table.setShowGrid(False)
@@ -393,7 +406,7 @@ class MainWindow(QMainWindow):
         for column, width in enumerate((176, 112, 126, 56, 160)):
             self.table.setColumnWidth(column, width)
         self.table.setAccessibleName("Canciones del catálogo")
-        self.table.selectionModel().currentRowChanged.connect(self._selection_changed)
+        self.table.selectionModel().selectionChanged.connect(self._selection_changed)
         layout.addWidget(self.table, 1)
         self.empty_label = QLabel("Abre un catálogo o importa una carpeta de música.", panel)
         self.empty_label.setObjectName("EmptyCatalog")
@@ -423,6 +436,14 @@ class MainWindow(QMainWindow):
         self.fields[key] = value
         caption.setBuddy(value)
         layout.addWidget(caption)
+        if key in BATCH_EDIT_FIELDS:
+            apply_field = QCheckBox("Aplicar", container)
+            apply_field.hide()
+            apply_field.toggled.connect(
+                lambda _checked, field=key: self._batch_field_changed(field)
+            )
+            self.batch_fields[key] = apply_field
+            layout.addWidget(apply_field)
         layout.addWidget(value)
         value.textEdited.connect(lambda _text, field=key: self._draft_changed(field))
         if key in ("artists", "genres"):
@@ -444,19 +465,30 @@ class MainWindow(QMainWindow):
         return container
 
     def _build_detail(self) -> QWidget:
-        scroll = QScrollArea(self)
+        container = QFrame(self)
+        container.setObjectName("DetailPanel")
+        container_layout = QVBoxLayout(container)
+        container_layout.setContentsMargins(0, 0, 0, 0)
+        controls = QWidget(container)
+        controls_layout = QVBoxLayout(controls)
+        controls_layout.setContentsMargins(22, 20, 22, 0)
+        controls_layout.setSpacing(12)
+        container_layout.addWidget(controls)
+        scroll = QScrollArea(container)
+        self._detail_scroll = scroll
         scroll.setObjectName("DetailScroll")
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setMinimumWidth(390)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         panel = QFrame(scroll)
-        panel.setObjectName("DetailPanel")
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(22, 20, 22, 22)
+        layout.setContentsMargins(22, 12, 22, 22)
         layout.setSpacing(22)
         heading = QHBoxLayout()
         title = QLabel("DETALLE DE LA CANCIÓN", panel)
+        self.detail_heading = title
+        title.setWordWrap(True)
         title.setObjectName("SectionTitle")
         heading.addWidget(title)
         heading.addStretch()
@@ -482,13 +514,13 @@ class MainWindow(QMainWindow):
             button.setToolTip(f"{action.text()} ({action.shortcut().toString()})")
             button.clicked.connect(action.trigger)
             heading.addWidget(button)
-        layout.addLayout(heading)
+        controls_layout.addLayout(heading)
         self.edit_status = QLabel(panel)
         self.edit_status.setObjectName("MutedLabel")
         self.edit_status.setTextFormat(Qt.TextFormat.PlainText)
         self.edit_status.setWordWrap(True)
         self.edit_status.hide()
-        layout.addWidget(self.edit_status)
+        controls_layout.addWidget(self.edit_status)
         identification = QHBoxLayout()
         identification.setSpacing(18)
         self.cover = CoverLabel(panel)
@@ -538,7 +570,8 @@ class MainWindow(QMainWindow):
         lyrics_layout.addWidget(lyrics_error)
         layout.addLayout(lyrics_layout, 1)
         scroll.setWidget(panel)
-        return scroll
+        container_layout.addWidget(scroll, 1)
+        return container
 
     def _build_resize_handles(self) -> list[ResizeHandle]:
         edges = Qt.Edge
@@ -594,7 +627,11 @@ class MainWindow(QMainWindow):
         path: Path | None,
         rows: tuple[CatalogSummary, ...],
         selected_file_id: int | None = None,
+        selected_file_ids: tuple[int, ...] | None = None,
     ) -> None:
+        retained = selected_file_ids
+        if retained is None and selected_file_id is None and path == self._catalog_path:
+            retained = self._selected_file_ids
         preferred = selected_file_id
         if preferred is None and path == self._catalog_path:
             preferred = self._current_file_id
@@ -606,8 +643,14 @@ class MainWindow(QMainWindow):
         if row is None and rows:
             row = 0
         self._current_file_id = self.model.file_id_at(row) if row is not None else None
-        if row is not None:
-            self.table.selectRow(row)
+        selected = tuple(
+            file_id for file_id in (retained or ()) if self.model.row_for_file(file_id) is not None
+        )
+        if not selected and self._current_file_id is not None:
+            selected = (self._current_file_id,)
+        self._selected_file_ids = selected
+        self._current_file_id = selected[0] if selected else None
+        self._restore_selection()
         del blocker
         self.set_detail(None)
         self.count_label.setText(str(len(rows)))
@@ -622,43 +665,79 @@ class MainWindow(QMainWindow):
         self.set_busy(self._busy)
         if self._current_file_id is not None:
             self.track_selected.emit(self._current_file_id)
+        self.tracks_selected.emit(self._selected_file_ids)
 
-    def _selection_changed(self, current: QModelIndex, previous: QModelIndex) -> None:
+    def _selection_changed(self, *_args: object) -> None:
         if self._importing or self._saving:
             return
-        file_id = self.model.file_id_at(current.row()) if current.isValid() else None
-        if file_id == self._current_file_id:
+        ids = tuple(
+            cast(int, self.model.file_id_at(index.row()))
+            for index in sorted(
+                self.table.selectionModel().selectedRows(), key=lambda item: item.row()
+            )
+        )
+        if ids == self._selected_file_ids:
             return
-        if (
-            file_id is not None
-            and self.selection_guard is not None
-            and not self.selection_guard(file_id)
-        ):
+        file_id = ids[0] if ids else None
+        allowed = True
+        if self.selection_group_guard is not None:
+            allowed = self.selection_group_guard(ids)
+        elif file_id is not None and self.selection_guard is not None:
+            allowed = self.selection_guard(file_id)
+        if not allowed:
             self._restore_selection()
             return
+        self._selected_file_ids = ids
         self._current_file_id = file_id
         self.set_detail(None)
         if file_id is not None:
             self.track_selected.emit(file_id)
+        self.tracks_selected.emit(ids)
 
     def current_file_id(self) -> int | None:
         return self._current_file_id
 
+    def selected_file_ids(self) -> tuple[int, ...]:
+        return self._selected_file_ids
+
     def _restore_selection(self) -> None:
-        blocker = QSignalBlocker(self.table.selectionModel())
+        selection = self.table.selectionModel()
+        blocker = QSignalBlocker(selection)
+        selection.clearSelection()
+        for file_id in self._selected_file_ids:
+            row = self.model.row_for_file(file_id)
+            if row is not None:
+                selection.select(
+                    self.model.index(row, 0),
+                    QItemSelectionModel.SelectionFlag.Select
+                    | QItemSelectionModel.SelectionFlag.Rows,
+                )
         row = self.model.row_for_file(self._current_file_id)
-        if row is None:
-            self.table.clearSelection()
-            self.table.setCurrentIndex(QModelIndex())
-        else:
-            self.table.selectRow(row)
+        selection.setCurrentIndex(
+            self.model.index(row, 0) if row is not None else QModelIndex(),
+            QItemSelectionModel.SelectionFlag.NoUpdate,
+        )
         del blocker
+
+    def select_files(self, file_ids: tuple[int, ...]) -> None:
+        selection = self.table.selectionModel()
+        blocker = QSignalBlocker(selection)
+        selection.clearSelection()
+        for file_id in file_ids:
+            row = self.model.row_for_file(file_id)
+            if row is not None:
+                selection.select(
+                    self.model.index(row, 0),
+                    QItemSelectionModel.SelectionFlag.Select
+                    | QItemSelectionModel.SelectionFlag.Rows,
+                )
+        del blocker
+        self._selection_changed()
+        self._restore_selection()
 
     def select_file(self, file_id: int) -> None:
         """Continue a selection that the controller deferred while saving a draft."""
-        row = self.model.row_for_file(file_id)
-        if row is not None:
-            self.table.selectRow(row)
+        self.select_files((file_id,))
 
     def set_detail(self, entry: CatalogEntry | None) -> None:
         # Results from a query started before editing must never overwrite the draft.
@@ -696,6 +775,11 @@ class MainWindow(QMainWindow):
         self._update_actions()
 
     def begin_edit(self, values: EditableValues) -> None:
+        self._batch_count = 0
+        for field in self.fields.values():
+            field.setPlaceholderText("")
+        for labels in self.ordered_labels.values():
+            labels.name_edit.setPlaceholderText("Nombre completo")
         self._updating_edit = True
         self._edit_values = values
         self._editing = True
@@ -721,19 +805,60 @@ class MainWindow(QMainWindow):
         self._update_actions()
         self.fields["title"].setFocus()
 
+    def begin_batch_edit(self, values: tuple[EditableValues, ...]) -> None:
+        common = values[0].as_dict()
+        mixed = set()
+        for edit_field in common:
+            if any(getattr(item, edit_field) != common[edit_field] for item in values[1:]):
+                common[edit_field] = () if edit_field in ("artists", "genres") else None
+                mixed.add(edit_field)
+        self.begin_edit(
+            EditableValues(
+                album=cast(str | None, common["album"]),
+                artists=cast(tuple[str, ...], common["artists"]),
+                album_year=cast(int | None, common["album_year"]),
+                genres=cast(tuple[str, ...], common["genres"]),
+            )
+        )
+        self._batch_count = len(values)
+        for key, checkbox in self.batch_fields.items():
+            blocker = QSignalBlocker(checkbox)
+            checkbox.setChecked(False)
+            checkbox.setToolTip(
+                ("Valores distintos. " if key in mixed else "")
+                + "Reemplazar este campo en todas las canciones seleccionadas. "
+                "Un campo vacío elimina sus valores."
+            )
+            del blocker
+            self.fields[key].setPlaceholderText("Valores distintos" if key in mixed else "")
+            if key in self.ordered_labels and key in mixed:
+                self.ordered_labels[key].name_edit.setPlaceholderText("Valores distintos")
+        self.cover.set_cover(None)
+        self._update_actions()
+        self.batch_fields["artists"].setFocus()
+        self._detail_scroll.verticalScrollBar().setValue(0)
+
+    def _batch_field_changed(self, field: str) -> None:
+        self._update_actions()
+        self._draft_changed(field)
+
     def edit_patch(self) -> TrackEditPatch:
         """Collect only differences; the application validates the raw number strings."""
         if self._edit_values is None:
             return TrackEditPatch(())
         changes = []
         for key, field in self.fields.items():
+            if self._batch_count and (
+                key not in self.batch_fields or not self.batch_fields[key].isChecked()
+            ):
+                continue
             original = getattr(self._edit_values, key)
             if key in self.ordered_labels:
                 value: str | int | tuple[str, ...] | None = self.ordered_labels[key].names()
             else:
                 text = field.text()
                 if key in ("title", "album"):
-                    if text == (original or ""):
+                    if not self._batch_count and text == (original or ""):
                         continue
                     value = text if text.strip() else None
                 elif (
@@ -742,10 +867,10 @@ class MainWindow(QMainWindow):
                     value = int(text.strip())
                 else:
                     value = text.strip() or None
-            if value != original:
+            if self._batch_count or value != original:
                 changes.append(FieldChange(cast(EditField, key), value))
         lyrics = self.lyrics.toPlainText() or None
-        if lyrics != self._edit_values.lyrics:
+        if not self._batch_count and lyrics != self._edit_values.lyrics:
             changes.append(FieldChange("lyrics", lyrics))
         return TrackEditPatch(tuple(changes))
 
@@ -756,6 +881,9 @@ class MainWindow(QMainWindow):
         self._editing = editing
         self._saving = saving
         if not editing:
+            self._batch_count = 0
+            for field in self.fields.values():
+                field.setPlaceholderText("")
             self._edit_values = None
             self._dirty = False
             self._edit_valid = True
@@ -843,19 +971,31 @@ class MainWindow(QMainWindow):
             (self.cancel_edit_action, self.cancel_edit_button),
         ):
             button.setEnabled(action.isEnabled())
+        count = len(self._selected_file_ids)
+        self.detail_heading.setText(
+            f"{count} CANCIONES SELECCIONADAS" if count > 1 else "DETALLE DE LA CANCIÓN"
+        )
+        self.edit_button.setText(f"Editar {count} canciones" if count > 1 else "Editar")
         self.edit_button.setVisible(not self._editing)
         self.save_button.setVisible(self._editing)
         self.cancel_edit_button.setVisible(self._editing)
         for key, field in self.fields.items():
-            field.setReadOnly(not self._editing or key in self.ordered_labels)
-            field.setEnabled(not self._saving)
+            allowed = not self._batch_count or (
+                key in self.batch_fields and self.batch_fields[key].isChecked()
+            )
+            if key in self.batch_fields:
+                self.batch_fields[key].setVisible(self._editing and self._batch_count > 1)
+                self.batch_fields[key].setEnabled(not self._saving)
+            field.setReadOnly(not self._editing or not allowed or key in self.ordered_labels)
+            field.setEnabled(not self._saving and allowed)
             if key in self.ordered_labels:
                 field.setVisible(not self._editing)
                 labels = self.ordered_labels[key]
                 labels.setVisible(self._editing)
-                labels.setEnabled(not self._saving)
-        self.lyrics.setReadOnly(not self._editing)
-        self.lyrics.setEnabled(not self._saving)
+                labels.setEnabled(not self._saving and allowed)
+        self.lyrics.setReadOnly(not self._editing or bool(self._batch_count))
+        self.lyrics.setEnabled(not self._saving and not self._batch_count)
+        self.cover.setVisible(not self._batch_count)
         self.edit_status.setVisible(self._editing)
         self.edit_status.setText(
             "Guardando cambios…"
@@ -864,6 +1004,12 @@ class MainWindow(QMainWindow):
             if self.edit_dirty()
             else "Cambios en el catálogo"
         )
+        if self._batch_count:
+            self.edit_status.setText(
+                f"{self._batch_count} canciones · "
+                + self.edit_status.text()
+                + "\nMarca los campos que se reemplazarán en todas las seleccionadas."
+            )
 
     def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)

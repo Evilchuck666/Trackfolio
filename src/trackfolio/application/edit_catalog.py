@@ -10,6 +10,7 @@ from typing import Protocol, cast
 from trackfolio.application.catalog import CatalogAccessError
 from trackfolio.domain.catalog import CatalogEntry, CatalogSummary
 from trackfolio.domain.catalog_edit import (
+    BATCH_EDIT_FIELDS,
     EDIT_FIELDS,
     ArtistChoice,
     EditableTrack,
@@ -60,6 +61,10 @@ class CatalogEditRepository(Protocol):
     def find_genres(self, query: str) -> tuple[str, ...]: ...
 
     def apply_edit(self, original: EditableTrack, patch: TrackEditPatch) -> CatalogEditOutcome: ...
+
+    def apply_edits(
+        self, originals: tuple[EditableTrack, ...], patch: TrackEditPatch
+    ) -> tuple[CatalogEditOutcome, ...]: ...
 
 
 class CatalogEditSession(CatalogEditRepository, Protocol):
@@ -198,3 +203,48 @@ class UpdateCatalogTrack:
                 warning=f"Los cambios se guardaron, pero no se pudo cerrar el acceso: {exc}",
             )
         return outcome
+
+
+def validate_batch_edit(originals: tuple[EditableTrack, ...], patch: TrackEditPatch) -> None:
+    if not originals or len({item.file_id for item in originals}) != len(originals):
+        raise CatalogEditError("Selecciona canciones distintas para editar en grupo.")
+    if any(change.field not in BATCH_EDIT_FIELDS for change in patch.changes):
+        raise CatalogEditError("En grupo solo se pueden editar álbum, artistas, año y géneros.")
+    for original in originals:
+        validate_edit_patch(original.values, patch)
+
+
+class UpdateCatalogTracks:
+    """Apply explicitly chosen common values in a single catalog transaction."""
+
+    def __init__(self, factory: CatalogEditSessionFactory) -> None:
+        self.factory = factory
+
+    def execute(
+        self, database_path: Path, originals: tuple[EditableTrack, ...], patch: TrackEditPatch
+    ) -> tuple[CatalogEditOutcome, ...]:
+        validate_batch_edit(originals, patch)
+        if all(validate_edit_patch(item.values, patch).empty for item in originals):
+            return ()
+        session = self.factory.open_writer(database_path)
+        try:
+            outcomes = session.apply_edits(originals, patch)
+        except Exception as exc:
+            if isinstance(exc, CatalogEditError):
+                exc.backup_path = session.backup_path
+            try:
+                session.close()
+            except Exception as cleanup:
+                exc.add_note(f"No se pudo cerrar el acceso al catálogo: {cleanup}")
+            raise
+        try:
+            session.close()
+        except Exception as exc:
+            return tuple(
+                replace(
+                    outcome,
+                    warning=f"Los cambios se guardaron, pero no se pudo cerrar el acceso: {exc}",
+                )
+                for outcome in outcomes
+            )
+        return outcomes

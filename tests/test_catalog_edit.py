@@ -17,6 +17,7 @@ from trackfolio.application.edit_catalog import (
     FindGenres,
     GetEditableTrack,
     UpdateCatalogTrack,
+    UpdateCatalogTracks,
 )
 from trackfolio.domain.catalog_edit import FieldChange, TrackEditPatch
 from trackfolio.domain.metadata import Artwork, RawTagValue, TrackMetadata
@@ -106,6 +107,114 @@ def all_rows(repository):
             db.raw_tags,
         )
     }
+
+
+def test_batch_edit_preserves_individual_fields_and_unselected_tracks(
+    catalogue, tmp_path, rich_metadata
+):
+    path, repository = catalogue
+    entries = tuple(
+        repository.save(
+            replace(
+                rich_metadata,
+                title=f"Song {i}",
+                track_number=i,
+                artists=("Accept",) if i == 1 else ("Abbath",),
+            ),
+            tmp_path,
+            f"album/{i}.flac",
+        )
+        for i in (1, 2, 3)
+    )
+    originals = tuple(editable(path, item.file_id) for item in entries[:2])
+    # A value already present in the first song must still reach the second one.
+    changes = dict(album="New album", album_year=1981, artists=("Accept",), genres=("Rock",))
+    outcomes = UpdateCatalogTracks(SqliteCatalogEditSessionFactory()).execute(
+        path, originals, patch(**changes)
+    )
+    assert len(outcomes) == 2
+    for item in entries[:2]:
+        actual = repository.get(item.file_id)
+        assert actual.metadata == replace(item.metadata, **changes)
+    assert repository.get(entries[2].file_id) == entries[2]
+
+
+@pytest.mark.parametrize(
+    "field", ["title", "track_number", "track_total", "disc_number", "disc_total", "lyrics"]
+)
+def test_batch_rejects_individual_fields_before_opening_writer(catalogue, tmp_path, field):
+    path, repository = catalogue
+    item = repository.save(TrackMetadata(title="Song", audio_format="flac"), tmp_path, "a.flac")
+    with pytest.raises(CatalogEditError, match="En grupo"):
+        UpdateCatalogTracks(NeverWriterFactory()).execute(
+            path, (editable(path, item.file_id),), patch(**{field: None})
+        )
+
+
+def test_batch_conflict_saves_nothing(catalogue, tmp_path, rich_metadata):
+    path, repository = catalogue
+    entries = tuple(repository.save(rich_metadata, tmp_path, f"{i}.flac") for i in (1, 2))
+    originals = tuple(editable(path, item.file_id) for item in entries)
+    edit(path, entries[1].file_id, title="External edit")
+    before = all_rows(repository)
+    with pytest.raises(CatalogEditConflict):
+        UpdateCatalogTracks(SqliteCatalogEditSessionFactory()).execute(
+            path, originals, patch(album="Should roll back")
+        )
+    assert all_rows(repository) == before
+
+
+def test_batch_no_op_does_not_open_writer(catalogue, tmp_path, rich_metadata):
+    path, repository = catalogue
+    entries = tuple(repository.save(rich_metadata, tmp_path, f"{i}.flac") for i in (1, 2))
+    originals = tuple(editable(path, item.file_id) for item in entries)
+    assert (
+        UpdateCatalogTracks(NeverWriterFactory()).execute(
+            path, originals, patch(album=rich_metadata.album)
+        )
+        == ()
+    )
+
+
+def test_batch_rolls_back_even_after_a_write(catalogue, tmp_path, rich_metadata, monkeypatch):
+    from trackfolio.infrastructure.catalog_edit import _SqliteCatalogEditSession
+
+    path, repository = catalogue
+    entries = tuple(repository.save(rich_metadata, tmp_path, f"{i}.flac") for i in (1, 2))
+    originals = tuple(editable(path, item.file_id) for item in entries)
+    before = all_rows(repository)
+    write = _SqliteCatalogEditSession._write_patch
+
+    def fail_second(self, connection, snapshot, changes):
+        write(self, connection, snapshot, changes)
+        if snapshot.editable.file_id == entries[1].file_id:
+            raise CatalogEditError("Late failure")
+
+    monkeypatch.setattr(_SqliteCatalogEditSession, "_write_patch", fail_second)
+    with pytest.raises(CatalogEditError, match="Late failure"):
+        UpdateCatalogTracks(SqliteCatalogEditSessionFactory()).execute(
+            path, originals, patch(album="New album", artists=("New artist",))
+        )
+    assert all_rows(repository) == before
+
+
+def test_batch_with_shared_tracks_leaves_unselected_file_untouched(
+    catalogue, tmp_path, rich_metadata
+):
+    path, repository = catalogue
+    first = repository.save(rich_metadata, tmp_path, "album/1.flac")
+    selected_copy = share_track(repository, first.file_id, "album/2.flac")
+    unselected_copy = share_track(repository, first.file_id, "album/3.flac")
+    before = repository.get(unselected_copy)
+    originals = tuple(editable(path, file_id) for file_id in (first.file_id, selected_copy))
+    UpdateCatalogTracks(SqliteCatalogEditSessionFactory()).execute(
+        path, originals, patch(artists=("Accept",), album_year=None)
+    )
+    for original in originals:
+        assert repository.get(original.file_id).metadata == replace(
+            first.metadata, artists=("Accept",), album_year=None
+        )
+    assert repository.get(unselected_copy) == before
 
 
 class NeverWriterFactory:

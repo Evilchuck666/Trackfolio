@@ -20,6 +20,7 @@ from trackfolio.application.edit_catalog import (
     CatalogEditOutcome,
     CatalogEditSession,
     CatalogRecordMissing,
+    validate_batch_edit,
     validate_edit_patch,
 )
 from trackfolio.domain.catalog_edit import (
@@ -341,36 +342,55 @@ class _SqliteCatalogEditSession:
                 )
 
     def apply_edit(self, original: EditableTrack, patch: TrackEditPatch) -> CatalogEditOutcome:
+        return self._apply_edits((original,), patch)[0]
+
+    def apply_edits(
+        self, originals: tuple[EditableTrack, ...], patch: TrackEditPatch
+    ) -> tuple[CatalogEditOutcome, ...]:
+        validate_batch_edit(originals, patch)
+        return self._apply_edits(originals, patch)
+
+    def _apply_edits(
+        self, originals: tuple[EditableTrack, ...], patch: TrackEditPatch
+    ) -> tuple[CatalogEditOutcome, ...]:
         self._check_open()
         if not self._writable:
             raise CatalogEditError("La sesión de consulta no permite guardar cambios.")
-        normalized = validate_edit_patch(original.values, patch)
+        for original in originals:
+            validate_edit_patch(original.values, patch)
         try:
             with self._engine.begin() as connection:
-                # autocommit=False inicia una transacción diferida: reservar el
-                # escritor antes de leer evita comparar contra una versión vieja.
                 connection.exec_driver_sql("ROLLBACK")
                 connection.exec_driver_sql("BEGIN IMMEDIATE")
                 self._repository._validate_write_schema(connection)
-                snapshot = _read_snapshot(connection, original.file_id)
-                if snapshot is None:
-                    raise CatalogRecordMissing("La canción ya no existe en este catálogo.")
-                if (
-                    snapshot.editable.token != original.token
-                    or snapshot.editable.track_id != original.track_id
-                ):
-                    raise CatalogEditConflict(
-                        "La canción o sus relaciones cambiaron desde que empezaste a editar. "
-                        "Recarga el registro para revisar los valores actuales."
-                    )
-                normalized = validate_edit_patch(snapshot.editable.values, normalized)
-                if not normalized.empty:
-                    self._write_patch(connection, snapshot, normalized)
-                entry = self._repository.get_from_connection(connection, original.file_id)
-                summary = self._repository.summary_from_connection(connection, original.file_id)
-                if entry is None or summary is None:
-                    raise CatalogRecordMissing("La canción ya no existe en este catálogo.")
-            return CatalogEditOutcome(entry, summary, self.backup_path)
+                # Check every snapshot before modifying shared tracks or albums.
+                for original in originals:
+                    snapshot = _read_snapshot(connection, original.file_id)
+                    if snapshot is None:
+                        raise CatalogRecordMissing("Una canción ya no existe en este catálogo.")
+                    if (
+                        snapshot.editable.token != original.token
+                        or snapshot.editable.track_id != original.track_id
+                    ):
+                        raise CatalogEditConflict(
+                            "Una canción o sus relaciones cambiaron desde que empezaste a editar. "
+                            "Recarga la selección para revisar los valores actuales."
+                        )
+                for original in originals:
+                    # Previous writes in this transaction may separate a shared track.
+                    snapshot = _read_snapshot(connection, original.file_id)
+                    assert snapshot is not None
+                    normalized = validate_edit_patch(snapshot.editable.values, patch)
+                    if not normalized.empty:
+                        self._write_patch(connection, snapshot, normalized)
+                outcomes = []
+                for original in originals:
+                    entry = self._repository.get_from_connection(connection, original.file_id)
+                    summary = self._repository.summary_from_connection(connection, original.file_id)
+                    if entry is None or summary is None:
+                        raise CatalogRecordMissing("Una canción ya no existe en este catálogo.")
+                    outcomes.append(CatalogEditOutcome(entry, summary, self.backup_path))
+            return tuple(outcomes)
         except CatalogEditError as exc:
             exc.backup_path = self.backup_path
             raise

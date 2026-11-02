@@ -100,6 +100,130 @@ def teardown(window, controller):
     dispose_window(window)
 
 
+def begin_batch(app, window, controller, file_ids):
+    window.select_files(file_ids)
+    wait_until(app, lambda: not controller._jobs)
+    started = QSignalSpy(controller.edit_started)
+    QTest.mouseClick(window.edit_button, Qt.MouseButton.LeftButton)
+    wait_until(app, lambda: started.count() == 1 and not controller._jobs)
+    assert window.batch_fields["album"].isVisible()
+    assert not window.fields["title"].isEnabled()
+
+
+def test_batch_save_updates_all_selected_rows_and_preserves_selection(qt_app, edit_catalog):
+    database, first, second = edit_catalog
+    window, controller = create_window()
+    try:
+        open_ready(qt_app, window, controller, database)
+        begin_batch(qt_app, window, controller, (first.file_id, second.file_id))
+        window.batch_fields["album"].setChecked(True)
+        replace_text(window.fields["album"], "Compilation")
+        window.batch_fields["album_year"].setChecked(True)
+        replace_text(window.fields["album_year"], "1981")
+        window.batch_fields["artists"].setChecked(True)
+        artists = window.ordered_labels["artists"]
+        artists.name_edit.setText("Shared artist")
+        QTest.mouseClick(artists.add_button, Qt.MouseButton.LeftButton)
+        results = []
+        controller.edit_finished.connect(results.append)
+        QTest.mouseClick(window.save_button, Qt.MouseButton.LeftButton)
+        wait_until(qt_app, lambda: len(results) == 1 and not controller._jobs)
+        assert len(results[0]) == 2
+        assert window.selected_file_ids() == (first.file_id, second.file_id)
+        for entry in (first, second):
+            expected = replace(
+                entry.metadata, album="Compilation", album_year=1981, artists=("Shared artist",)
+            )
+            assert read_entry(database, entry.file_id).metadata == expected
+        assert all(row.album == "Compilation" for row in window.model.summaries())
+        assert all(row.artists == ("Shared artist",) for row in window.model.summaries())
+        controller.refresh()
+        wait_until(qt_app, lambda: not controller._jobs)
+        assert window.selected_file_ids() == (first.file_id, second.file_id)
+    finally:
+        teardown(window, controller)
+
+
+@pytest.mark.parametrize("answer", ["Cancel", "Discard", "Save"])
+def test_batch_unsaved_navigation_preserves_or_saves_whole_selection(
+    qt_app, edit_catalog, monkeypatch, answer
+):
+    database, first, second = edit_catalog
+    window, controller = create_window()
+    monkeypatch.setattr(
+        controller, "_confirm_unsaved", lambda: getattr(QMessageBox.StandardButton, answer)
+    )
+    try:
+        open_ready(qt_app, window, controller, database)
+        begin_batch(qt_app, window, controller, (first.file_id, second.file_id))
+        # Mixed artists are left blank; explicitly applying that field clears both.
+        window.batch_fields["artists"].setChecked(True)
+        window.select_files((second.file_id,))
+        wait_until(qt_app, lambda: not controller._jobs and not controller.saving)
+        if answer == "Cancel":
+            assert window.selected_file_ids() == (first.file_id, second.file_id)
+            assert window.edit_dirty()
+            assert window.batch_fields["artists"].isChecked()
+            controller.cancel_edit()
+            wait_until(qt_app, lambda: not controller._jobs)
+        else:
+            wait_until(qt_app, lambda: window.selected_file_ids() == (second.file_id,))
+        for entry in (first, second):
+            actual = read_entry(database, entry.file_id)
+            assert actual.metadata == (
+                replace(entry.metadata, artists=()) if answer == "Save" else entry.metadata
+            )
+    finally:
+        teardown(window, controller)
+
+
+def test_batch_conflict_keeps_whole_draft_without_partial_save(qt_app, edit_catalog):
+    database, first, second = edit_catalog
+    window, controller = create_window()
+    try:
+        open_ready(qt_app, window, controller, database)
+        begin_batch(qt_app, window, controller, (first.file_id, second.file_id))
+        window.batch_fields["album_year"].setChecked(True)
+        replace_text(window.fields["album_year"], "1981")
+        with closing(sqlite3.connect(database)) as external, external:
+            external.execute("UPDATE tracks SET title='External' WHERE id=?", (second.track_id,))
+        results = []
+        controller.edit_finished.connect(results.append)
+        QTest.mouseClick(window.save_button, Qt.MouseButton.LeftButton)
+        wait_until(qt_app, lambda: results == [None] and not controller._jobs)
+        assert window.selected_file_ids() == (first.file_id, second.file_id)
+        assert window.edit_dirty() and window.save_button.isEnabled()
+        assert window.fields["album_year"].text() == "1981"
+        assert read_entry(database, first.file_id) == first
+        assert read_entry(database, second.file_id).metadata.album_year == 2020
+        assert "cambiaron" in window.error_label.text()
+        controller.cancel_edit()
+    finally:
+        teardown(window, controller)
+
+
+def test_batch_applying_unchanged_value_exits_editor_without_stale_save_status(
+    qt_app, edit_catalog
+):
+    database, first, second = edit_catalog
+    window, controller = create_window()
+    try:
+        open_ready(qt_app, window, controller, database)
+        begin_batch(qt_app, window, controller, (first.file_id, second.file_id))
+        window.batch_fields["album"].setChecked(True)
+        results = []
+        controller.edit_finished.connect(results.append)
+        QTest.mouseClick(window.save_button, Qt.MouseButton.LeftButton)
+        wait_until(qt_app, lambda: results == [()] and not controller._jobs)
+        assert window.edit_button.isVisible()
+        assert not window.edit_dirty()
+        assert window.status_label.text() == "No hay cambios que guardar."
+        assert read_entry(database, first.file_id) == first
+        assert read_entry(database, second.file_id) == second
+    finally:
+        teardown(window, controller)
+
+
 def test_save_reopens_and_updates_summary_detail_and_unique_artist(qt_app, edit_catalog, tmp_path):
     database, first, second = edit_catalog
     preferences = CatalogPreferences(tmp_path / "settings.json")
