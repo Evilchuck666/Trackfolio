@@ -3,6 +3,7 @@
 
 import json
 import threading
+from pathlib import Path
 
 import pytest
 
@@ -275,7 +276,8 @@ def test_gui_updates_only_nfo_and_completes(qt_app, setup_tags, tmp_path):
     nfo = source.parent / "album.nfo"
     nfo.write_text(
         "<album><title>Outdated</title><track><position>1</position>"
-        "<title>Old song title</title><duration>5:35</duration></track></album>"
+        "<title>Old song title</title><duration>5:35</duration></track></album>",
+        encoding="utf-8",
     )
     original = source.read_bytes()
     window, controller = open_window(qt_app, setup_tags, entry)
@@ -297,13 +299,25 @@ def test_gui_updates_only_nfo_and_completes(qt_app, setup_tags, tmp_path):
         teardown(window, controller)
 
 
-def test_gui_nfo_error_exports_report_and_retry_updates_only_nfo(qt_app, setup_tags, tmp_path):
+@pytest.mark.parametrize("default_encoding", ["utf-8", "cp1252"])
+def test_gui_nfo_error_exports_report_and_retry_updates_only_nfo(
+    qt_app, setup_tags, tmp_path, monkeypatch, default_encoding
+):
+    read_text = Path.read_text
+
+    def read_with_locale(path, encoding=None, errors=None, newline=None):
+        return read_text(
+            path, encoding=encoding or default_encoding, errors=errors, newline=newline
+        )
+
+    # A UTF-8 report must round-trip Unicode paths even on a CP1252 desktop.
+    monkeypatch.setattr(Path, "read_text", read_with_locale)
     database, repository, _, _, _ = setup_tags
     source = make_source(tmp_path, "flac")
     entry = repository.save(read_metadata(source), source.parent, source.name)
     edit(database, entry.file_id, title="Publish this")
     nfo = source.parent / "album.nfo"
-    nfo.write_text("not XML")
+    nfo.write_text("not XML", encoding="utf-8")
     window, controller = open_window(qt_app, setup_tags, entry)
     try:
         dialog = open_dialog(qt_app, window, controller)
@@ -324,11 +338,11 @@ def test_gui_nfo_error_exports_report_and_retry_updates_only_nfo(qt_app, setup_t
         save = next(button for button in popup.buttons() if button.text() == "Guardar informe…")
         QTimer.singleShot(0, choose_report)
         QTest.mouseClick(save, Qt.MouseButton.LeftButton)
-        stored = json.loads(destination.read_text())
+        stored = json.loads(destination.read_text(encoding="utf-8"))
         assert stored["nfo_results"][0]["state"] == "failed"
         assert stored["nfo_results"][0]["path"] == str(nfo)
         wait_until(qt_app, lambda: dialog._error_popup is None)
-        nfo.write_text("<album/>")
+        nfo.write_text("<album/>", encoding="utf-8")
         QTest.mouseClick(dialog.write_button, Qt.MouseButton.LeftButton)
         wait_until(qt_app, lambda: dialog._report is not None and not controller._tag_running)
         assert dialog._report.results[0].state == "unchanged"
@@ -368,7 +382,7 @@ def test_errors_offer_export_in_popup_and_keep_successful_songs(qt_app, setup_ta
         save = next(button for button in popup.buttons() if button.text() == "Guardar informe…")
         QTimer.singleShot(0, choose_report)
         QTest.mouseClick(save, Qt.MouseButton.LeftButton)
-        stored = json.loads(destination.read_text())
+        stored = json.loads(destination.read_text(encoding="utf-8"))
         assert [item["state"] for item in stored["results"]] == ["confirmed", "excluded"]
         assert stored["results"][1]["message"]
         assert dialog.write_button.isEnabled()

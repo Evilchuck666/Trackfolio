@@ -733,3 +733,27 @@ Validación local de la corrección en Linux:
 
 Los cambios están en la rama local `main`. No se han publicado ni reejecutado los
 trabajos del commit antiguo: una nueva ejecución de CI con la corrección queda pendiente.
+
+### Lectura UTF-8 del informe exportado en las pruebas GUI de Windows (2026-11-03)
+
+Se revisó el nuevo archivo de registros `logs_112800516057.zip`. Windows ya superaba
+las pruebas del núcleo (**522 passed, 21 skipped**), la preparación y los diagnósticos
+GUI. La suite con GUI terminaba con **1 failed, 645 passed, 14 skipped**:
+`test_gui_nfo_error_exports_report_and_retry_updates_only_nfo` comparaba una ruta
+Unicode leída con la codificación regional contra la ruta original `Música Ω`.
+
+El exportador del producto ya escribe UTF-8 explícitamente. Faltaba especificarlo
+en las dos lecturas JSON de `tests/test_tag_write_gui.py`; ambas se corrigen, junto
+con la codificación de sus fixtures NFO. La prueba de exportación/reintento se ejecuta
+ahora con UTF-8 y CP1252 como codificaciones implícitas de pathlib, para reproducir
+el fallo de Windows también en Linux.
+
+La regresión se reprodujo primero en Linux con CP1252, obteniendo la misma alteración
+de caracteres que en el registro. Tras corregir las lecturas:
+
+- **655 passed, 6 skipped** en la suite completa local.
+- **109 pruebas NFO/GUI** pasan con CP1252 simulado para lecturas/escrituras de texto
+  sin codificación explícita, ampliando la comprobación anterior que sólo cubría NFO.
+- Las **20 pruebas del diálogo** pasan; Ruff, formato, mypy y `git diff --check` correctos.
+
+Corrección local en `main`, sin push. La nueva ejecución nativa de CI queda pendiente.
