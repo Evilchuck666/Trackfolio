@@ -38,6 +38,15 @@ _STATES = {
     "pending": "Pendiente",
 }
 
+_NFO_STATES = {
+    "updated": "NFO actualizado",
+    "unchanged": "NFO sin cambios",
+    "absent": "NFO ausente",
+    "pending": "NFO pendiente",
+    "conflict": "Conflicto NFO",
+    "failed": "NFO fallido",
+}
+
 
 def report_text(report: TagWriteReport) -> str:
     lines = ["Escritura de etiquetas" + (" · Cancelada" if report.cancelled else "")]
@@ -49,6 +58,12 @@ def report_text(report: TagWriteReport) -> str:
             lines.append(item.message)
         if item.backup_path:
             lines.append(f"Respaldo: {item.backup_path}")
+    for nfo in report.nfo_results:
+        lines.append(f"\n{nfo.path}\n{_NFO_STATES[nfo.state]}")
+        if nfo.message:
+            lines.append(nfo.message)
+        if nfo.backup_path:
+            lines.append(f"Respaldo: {nfo.backup_path}")
     if report.journal_path:
         lines.append(f"\nRegistro de recuperación: {report.journal_path}")
     return "\n".join(lines)
@@ -88,7 +103,8 @@ class TagWriteDialog(QDialog):
         layout.addWidget(heading)
         description = QLabel(
             "Se escribirán todas las etiquetas modificadas con los valores guardados "
-            "de cada canción. El respaldo se eliminará si todo termina correctamente.",
+            "de cada canción y se actualizará album.nfo si existe junto al audio. "
+            "El respaldo se eliminará si todo termina correctamente.",
             self,
         )
         description.setWordWrap(True)
@@ -160,6 +176,8 @@ class TagWriteDialog(QDialog):
             "checking": "Comprobando archivo",
             "backup": "Creando respaldo",
             "writing": "Escribiendo y verificando",
+            "nfo_reading": "Comprobando album.nfo",
+            "nfo_writing": "Actualizando album.nfo",
             "finished": "Escritura terminada",
         }
         phase = names.get(progress.phase, progress.phase)
@@ -190,6 +208,7 @@ class TagWriteDialog(QDialog):
             and not report.fatal_error
             and {item.file_id for item in report.results} == set(self.file_ids)
             and all(item.state in ("confirmed", "unchanged") for item in report.results)
+            and all(item.state in ("updated", "unchanged", "absent") for item in report.nfo_results)
         )
         self.set_busy(False)
         if report.fatal_error:
@@ -203,10 +222,21 @@ class TagWriteDialog(QDialog):
                 assert cell is not None
                 cell.setText(_STATES[item.state])
                 cell.setToolTip(item.message)
+        for nfo in report.nfo_results:
+            self.output.appendPlainText(f"{nfo.path} · {_NFO_STATES[nfo.state]}")
+            if nfo.message:
+                self.output.appendPlainText(nfo.message)
+            if nfo.backup_path:
+                self.output.appendPlainText(f"Respaldo: {nfo.backup_path}")
         written = sum(item.state in ("confirmed", "catalog_pending") for item in report.results)
         self.summary.setText(
             f"{'Escritura cancelada' if report.cancelled else 'Escritura terminada'} · "
             f"{written} archivos escritos."
+            + (
+                f" {sum(n.state == 'updated' for n in report.nfo_results)} NFO actualizados."
+                if report.nfo_results
+                else ""
+            )
         )
         self.progress.setRange(0, max(1, len(self.file_ids)))
         self.progress.setValue(sum(item.state != "pending" for item in report.results))
@@ -218,6 +248,11 @@ class TagWriteDialog(QDialog):
                 item.state in ("failed", "conflict", "catalog_pending")
                 or (item.state == "excluded" and item.message)
                 for item in report.results
+            )
+            or any(
+                item.state in ("failed", "conflict")
+                or (item.state == "pending" and not report.cancelled)
+                for item in report.nfo_results
             )
         ):
             self._offer_error_report()

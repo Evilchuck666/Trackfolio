@@ -6,6 +6,7 @@ import os
 from collections.abc import Callable
 from pathlib import Path
 
+from trackfolio.application.catalog import AUDIO_SUFFIXES
 from trackfolio.application.import_catalog import (
     AudioScanError,
     AudioSource,
@@ -50,9 +51,9 @@ class FileSystemAudioScanner:
                         continue
                     if entry.is_dir(follow_symlinks=False):
                         children.append(path)
-                    elif entry.is_file(follow_symlinks=False) and path.suffix.casefold() in (
-                        ".flac",
-                        ".mp3",
+                    elif (
+                        entry.is_file(follow_symlinks=False)
+                        and path.suffix.casefold() in AUDIO_SUFFIXES
                     ):
                         sources.append(AudioSource(path, path.relative_to(root).as_posix()))
                         on_discovered(len(sources))

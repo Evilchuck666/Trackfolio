@@ -6,6 +6,8 @@ from typing import Protocol
 from trackfolio.domain.catalog import CatalogEntry, CatalogSummary
 from trackfolio.domain.metadata import TrackMetadata
 
+AUDIO_SUFFIXES = (".flac", ".mp3")
+
 
 class CatalogAccessError(Exception):
     """Un catálogo no está accesible; el mensaje puede presentarse en cualquier interfaz."""

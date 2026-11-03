@@ -215,6 +215,9 @@ jobs:
                   "trackfolio/application/import_catalog.py",
                   "trackfolio/application/edit_catalog.py",
                   "trackfolio/application/write_tags.py",
+                  "trackfolio/application/album_nfo.py",
+                  "trackfolio/application/tag_write_errors.py",
+                  "trackfolio/infrastructure/album_nfo.py",
                   "trackfolio/domain/tag_write.py",
                   "trackfolio/infrastructure/tag_write.py",
                   "trackfolio/infrastructure/tag_write_files.py",
@@ -390,6 +393,17 @@ jobs:
           assert written.results[0].backup_path is None
           assert not (audio.parent / ".trackfolio-backups").exists()
           assert read_metadata(audio).title == "Written from installed core"
+          from trackfolio.application.write_tags import TagWriteService
+          from trackfolio.infrastructure.album_nfo import XmlAlbumNfoCodec
+          from xml.etree import ElementTree
+          nfo = audio.parent / "album.nfo"
+          nfo.write_text("<album><title>Outdated</title><review>Keep</review></album>")
+          sidecar = TagWriteService(tag_catalog, codec, tag_files, XmlAlbumNfoCodec()).execute(
+              target, (imported.file_id,))
+          assert sidecar.results[0].state == "unchanged", sidecar
+          assert sidecar.nfo_results[0].state == "updated", sidecar
+          assert ElementTree.parse(nfo).findtext("review") == "Keep"
+          assert not (audio.parent / ".trackfolio-backups").exists()
           assert find_spec("PySide6") is None
           legacy = target.with_name("legacy.tfo")
           with sqlite3.connect(legacy) as connection:
@@ -469,6 +483,7 @@ jobs:
           assert report["imported"] is True, report
           assert report["edited"] is True, report
           assert report["tags_written"] is True, report
+          assert report["nfo_written"] is True, report
           print("Wheel GUI instalado fuera del checkout:", report)
           """
               subprocess.run(

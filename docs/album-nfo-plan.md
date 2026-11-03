@@ -1,7 +1,12 @@
 # Plan de actualización opcional de album.nfo
 
-Estado: propuesta del 3 de noviembre de 2026, pendiente de implementación.
-Trabajo previsto sobre la rama local activa `update-nfo`, sin crear ramas ni publicar.
+Estado: implementado el 3 de noviembre de 2026 sobre la rama local `update-nfo`.
+La [guía de escritura](tag-writing.md#actualización-opcional-de-albumnfo) describe el uso
+y [VALIDATION.md](../VALIDATION.md) recoge la validación local y las plataformas pendientes.
+Este documento conserva el diseño de la entrega. No se han creado ramas ni publicado cambios.
+Corrección posterior: se amplía el alcance a los títulos `track/title` tras reproducir
+el caso «To War! → To War!2» de un NFO con lista de pistas. La primera entrega sólo
+sincronizaba los datos generales del álbum.
 
 ## Resultado esperado y alcance
 
@@ -40,6 +45,7 @@ No utilizar la primera canción ni el último archivo procesado como autoridad.
 | Año | Todos deben coincidir, incluida la ausencia de año. | `year`; actualizar también el año de `releasedate` si existe. |
 | Géneros | Unión sin duplicados exactos de los géneros de todas las pistas, ordenada por ruta relativa y orden de cada lista. | Un `genre` directo por valor. |
 | Artistas del álbum | Usar créditos `album_artists` coincidentes; si todos carecen de ellos, aceptar los artistas de pista únicamente cuando sean idénticos en todas las canciones. | `albumArtistCredits/artist`; actualizar `artistdesc` si existe. |
+| Título de canción | Actualizar sólo las canciones destinatarias, asociadas de forma única por posición y disco. | `track/title` de una lista existente. |
 
 No dividir nombres por separadores ni equiparar mayúsculas, espacios o variantes.
 Un valor vacío coherente elimina el elemento gestionado; no inventar año ni artista.
@@ -69,7 +75,9 @@ un valor, y evitar duplicados de campos escalares.
 
 Conservar reseñas, sellos, identificadores, imágenes, puntuaciones, campos desconocidos,
 atributos, comentarios e instrucciones de procesamiento. No reconstruir el documento
-desde una plantilla ni modificar listas de pistas anidadas, numeración o líricas.
+desde una plantilla. En listas de pistas existentes, actualizar los títulos de las
+canciones destinatarias conservando el resto de los datos, orden, numeración,
+duraciones y líricas. Sin correspondencia única por posición/disco, registrar conflicto.
 La conservación del contenido será semántica; una escritura puede normalizar el
 escape y la representación XML. Conservar codificación declarada, BOM y saltos de
 línea cuando el serializador lo permita; rechazar una codificación no soportada.
@@ -126,6 +134,8 @@ los trabajos pendientes.
 | --- | --- |
 | `domain/tag_write.py` | Añadir planes/resultados NFO y su colección separada en el informe, conservando los resultados musicales. |
 | `application/write_tags.py` | Contratos para lectura agregada y codec NFO; coordinación por carpeta, operaciones sólo NFO y finalización conjunta. |
+| `application/album_nfo.py` | Agregación, preparación, publicación y revisión técnica de los NFO mediante contratos. |
+| `application/tag_write_errors.py` | Errores compartidos entre escritura musical y NFO, reexportados por `write_tags.py` para compatibilidad. |
 | `infrastructure/album_nfo.py` (nuevo) | Análisis, diferencias, edición XML y verificación de preservación. |
 | `infrastructure/tag_write_catalog.py` | Consultar y revalidar valores de todas las pistas de la carpeta, incluidos créditos de álbum. |
 | `infrastructure/tag_write_files.py` | Primitivas compartidas, respaldo/publicación NFO, registro y limpieza conjunta. |
@@ -162,6 +172,8 @@ Añadir `tests/test_album_nfo.py` y ampliar las pruebas de escritura, limpieza y
 - NFO ausente, válido, ya actualizado, no compatible y malformado; entidades/DTD y límite.
 - Actualización de título, año/fecha, artistas y géneros; vaciados, Unicode y XML escapado.
 - Conservación de campos ajenos, comentarios, atributos, IDs y listas de pistas anidadas.
+- Corrección «To War! → To War!2» en `track/title`, con audio pendiente y ya actualizado;
+  selección parcial, títulos vacíos, discos distintos y posiciones ausentes/ambiguas.
 - Varias canciones comparten un NFO y sólo lo publican una vez; varias carpetas se aíslan.
 - Selección parcial consulta todo el álbum sin escribir audio fuera de la selección;
   álbumes contradictorios y pistas sin catalogar producen conflicto.

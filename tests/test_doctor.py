@@ -100,6 +100,7 @@ def test_headless_qt_success_does_not_claim_desktop_validation(doctor, monkeypat
         "imported": True,
         "edited": True,
         "tags_written": True,
+        "nfo_written": True,
     }
     output = doctor.QT_PROBE_PREFIX + json.dumps(report)
 
@@ -112,7 +113,7 @@ def test_headless_qt_success_does_not_claim_desktop_validation(doctor, monkeypat
     assert "no confirma el escritorio real" in result.detail
 
 
-@pytest.mark.parametrize("missing", ["imported", "edited", "tags_written"])
+@pytest.mark.parametrize("missing", ["imported", "edited", "tags_written", "nfo_written"])
 def test_qt_report_requires_import_and_edit_confirmation(doctor, monkeypatch, missing):
     report = {
         "platform": "offscreen",
@@ -122,6 +123,7 @@ def test_qt_report_requires_import_and_edit_confirmation(doctor, monkeypatch, mi
         "imported": True,
         "edited": True,
         "tags_written": True,
+        "nfo_written": True,
     }
     report.pop(missing)
     output = doctor.QT_PROBE_PREFIX + json.dumps(report)

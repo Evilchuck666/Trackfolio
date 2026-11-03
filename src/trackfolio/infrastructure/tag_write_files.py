@@ -16,16 +16,25 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any, cast
 
-from trackfolio.application.catalog import prepare_audio_source, validate_library_root
+from trackfolio.application.catalog import (
+    AUDIO_SUFFIXES,
+    prepare_audio_source,
+    validate_library_root,
+)
 from trackfolio.application.write_tags import (
     TagJournalError,
     TagPublishedError,
     TagWriteCancelled,
     TagWriteConflict,
     TagWriteError,
+    WriteTarget,
 )
 from trackfolio.domain.catalog_edit import EditableValues, EditField
 from trackfolio.domain.tag_write import (
+    AlbumNfoItem,
+    AlbumNfoSong,
+    AlbumNfoTrack,
+    AlbumNfoValues,
     FileFingerprint,
     PendingTagOperation,
     PlannedTags,
@@ -397,6 +406,41 @@ def _load_preview(data: dict[str, Any]) -> TagWritePreview:
         ),
         tuple(data["catalog_identity"]),
         tuple(items),
+        tuple(_load_nfo(value) for value in data.get("nfo_items", [])),
+    )
+
+
+def _load_nfo(value: dict[str, Any]) -> AlbumNfoItem:
+    values = value["values"]
+    return AlbumNfoItem(
+        path=Path(value["path"]),
+        library_root=Path(value["library_root"]),
+        file_ids=tuple(value["file_ids"]),
+        tracks=tuple(
+            AlbumNfoTrack(
+                **{
+                    **track,
+                    "album_artists": tuple(track["album_artists"]),
+                    "artists": tuple(track["artists"]),
+                    "genres": tuple(track["genres"]),
+                }
+            )
+            for track in value["tracks"]
+        ),
+        members=tuple(value["members"]),
+        values=AlbumNfoValues(
+            **{
+                **values,
+                "songs": tuple(AlbumNfoSong(**song) for song in values.get("songs", [])),
+                "genres": tuple(values["genres"]),
+                "artists": tuple(values["artists"]) if values["artists"] is not None else None,
+            }
+        )
+        if values is not None
+        else None,
+        fingerprint=FileFingerprint(**value["fingerprint"]) if value["fingerprint"] else None,
+        state=value["state"],
+        message=value["message"],
     )
 
 
@@ -424,6 +468,24 @@ class FileTagJournal:
             / f"{item.file_id}-{item.path.name}.tfo-bak",
             item.path.parent / f".trackfolio-{operation}-{item.file_id}.tmp",
         )
+
+    def nfo_state(self, item: AlbumNfoItem) -> TagRecoveryState:
+        value = self.data["nfos"][str(item.path)]
+        identity = value.get("temporary_identity")
+        return TagRecoveryState(
+            value["state"], value.get("after_hash"), tuple(identity) if identity else None
+        )
+
+    def nfo_paths(self, item: AlbumNfoItem) -> tuple[Path, Path]:
+        operation = self.data["preview"]["operation_id"]
+        return (
+            item.path.parent / ".trackfolio-backups" / operation / "nfo-album.nfo.tfo-bak",
+            item.path.parent / f".trackfolio-{operation}-album-nfo.tmp",
+        )
+
+    def record_nfo(self, item: AlbumNfoItem, state: str, **details: object) -> None:
+        self.data["nfos"][str(item.path)].update(state=state, **details)
+        self._save()
 
     def _save(self) -> None:
         temporary = None
@@ -465,11 +527,20 @@ class FileTagJournal:
 
     def finish(self, report: TagWriteReport) -> None:
         self.data["report"] = asdict(report)
-        self.data["closed"] = not report.fatal_error and not any(
-            item.state == "catalog_pending" for item in report.results
+        self.data["closed"] = (
+            not report.fatal_error
+            and not report.cancelled
+            and all(item.state in ("confirmed", "unchanged", "excluded") for item in report.results)
+            and all(item.state in ("updated", "unchanged", "absent") for item in report.nfo_results)
         )
         for result in report.results:
             self.data["files"][str(result.file_id)].update(state=result.state, error=result.message)
+        for nfo in report.nfo_results:
+            self.data["nfos"][str(nfo.path)].update(
+                state=nfo.state,
+                error=nfo.message,
+                published=nfo.published,
+            )
         self._save()
 
 
@@ -486,14 +557,53 @@ class FileTagAccess:
         return info.st_dev, info.st_ino
 
     def resolve(self, snapshot: TagCatalogSnapshot) -> Path:
-        root = validate_library_root(snapshot.library_root)
-        path, _ = prepare_audio_source(root / snapshot.relative_path, root)
+        return self.resolve_target(
+            snapshot.library_root, snapshot.library_root / snapshot.relative_path
+        )
+
+    def resolve_target(self, root: Path, path: Path) -> Path:
+        root = validate_library_root(root)
+        path, _ = prepare_audio_source(path, root)
         info = path.stat()
         if info.st_nlink != 1:
             raise TagWriteError("El archivo tiene enlaces duros; no se reemplazará.")
         _writable(path)
         _writable(path.parent, directory=True)
         return path
+
+    def folder_members(self, root: Path, folder: Path) -> tuple[str, ...]:
+        root = validate_library_root(root)
+        if folder.resolve(strict=True) != folder or not folder.is_relative_to(root):
+            raise TagWriteConflict("La carpeta NFO cambió o está fuera de la biblioteca.")
+        candidate = folder
+        while candidate != root:
+            if candidate.is_symlink() or candidate.is_junction():
+                raise TagWriteConflict("La carpeta NFO contiene enlaces o puntos de unión.")
+            candidate = candidate.parent
+        members = []
+        for path in folder.iterdir():
+            if path.suffix.casefold() not in AUDIO_SUFFIXES:
+                continue
+            if path.is_symlink() or path.is_junction():
+                raise TagWriteConflict("La carpeta del NFO contiene audio enlazado.")
+            if path.is_file():
+                members.append(path.name)
+        return tuple(sorted(members))
+
+    def reserve(self, items: tuple[WriteTarget, ...]) -> None:
+        volumes: dict[int, tuple[Path, int, int]] = {}
+        for item in items:
+            if item.fingerprint is None:
+                continue
+            device = item.path.parent.stat().st_dev
+            path, total, largest = volumes.get(device, (item.path.parent, 0, 0))
+            size = item.fingerprint.size
+            volumes[device] = path, total + size, max(largest, size)
+        for path, total, largest in volumes.values():
+            if shutil.disk_usage(path).free < total + largest + 1024 * 1024:
+                raise OSError(
+                    errno.ENOSPC, "Espacio insuficiente para respaldos y temporal.", str(path)
+                )
 
     def fingerprint(self, path: Path, cancelled: Callable[[], bool]) -> FileFingerprint:
         before = path.stat(follow_symlinks=False)
@@ -544,17 +654,18 @@ class FileTagAccess:
         journal = FileTagJournal(
             operation / "journal.json",
             {
-                "schema": 1,
+                "schema": 2,
                 "preview": asdict(preview),
                 "closed": False,
                 "files": {str(item.file_id): {"state": "pending"} for item in preview.items},
+                "nfos": {str(item.path): {"state": "pending"} for item in preview.nfo_items},
             },
         )
         journal._save()
         self._backup_directories.clear()
         return journal
 
-    def backup(self, item: TagWriteItem, path: Path, cancelled: Callable[[], bool]) -> None:
+    def backup(self, item: WriteTarget, path: Path, cancelled: Callable[[], bool]) -> None:
         directory = path.parent.parent
         _plain_directory(directory)
         info = directory.stat(follow_symlinks=False)
@@ -594,7 +705,7 @@ class FileTagAccess:
 
         _copy(backup, temporary, cancelled, claim)
 
-    def publish(self, item: TagWriteItem, temporary: Path) -> None:
+    def publish(self, item: WriteTarget, temporary: Path) -> None:
         info = temporary.stat(follow_symlinks=False)
         if self._temporaries.get(temporary) != (info.st_dev, info.st_ino):
             raise TagWriteConflict("El temporal verificado fue sustituido.")
@@ -650,13 +761,17 @@ class FileTagAccess:
         data = json.loads(path.read_text(encoding="utf-8"))
         if (
             not isinstance(data, dict)
-            or data.get("schema") != 1
+            or data.get("schema") not in (1, 2)
             or not isinstance(data.get("preview"), dict)
             or data["preview"].get("operation_id") != path.parent.name
             or not isinstance(data.get("files"), dict)
             or not isinstance(data.get("closed"), bool)
         ):
             raise TagJournalError("El formato del registro no es válido.")
+        if data["schema"] == 2 and not isinstance(data.get("nfos"), dict):
+            raise TagJournalError("El registro NFO no es válido.")
+        if data["schema"] == 1 and data["preview"].get("nfo_items"):
+            raise TagJournalError("Un registro antiguo no puede contener trabajos NFO.")
         if not re.fullmatch(r"[0-9a-f]{32}", path.parent.name):
             raise TagJournalError("Identificador de registro no válido.")
         preview = _load_preview(data["preview"])
@@ -667,6 +782,29 @@ class FileTagAccess:
                 resolved = candidate.resolve()
                 if not resolved.is_relative_to(root) or item.path != resolved:
                     raise TagJournalError("La ruta del registro no coincide con su biblioteca.")
+        selected = {item.file_id: item for item in preview.items}
+        for nfo in preview.nfo_items:
+            root = nfo.library_root.resolve()
+            if (
+                not nfo.path.is_absolute()
+                or nfo.path.name != "album.nfo"
+                or not nfo.path.is_relative_to(root)
+                or nfo.path.parent.resolve() != nfo.path.parent
+                or not nfo.file_ids
+                or str(nfo.path) not in data.get("nfos", {})
+            ):
+                raise TagJournalError("La ruta NFO del registro no pertenece a su biblioteca.")
+            for file_id in nfo.file_ids:
+                audio = selected.get(file_id)
+                if (
+                    audio is None
+                    or audio.snapshot is None
+                    or (
+                        audio.snapshot.library_root != nfo.library_root
+                        or audio.path.parent != nfo.path.parent
+                    )
+                ):
+                    raise TagJournalError("El NFO no coincide con sus canciones destinatarias.")
         return FileTagJournal(path, data)
 
     def pending(self) -> tuple[PendingTagOperation, ...]:

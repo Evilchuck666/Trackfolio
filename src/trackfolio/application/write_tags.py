@@ -9,10 +9,29 @@ from pathlib import Path
 from typing import Protocol, cast
 from uuid import uuid4
 
+from trackfolio.application.album_nfo import AlbumNfoCodec, AlbumNfoWrites, review_nfos
 from trackfolio.application.edit_catalog import validate_edit_patch
+from trackfolio.application.tag_write_errors import (
+    TagJournalError as TagJournalError,
+)
+from trackfolio.application.tag_write_errors import (
+    TagPublishedError as TagPublishedError,
+)
+from trackfolio.application.tag_write_errors import (
+    TagWriteCancelled as TagWriteCancelled,
+)
+from trackfolio.application.tag_write_errors import (
+    TagWriteConflict as TagWriteConflict,
+)
+from trackfolio.application.tag_write_errors import (
+    TagWriteError as TagWriteError,
+)
 from trackfolio.domain.catalog_edit import EDIT_FIELDS, FieldChange, TrackEditPatch
 from trackfolio.domain.metadata import TrackMetadata
 from trackfolio.domain.tag_write import (
+    AlbumNfoItem,
+    AlbumNfoResult,
+    AlbumNfoTrack,
     FileFingerprint,
     PendingTagOperation,
     PlannedTags,
@@ -29,27 +48,9 @@ from trackfolio.domain.tag_write import (
 )
 
 
-class TagWriteError(Exception):
-    """A recoverable error suitable for presentation to a user."""
-
-
-class TagWriteConflict(TagWriteError):
-    pass
-
-
-class TagWriteCancelled(TagWriteError):
-    pass
-
-
-class TagJournalError(TagWriteError):
-    pass
-
-
-class TagPublishedError(TagWriteError):
-    """The rename succeeded but a subsequent durability check failed."""
-
-
 class TagCatalog(Protocol):
+    def album_tracks(self, path: Path, root: Path, folder: Path) -> tuple[AlbumNfoTrack, ...]: ...
+
     def snapshot(self, path: Path, file_id: int) -> TagCatalogSnapshot: ...
 
     def prepare(self, path: Path) -> None: ...
@@ -78,6 +79,12 @@ class TagJournal(Protocol):
 
     def state(self, file_id: int) -> TagRecoveryState: ...
 
+    def nfo_state(self, item: AlbumNfoItem) -> TagRecoveryState: ...
+
+    def nfo_paths(self, item: AlbumNfoItem) -> tuple[Path, Path]: ...
+
+    def record_nfo(self, item: AlbumNfoItem, state: str, **details: object) -> None: ...
+
     def paths(self, item: TagWriteItem) -> tuple[Path, Path]: ...
 
     def record(self, item: TagWriteItem, state: str, **details: object) -> None: ...
@@ -85,10 +92,24 @@ class TagJournal(Protocol):
     def finish(self, report: TagWriteReport) -> None: ...
 
 
+class WriteTarget(Protocol):
+    @property
+    def path(self) -> Path: ...
+
+    @property
+    def fingerprint(self) -> FileFingerprint | None: ...
+
+
 class TagFiles(Protocol):
     def identity(self, path: Path) -> tuple[int, int]: ...
 
     def resolve(self, snapshot: TagCatalogSnapshot) -> Path: ...
+
+    def resolve_target(self, root: Path, path: Path) -> Path: ...
+
+    def folder_members(self, root: Path, folder: Path) -> tuple[str, ...]: ...
+
+    def reserve(self, items: tuple[WriteTarget, ...]) -> None: ...
 
     def fingerprint(self, path: Path, cancelled: Callable[[], bool]) -> FileFingerprint: ...
 
@@ -96,11 +117,11 @@ class TagFiles(Protocol):
 
     def journal(self, preview: TagWritePreview) -> TagJournal: ...
 
-    def backup(self, item: TagWriteItem, path: Path, cancelled: Callable[[], bool]) -> None: ...
+    def backup(self, item: WriteTarget, path: Path, cancelled: Callable[[], bool]) -> None: ...
 
     def temporary(self, backup: Path, temporary: Path, cancelled: Callable[[], bool]) -> None: ...
 
-    def publish(self, item: TagWriteItem, temporary: Path) -> None: ...
+    def publish(self, item: WriteTarget, temporary: Path) -> None: ...
 
     def discard_temporary(self, path: Path) -> None: ...
 
@@ -207,8 +228,15 @@ class PreviewTagWrites:
 
 
 class WriteTagWrites:
-    def __init__(self, catalog: TagCatalog, codec: TagCodec, files: TagFiles) -> None:
+    def __init__(
+        self,
+        catalog: TagCatalog,
+        codec: TagCodec,
+        files: TagFiles,
+        nfo_writer: AlbumNfoWrites | None = None,
+    ) -> None:
         self.catalog, self.codec, self.files = catalog, codec, files
+        self.nfo_writer = nfo_writer
 
     def _check_catalog(self, preview: TagWritePreview) -> None:
         try:
@@ -227,8 +255,10 @@ class WriteTagWrites:
         on_progress: Callable[[TagWriteProgress], None] = _ignore_progress,
     ) -> TagWriteReport:
         eligible = {item.file_id for item in preview.items if item.state == "ready"}
+        if preview.nfo_items and self.nfo_writer is None:
+            raise TagWriteError("La operación requiere un escritor NFO configurado.")
         if (
-            not selected_ids
+            (not selected_ids and not preview.nfo_items)
             or len(set(selected_ids)) != len(selected_ids)
             or not set(selected_ids) <= eligible
         ):
@@ -240,11 +270,23 @@ class WriteTagWrites:
                 preview.operation_id,
                 tuple(TagWriteResult(i.file_id, i.path, "pending") for i in preview.items),
                 cancelled=True,
+                nfo_results=tuple(
+                    AlbumNfoResult(item.path, "pending") for item in preview.nfo_items
+                ),
             )
         self.catalog.prepare(preview.request.database_path)
         journal = self.files.journal(preview)
         results: list[TagWriteResult] = []
         fatal = None
+        try:
+            self.files.reserve(
+                tuple(
+                    [item for item in preview.items if item.file_id in selected_ids]
+                    + [item for item in preview.nfo_items if item.state == "ready"]
+                )
+            )
+        except OSError as exc:
+            fatal = str(exc)
         for index, item in enumerate(preview.items):
             if item.file_id not in selected_ids:
                 results.append(
@@ -343,8 +385,13 @@ class WriteTagWrites:
                 except OSError as exc:
                     # The journal retains its reserved path for assisted cleanup.
                     fatal = fatal or f"No se pudo limpiar el temporal: {exc}"
+        nfo_results: tuple[AlbumNfoResult, ...] = ()
+        if self.nfo_writer is not None:
+            nfo_results, fatal = self.nfo_writer.execute(
+                preview, tuple(results), journal, is_cancelled, on_progress, fatal
+            )
         report = TagWriteReport(
-            preview.operation_id, tuple(results), journal.path, is_cancelled(), fatal
+            preview.operation_id, tuple(results), journal.path, is_cancelled(), fatal, nfo_results
         )
         try:
             journal.finish(report)
@@ -356,9 +403,11 @@ class WriteTagWrites:
             not report.cancelled
             and not report.fatal_error
             and all(item.state in ("confirmed", "unchanged") for item in report.results)
+            and all(item.state in ("updated", "unchanged", "absent") for item in report.nfo_results)
         ):
             directories = sorted(
                 {item.backup_path.parent.parent for item in report.results if item.backup_path}
+                | {nfo.backup_path.parent.parent for nfo in report.nfo_results if nfo.backup_path}
             )
             for directory in directories:
                 try:
@@ -376,6 +425,14 @@ class WriteTagWrites:
                     removed = False  # Keep its location if access cannot be checked.
                 remaining.append(replace(result, backup_path=None) if removed else result)
             report = replace(report, results=tuple(remaining))
+            remaining_nfos = []
+            for nfo in report.nfo_results:
+                try:
+                    removed = nfo.backup_path is not None and not nfo.backup_path.is_file()
+                except OSError:
+                    removed = False
+                remaining_nfos.append(replace(nfo, backup_path=None) if removed else nfo)
+            report = replace(report, nfo_results=tuple(remaining_nfos))
             try:
                 journal.finish(report)
             except Exception as exc:
@@ -489,7 +546,10 @@ class ReviewTagWrites:
                         available_backup,
                     )
                 )
-        report = TagWriteReport(preview.operation_id, tuple(results), path, is_cancelled())
+        nfo_results = review_nfos(preview, journal, self.files, is_cancelled, reconcile)
+        report = TagWriteReport(
+            preview.operation_id, tuple(results), path, is_cancelled(), nfo_results=nfo_results
+        )
         if reconcile and not report.cancelled:
             # Conflicts must remain discoverable instead of becoming silently closed.
             if any(item.state == "conflict" for item in results):
@@ -503,9 +563,18 @@ class ReviewTagWrites:
 class TagWriteService:
     """Composition facade shared by GUI, diagnostics and future interfaces."""
 
-    def __init__(self, catalog: TagCatalog, codec: TagCodec, files: TagFiles) -> None:
+    def __init__(
+        self,
+        catalog: TagCatalog,
+        codec: TagCodec,
+        files: TagFiles,
+        nfo_codec: AlbumNfoCodec | None = None,
+    ) -> None:
         self.previewer = PreviewTagWrites(catalog, codec, files)
-        self.writer = WriteTagWrites(catalog, codec, files)
+        self.nfo_writer = (
+            AlbumNfoWrites(catalog, files, nfo_codec) if nfo_codec is not None else None
+        )
+        self.writer = WriteTagWrites(catalog, codec, files, self.nfo_writer)
         self.reviewer = ReviewTagWrites(catalog, codec, files)
         self.files = files
 
@@ -538,13 +607,27 @@ class TagWriteService:
                     is_cancelled=is_cancelled,
                     on_progress=on_progress,
                 )
+            if self.nfo_writer is not None:
+                preview = replace(
+                    preview,
+                    nfo_items=self.nfo_writer.prepare(
+                        preview,
+                        is_cancelled,
+                        on_progress,
+                    ),
+                )
         except TagWriteCancelled:
             return TagWriteReport(uuid4().hex, (), cancelled=True)
         ready = tuple(item.file_id for item in preview.items if item.state == "ready")
-        if ready:
+        if ready or any(item.state not in ("absent", "unchanged") for item in preview.nfo_items):
             return self.writer.execute(
                 preview, ready, is_cancelled=is_cancelled, on_progress=on_progress
             )
+        nfo_results = (
+            self.nfo_writer.unchanged_results(preview, is_cancelled)
+            if self.nfo_writer is not None
+            else ()
+        )
         return TagWriteReport(
             preview.operation_id,
             tuple(
@@ -560,4 +643,6 @@ class TagWriteService:
                 )
                 for item in preview.items
             ),
+            cancelled=is_cancelled(),
+            nfo_results=nfo_results,
         )

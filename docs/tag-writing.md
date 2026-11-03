@@ -14,12 +14,72 @@ El diálogo muestra todas las canciones desde que se abre, la salida del progres
 únicamente **Cerrar** y **Escribir etiquetas**. Pulsar escribir prepara y verifica los
 cambios internamente, sin selección de campos ni revisión manual de diferencias.
 Cada canción conserva sus propios valores; los archivos sin diferencias se omiten.
+También se comprueba y actualiza `album.nfo` si existe junto al audio, incluso cuando
+las etiquetas musicales ya están actualizadas. Su ausencia es normal y no lo crea.
 Los errores abren un pop-up que ofrece guardar el informe JSON; una operación correcta
 no muestra ese pop-up.
 
 Tras completar la escritura correctamente, **Escribir etiquetas** queda deshabilitado
-y **Cerrar** sigue disponible. También se deshabilita si todos los archivos estaban
-ya actualizados. Si hay errores o pendientes, permite reintentar en el mismo diálogo.
+y **Cerrar** sigue disponible. También se deshabilita si todos los archivos y NFO estaban
+ya actualizados, o los NFO no existen. Si hay errores o pendientes, permite reintentar
+en el mismo diálogo, incluido actualizar sólo el NFO después de escribir el audio.
+
+## Actualización opcional de album.nfo
+
+Se admite XML con raíz `<album>` sin namespace, compatible con metadatos de álbum Kodi.
+Se busca `album.nfo` únicamente en la misma carpeta que los FLAC/MP3 destinatarios,
+una vez por carpeta. No se busca en carpetas superiores: un NFO común situado sobre
+subcarpetas de discos no se actualiza automáticamente.
+
+La selección determina las carpetas. Los datos NFO se obtienen de todas las pistas
+catalogadas de cada carpeta, sin escribir audio fuera de la selección:
+
+| Dato NFO | Regla |
+| --- | --- |
+| `title` | Nombre de álbum guardado, coincidente en todas las pistas. |
+| `year` | Año guardado, coincidente en todas las pistas. |
+| `releasedate` existente | Actualiza el año conservando mes/día válidos; una fecha inválida se reduce al año. No cambia `originalreleasedate`. |
+| `genre` | Unión de géneros sin duplicados exactos, según ruta relativa y orden de cada lista. |
+| `albumArtistCredits/artist` | Créditos de álbum coincidentes; si todos carecen de ellos, artistas de pista cuando coincidan en todas las canciones. |
+| `artistdesc` existente | Descripción de los artistas resueltos, separados por ` / `. No se divide ningún nombre. |
+| `track/title` en una lista de pistas existente | Título guardado de cada canción destinataria; se asocia por `position` y `discnumber` si existe en la pista o el álbum. |
+
+Los valores vacíos coherentes eliminan sus elementos gestionados. Si faltan créditos
+de álbum y difieren los artistas de pista, conserva los créditos NFO existentes,
+como en una recopilación. Se conservan los identificadores asociados a los mismos
+artistas; sustituir un crédito enriquecido por otro artista produce un conflicto.
+
+Álbumes, años o créditos contradictorios, audio sin catalogar y pistas catalogadas
+ausentes dejan el NFO intacto con una incidencia. Un XML no compatible o malformado
+tampoco se convierte ni se sobrescribe. Se rechazan DTD, entidades y documentos de
+más de 16 MiB; no se consultan recursos externos.
+
+Si el NFO contiene una lista `<track>`, se actualizan los títulos de las canciones
+destinatarias, también cuando el audio ya tiene el título correcto. El título general
+del álbum se gestiona por separado; los títulos fuera de la selección se conservan. La numeración
+debe identificar una única canción y una única entrada XML: una asociación ausente
+o ambigua produce un conflicto. Se aceptan ceros iniciales en posición/disco. No se
+crea una lista de pistas donde no existe ni se cambia su orden, posición o duración.
+
+Se conservan reseñas, sellos, imágenes, identificadores, puntuaciones, campos
+desconocidos y el resto de los datos de las listas de pistas, además de los atributos y comentarios
+de los elementos conservados y las instrucciones de procesamiento. Al escribir
+puede normalizarse la representación XML; se mantiene la codificación admitida,
+el BOM UTF-8 y el uso de CRLF cuando existen. Sin diferencias semánticas, no cambia
+el contenido, la fecha ni el archivo físico.
+
+Cada NFO se publica después de que sus audios destinatarios hayan terminado
+confirmados o sin cambios. Si falla el audio, queda pendiente el NFO de esa carpeta.
+Si falla el NFO, los audios ya escritos conservan su resultado y se mantienen los
+respaldos del lote. Otros álbumes pueden continuar salvo un fallo esencial de
+almacenamiento, catálogo o registro. La cancelación conserva lo ya publicado.
+
+La salida y el informe JSON incluyen los NFO por separado: actualizado, sin cambios,
+ausente, pendiente, conflicto o fallido. El contador de audio escrito no los incluye.
+Los errores NFO ofrecen el mismo pop-up de informe y permiten reintentar. Una
+publicación seguida de un fallo se identifica expresamente como NFO reemplazado.
+
+El [plan de la entrega](album-nfo-plan.md) detalla contratos y criterios de aceptación.
 
 ## Formatos y valores admitidos
 
@@ -49,8 +109,9 @@ reabriendo la copia modificada antes de reemplazar el original.
 
 ## Archivos, permisos y espacio
 
-Cada archivo necesita espacio para un respaldo completo y una copia temporal. Se
+Cada archivo, incluido el NFO, necesita espacio para un respaldo completo y una copia temporal. Se
 procesan secuencialmente: reserva espacio para todos los respaldos y el mayor temporal.
+Antes de escribir se comprueba ese espacio por volumen, con un margen adicional de 1 MiB.
 No se siguen enlaces simbólicos/junctions, no se reemplazan enlaces duros ni destinos
 fuera de su raíz importada. Un original ausente o de solo lectura queda bloqueado;
 esto no impide editar sus datos en SQLite.
@@ -95,7 +156,9 @@ Antes de editar una copia se crea un respaldo completo junto a cada original:
 
 Los temporales propios están en la carpeta del original:
 `.trackfolio-<operación>-<id>.tmp`. Estos sufijos evitan reimportarlos como música.
-Después de escribir y confirmar todo el lote sin errores ni cancelación, se elimina
+El respaldo NFO se llama `nfo-album.nfo.tfo-bak` dentro del mismo directorio de operación;
+su temporal es `.trackfolio-<operación>-album-nfo.tmp` junto al original.
+Después de escribir y confirmar todo el lote, incluidos sus NFO, sin errores ni cancelación, se elimina
 el directorio `.trackfolio-backups` completo en cada carpeta donde se crearon copias,
 incluidos los UUID y respaldos anteriores que contenga. La limpieza espera al final
 del lote y al registro de su confirmación; no se realiza por canción. Los resultados
@@ -109,13 +172,16 @@ El registro persistente está en la carpeta de datos del usuario, en
 `Trackfolio/tag-writes/<operación>/journal.json`. En Linux normalmente es
 `~/.local/share/Trackfolio/tag-writes/`; se respeta `XDG_DATA_HOME` y en macOS/Windows
 se utiliza el equivalente de `platformdirs`. El registro guarda rutas, valores
-confirmados, hashes y estados, sin incluir las portadas binarias.
+confirmados, hashes y estados, sin incluir las portadas binarias. Su versión `2`
+incluye trabajos y resultados NFO separados de las canciones; la revisión técnica
+sigue admitiendo los registros antiguos de versión `1`.
 
 Los registros se conservan como historial. Los respaldos que permanecen después de un
 lote incompleto permiten recuperación manual.
 La GUI no presenta un gestor de operaciones pendientes ni reanuda escrituras al arrancar.
 El caso de uso técnico `ReviewTagWrites` sigue disponible para inspeccionar hashes y
-reconciliar observaciones del catálogo mediante sus contratos Python, sin reescribir
+reconciliar observaciones del catálogo e inspeccionar los hashes de los NFO mediante
+sus contratos Python, sin reescribir
 ni restaurar audio. Una confirmación requiere que el catálogo y su instantánea sigan
 siendo válidos; las ediciones posteriores se conservan como conflictos.
 

@@ -17,6 +17,7 @@ from test_tag_write import make_source
 from test_tag_write import setup_tags as setup_tags
 
 from trackfolio.application.write_tags import TagWriteService
+from trackfolio.infrastructure.album_nfo import XmlAlbumNfoCodec
 from trackfolio.infrastructure.catalog_edit import SqliteCatalogEditSessionFactory
 from trackfolio.infrastructure.metadata import read_metadata
 from trackfolio.infrastructure.session import open_catalog
@@ -32,7 +33,7 @@ def open_window(app, setup_tags, entry):
         window,
         open_catalog,
         edit_factory=SqliteCatalogEditSessionFactory(),
-        tag_writer=TagWriteService(catalog, codec, files),
+        tag_writer=TagWriteService(catalog, codec, files, nfo_codec=XmlAlbumNfoCodec()),
     )
     window.show()
     controller.open_database(database)
@@ -263,6 +264,76 @@ def test_unchanged_songs_do_not_write_or_offer_a_report(qt_app, setup_tags, tmp_
         assert dialog._error_popup is None
         assert not dialog.write_button.isEnabled()
         assert dialog.close_button.isEnabled()
+    finally:
+        teardown(window, controller)
+
+
+def test_gui_updates_only_nfo_and_completes(qt_app, setup_tags, tmp_path):
+    _, repository, _, _, _ = setup_tags
+    source = make_source(tmp_path, "flac")
+    entry = repository.save(read_metadata(source), source.parent, source.name)
+    nfo = source.parent / "album.nfo"
+    nfo.write_text(
+        "<album><title>Outdated</title><track><position>1</position>"
+        "<title>Old song title</title><duration>5:35</duration></track></album>"
+    )
+    original = source.read_bytes()
+    window, controller = open_window(qt_app, setup_tags, entry)
+    try:
+        dialog = open_dialog(qt_app, window, controller)
+        QTest.mouseClick(dialog.write_button, Qt.MouseButton.LeftButton)
+        wait_until(qt_app, lambda: dialog._report is not None and not controller._tag_running)
+        assert dialog._report.results[0].state == "unchanged"
+        assert dialog._report.nfo_results[0].state == "updated"
+        assert source.read_bytes() == original
+        from xml.etree import ElementTree
+
+        assert ElementTree.parse(nfo).findtext("track/title") == "Original"
+        assert ElementTree.parse(nfo).findtext("track/duration") == "5:35"
+        assert "NFO actualizado" in dialog.output.toPlainText()
+        assert "0 archivos escritos. 1 NFO actualizados." in dialog.summary.text()
+        assert dialog._error_popup is None and not dialog.write_button.isEnabled()
+    finally:
+        teardown(window, controller)
+
+
+def test_gui_nfo_error_exports_report_and_retry_updates_only_nfo(qt_app, setup_tags, tmp_path):
+    database, repository, _, _, _ = setup_tags
+    source = make_source(tmp_path, "flac")
+    entry = repository.save(read_metadata(source), source.parent, source.name)
+    edit(database, entry.file_id, title="Publish this")
+    nfo = source.parent / "album.nfo"
+    nfo.write_text("not XML")
+    window, controller = open_window(qt_app, setup_tags, entry)
+    try:
+        dialog = open_dialog(qt_app, window, controller)
+        QTest.mouseClick(dialog.write_button, Qt.MouseButton.LeftButton)
+        wait_until(qt_app, lambda: dialog._error_popup is not None and not controller._tag_running)
+        assert dialog._report.results[0].state == "confirmed"
+        assert dialog._report.nfo_results[0].state == "failed"
+        assert dialog.write_button.isEnabled()
+        assert "NFO fallido" in dialog.output.toPlainText()
+        destination = tmp_path / "nfo-errors.json"
+
+        def choose_report():
+            picker = dialog.findChildren(QFileDialog)[-1]
+            picker.selectFile(str(destination))
+            picker.accept()
+
+        popup = dialog._error_popup
+        save = next(button for button in popup.buttons() if button.text() == "Guardar informe…")
+        QTimer.singleShot(0, choose_report)
+        QTest.mouseClick(save, Qt.MouseButton.LeftButton)
+        stored = json.loads(destination.read_text())
+        assert stored["nfo_results"][0]["state"] == "failed"
+        assert stored["nfo_results"][0]["path"] == str(nfo)
+        wait_until(qt_app, lambda: dialog._error_popup is None)
+        nfo.write_text("<album/>")
+        QTest.mouseClick(dialog.write_button, Qt.MouseButton.LeftButton)
+        wait_until(qt_app, lambda: dialog._report is not None and not controller._tag_running)
+        assert dialog._report.results[0].state == "unchanged"
+        assert dialog._report.nfo_results[0].state == "updated"
+        assert not dialog.write_button.isEnabled() and dialog._error_popup is None
     finally:
         teardown(window, controller)
 

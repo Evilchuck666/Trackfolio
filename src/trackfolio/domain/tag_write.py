@@ -24,6 +24,60 @@ class FileFingerprint:
 
 
 @dataclass(frozen=True, slots=True)
+class AlbumNfoTrack:
+    file_id: int
+    relative_path: str
+    album: str | None
+    year: int | None
+    album_artists: tuple[str, ...]
+    artists: tuple[str, ...]
+    genres: tuple[str, ...]
+    title: str | None = None
+    track_number: int | None = None
+    disc_number: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class AlbumNfoSong:
+    file_id: int
+    title: str | None
+    track_number: int | None
+    disc_number: int | None
+    update_title: bool
+
+
+@dataclass(frozen=True, slots=True)
+class AlbumNfoValues:
+    title: str | None
+    year: int | None
+    genres: tuple[str, ...]
+    artists: tuple[str, ...] | None  # None preserves existing compilation credits.
+    songs: tuple[AlbumNfoSong, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class AlbumNfoItem:
+    path: Path
+    library_root: Path
+    file_ids: tuple[int, ...]
+    tracks: tuple[AlbumNfoTrack, ...] = ()
+    members: tuple[str, ...] = ()
+    values: AlbumNfoValues | None = None
+    fingerprint: FileFingerprint | None = None
+    state: Literal["ready", "unchanged", "absent", "blocked", "conflict"] = "blocked"
+    message: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class AlbumNfoResult:
+    path: Path
+    state: Literal["updated", "unchanged", "absent", "pending", "conflict", "failed"]
+    message: str = ""
+    backup_path: Path | None = None
+    published: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class TagCatalogSnapshot:
     file_id: int
     library_root: Path
@@ -81,6 +135,7 @@ class TagWritePreview:
     request: TagWriteRequest
     catalog_identity: tuple[int, int]
     items: tuple[TagWriteItem, ...]
+    nfo_items: tuple[AlbumNfoItem, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,6 +162,7 @@ class TagWriteReport:
     journal_path: Path | None = None
     cancelled: bool = False
     fatal_error: str | None = None
+    nfo_results: tuple[AlbumNfoResult, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

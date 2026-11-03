@@ -145,6 +145,13 @@ El diálogo contiene el listado, la salida del progreso y los botones **Cerrar**
 La selección múltiple conserva los valores particulares de cada canción. El audio,
 las portadas y las etiquetas ajenas a los campos del catálogo se conservan y verifican.
 
+Si existe `album.nfo` en la misma carpeta del audio, también se actualizan sus datos
+de álbum y los títulos de las canciones destinatarias que ya figuran en su lista
+XML, una vez por carpeta y conservando la información ajena. Se comprueba
+incluso si el audio ya está actualizado; su ausencia no lo crea ni produce un error.
+Las incidencias NFO se incluyen en el informe y conservan los respaldos del lote.
+Consulta las [reglas y límites de actualización NFO](docs/tag-writing.md#actualización-opcional-de-albumnfo).
+
 Se admiten comentarios FLAC e ID3v2.4; ID3v2.3 se conserva cuando sus valores son
 representables sin unir listas. Los archivos incompatibles se indican como incidencias.
 Consulta la [matriz y los límites](docs/tag-writing.md).

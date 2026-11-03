@@ -4,6 +4,9 @@ Estado: implementación funcional del 2 de noviembre de 2026, con el flujo simpl
 solicitado después de la primera entrega. La comprobación local y la validación por
 plataforma de cada revisión se registran en [VALIDATION.md](../VALIDATION.md).
 La [guía de uso y recuperación](tag-writing.md) describe los formatos y límites.
+Desde el 3 de noviembre de 2026 también se actualiza opcionalmente `album.nfo`,
+según el [plan implementado de NFO](album-nfo-plan.md). Se comparte operación,
+registro y limpieza de respaldos; los resultados NFO se separan de los musicales.
 
 ## Resultado y alcance
 
@@ -45,6 +48,8 @@ antigua ni cambiar automáticamente los destinatarios.
 
 - Se escribe únicamente lo que difiere; el audio, las imágenes y los metadatos ajenos
   al catálogo se conservan. No se incrusta `album.jpg` ni se renombran archivos.
+  Si existe `album.nfo` junto al audio, se sincroniza una vez por carpeta con los
+  valores coherentes de todas sus pistas catalogadas, sin ampliar la selección musical.
 - Se actualiza la familia de alias de cada campo modificado, incluidos los `TXXX`
   reconocidos por el lector, para que no prevalezcan valores antiguos al importar.
 - Los artistas y géneros conservan orden, Unicode y nombres completos, sin unir ni
@@ -122,6 +127,8 @@ ni escrituras/restauraciones automáticas al iniciar la GUI.
 | `infrastructure/tag_write.py` | Modificación Mutagen y verificación de audio, bloques y frames. |
 | `infrastructure/tag_write_files.py` | Rutas, hashes, copias exclusivas, publicación, atributos y registros. |
 | `infrastructure/tag_write_catalog.py` | Confirmación parcial con comparación de instantánea en SQLite. |
+| `application/album_nfo.py` | Preparación, agregación, publicación y revisión de NFO mediante contratos. |
+| `infrastructure/album_nfo.py` | Edición y verificación del XML, conservando contenido ajeno. |
 | `interfaces/gui/tag_write_dialog.py` | Listado fijo, progreso, dos botones y pop-up de informe ante errores. |
 
 Se reutilizan los casos internos de preparación, escritura y revisión técnica, sin

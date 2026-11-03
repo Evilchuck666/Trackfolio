@@ -4,21 +4,21 @@ from __future__ import annotations
 
 import hashlib
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import cast
 
 from sqlalchemy import Connection, delete, insert, select, update
 
 from trackfolio.application.write_tags import TagWriteConflict, TagWriteError
 from trackfolio.domain.metadata import TrackMetadata
-from trackfolio.domain.tag_write import TagCatalogSnapshot
+from trackfolio.domain.tag_write import AlbumNfoTrack, TagCatalogSnapshot
 from trackfolio.infrastructure.catalog import separate_shared_track
 from trackfolio.infrastructure.catalog_edit import (
     SqliteCatalogEditSessionFactory,
     _read_snapshot,
     _SqliteCatalogEditSession,
 )
-from trackfolio.infrastructure.database import raw_tags, tracks
+from trackfolio.infrastructure.database import audio_files, libraries, raw_tags, tracks
 
 
 def _snapshot(connection: Connection, file_id: int) -> TagCatalogSnapshot:
@@ -53,6 +53,55 @@ class SqliteTagCatalog:
         try:
             with session._engine.connect() as connection:
                 return _snapshot(connection, file_id)
+        finally:
+            session.close()
+
+    def album_tracks(self, path: Path, root: Path, folder: Path) -> tuple[AlbumNfoTrack, ...]:
+        relative_folder = PurePosixPath(folder.relative_to(root).as_posix())
+        session = cast(_SqliteCatalogEditSession, self._factory.open_reader(path))
+        try:
+            with session._engine.connect() as connection, connection.begin():
+                query = (
+                    select(audio_files.c.id, audio_files.c.relative_path)
+                    .join(libraries, libraries.c.id == audio_files.c.library_id)
+                    .where(libraries.c.root_path == str(root))
+                    .order_by(audio_files.c.relative_path)
+                )
+                if relative_folder != PurePosixPath("."):
+                    query = query.where(
+                        audio_files.c.relative_path.startswith(
+                            relative_folder.as_posix() + "/",
+                            autoescape=True,
+                        )
+                    )
+                records = connection.execute(query).all()
+                result = []
+                for record in records:
+                    if PurePosixPath(record.relative_path).parent != relative_folder:
+                        continue
+                    snapshot = _read_snapshot(connection, record.id)
+                    if snapshot is None:
+                        raise TagWriteConflict("Una pista dejó de estar disponible.")
+                    values = snapshot.editable.values
+                    result.append(
+                        AlbumNfoTrack(
+                            record.id,
+                            record.relative_path,
+                            values.album,
+                            values.album_year,
+                            tuple(
+                                name
+                                for role, _, name in snapshot.album_credits
+                                if role == "album_artist"
+                            ),
+                            values.artists,
+                            values.genres,
+                            values.title,
+                            values.track_number,
+                            values.disc_number,
+                        )
+                    )
+                return tuple(result)
         finally:
             session.close()
 

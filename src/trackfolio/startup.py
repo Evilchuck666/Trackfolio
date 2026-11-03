@@ -21,6 +21,7 @@ def create_window(
 
     from trackfolio.application.import_catalog import ImportCatalog
     from trackfolio.application.write_tags import TagWriteService
+    from trackfolio.infrastructure.album_nfo import XmlAlbumNfoCodec
     from trackfolio.infrastructure.audio_scan import FileSystemAudioScanner
     from trackfolio.infrastructure.catalog_edit import SqliteCatalogEditSessionFactory
     from trackfolio.infrastructure.import_target import SqliteImportTargetFactory
@@ -53,6 +54,7 @@ def create_window(
             FileTagAccess(
                 tag_journal_root or user_data_path("Trackfolio", appauthor=False) / "tag-writes"
             ),
+            nfo_codec=XmlAlbumNfoCodec(),
         ),
     )
     return window, controller

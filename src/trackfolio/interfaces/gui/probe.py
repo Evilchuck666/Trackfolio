@@ -7,6 +7,7 @@ import struct
 import tempfile
 import zlib
 from pathlib import Path
+from xml.etree import ElementTree
 
 from PySide6.QtCore import Qt, QTimer, qVersion
 from PySide6.QtTest import QTest
@@ -194,6 +195,12 @@ def run_probe(argv: list[str]) -> dict[str, object]:
                 state["edited"] = True
                 state["failure"] = "La ventana no confirmó la escritura de etiquetas."
                 _audio_source(Path(directory))
+                (source.parent / "album.nfo").write_text(
+                    "<album><title>Outdated</title><review>Keep this review</review>"
+                    "<track><position>3</position><title>Canción de prueba</title>"
+                    "<duration>0:02</duration></track></album>",
+                    encoding="utf-8",
+                )
                 QTimer.singleShot(0, request_tags)
             except Exception as exc:
                 fail(str(exc) or type(exc).__name__)
@@ -220,7 +227,20 @@ def run_probe(argv: list[str]) -> dict[str, object]:
                 actual = read_metadata(source)
                 assert actual.title == "Catalog correction" and actual.artists == ("Accept",)
                 assert actual.artwork is not None
+                assert len(report.nfo_results) == 1 and report.nfo_results[0].state == "updated", (
+                    report
+                )
+                assert report.nfo_results[0].backup_path is None
+                nfo = ElementTree.parse(source.parent / "album.nfo").getroot()
+                assert nfo.findtext("title") == "Álbum de prueba", ElementTree.tostring(nfo)
+                assert nfo.findtext("review") == "Keep this review"
+                assert nfo.findtext("track/title") == "Catalog correction"
+                assert nfo.findtext("track/duration") == "0:02"
+                assert nfo.findtext("albumArtistCredits/artist") == "Accept", ElementTree.tostring(
+                    nfo
+                )
                 state["tags_written"] = True
+                state["nfo_written"] = True
                 state["failure"] = ""
                 if controller._tag_dialog is not None:
                     controller._tag_dialog.reject()
@@ -252,4 +272,5 @@ def run_probe(argv: list[str]) -> dict[str, object]:
             "imported": bool(state.get("imported")),
             "edited": bool(state.get("edited")),
             "tags_written": bool(state.get("tags_written")),
+            "nfo_written": bool(state.get("nfo_written")),
         }

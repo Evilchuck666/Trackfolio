@@ -587,3 +587,84 @@ escritura real del catálogo completo, entradas nuevas no visibles, selección v
 borradores, fallo de lectura y cierre seguro durante la consulta. Ruff, formato, mypy
 y diagnóstico GUI `offscreen` correctos. Ventana revisada a 960×640 y diálogo a 640×480.
 Esta revisión no incluye una ejecución nueva de CI.
+
+### Actualización opcional de album.nfo (2026-11-03)
+
+Implementado el [plan NFO](docs/album-nfo-plan.md) sobre la rama local `update-nfo`.
+La composición de la aplicación añade el codec XML al servicio de escritura. Se
+comprueba un NFO por carpeta, también en operaciones sin diferencias de audio, y
+su ausencia no crea archivos ni errores. Los resultados NFO se separan de las
+canciones en el diálogo, informe JSON y registro persistente de versión `2`.
+La revisión técnica mantiene compatibilidad con registros de versión `1`.
+
+Validación local en Linux x86-64 con CPython 3.13.15 y Qt/PySide6 6.11.2:
+
+- **623 passed, 6 skipped**. Las omisiones son cuatro pruebas de PowerShell y las
+  pruebas nativas de bloqueos/streams de Windows y atributos/ACL de macOS.
+- Ruff y formato correctos; mypy correcto en Linux y con `--platform win32` y
+  `--platform darwin`. `git diff --check` sin incidencias.
+- XML real con título, año/fechas, géneros, créditos, vaciados, Unicode y escape;
+  conservación de campos ajenos, imágenes referenciadas, reseñas, atributos,
+  comentarios, instrucciones de procesamiento, CDATA y extensiones con namespace.
+  UTF-8 con BOM, UTF-16 e ISO-8859-1, con conservación de CRLF.
+- XML malformado/no compatible, DTD, entidades y límite de 16 MiB; los originales
+  se conservan. Artistas enriquecidos no se reasignan a otros identificadores.
+- Selección parcial agrega todas las pistas de la carpeta y conserva el audio no
+  seleccionado. Recopilaciones, datos contradictorios, audio sin catalogar, álbumes
+  bajo una raíz importada y nombres con caracteres especiales de SQL comprobados.
+- Publicación única del NFO compartido, actualización sólo de NFO, segunda ejecución
+  sin reemplazos, reintento después de publicar audio y varios álbumes independientes.
+- Cambios concurrentes de documento/catálogo/carpeta, aparición o desaparición del
+  NFO, enlaces, permisos, espacio insuficiente y cancelación comprobados. Los fallos
+  NFO conservan resultados musicales y respaldos; el éxito conjunto permite limpiarlos.
+- Fallos del registro antes/después de publicar y salida abrupta real de subprocesos
+  en dos puntos de la escritura NFO; revisión posterior por hashes sin reescritura.
+  Conservación de modo y atributos extendidos comprobada en el sistema local.
+- Integración Qt `offscreen`: progreso/resultados NFO, contador de audio separado,
+  pop-up e informe JSON, reintento sólo de NFO y finalización de los dos botones.
+- Diagnóstico GUI `offscreen`: **0 errores**, incluyendo importación, edición y
+  escritura real de etiquetas y NFO; el probe devuelve `nfo_written=true`.
+- Wheel y sdist construidos con el backend fijado `uv-build==0.12.10`, disponible
+  en la caché local. El wheel se instaló fuera del checkout, reutilizando las
+  dependencias core bloqueadas del entorno local: importación, edición y escritura
+  de audio/NFO comprobadas con `PySide6` ausente. Después se habilitó la distribución
+  Qt local en ese intérprete y pasó el probe GUI `offscreen` desde el wheel instalado.
+
+Se amplía el workflow para verificar los módulos NFO del paquete y la escritura NFO
+desde el núcleo instalado y el probe GUI. No se ha ejecutado ni publicado esta revisión
+en CI. Quedan pendientes la validación nativa de esta entrega en Windows y macOS y
+la revisión visual manual de escritorio; `offscreen` no acredita esa revisión.
+
+### Corrección de títulos de canción en las listas NFO (2026-11-03)
+
+El caso aportado por el usuario mostró un hueco de alcance y pruebas: la primera
+implementación sincronizaba los campos generales del álbum y conservaba íntegra
+la lista `<track>`, por lo que «To War! → To War!2» no actualizaba `track/title`.
+Un resultado NFO correcto no acreditaba que se hubiera sincronizado ese título.
+
+Se añaden título y numeración a las instantáneas y los destinos de título de las
+canciones seleccionadas al plan NFO. La asociación usa `position` y `discnumber`
+de pista o álbum cuando existe, aceptando ceros iniciales. Las correspondencias
+ausentes/ambiguas producen conflicto. Se preservan los títulos fuera de la selección,
+el orden de las pistas, su posición, duración y metadatos ajenos. No se crea una lista
+donde no existe. Los registros anteriores de versión `2`, sin estos campos, siguen
+siendo legibles y revisables.
+
+Validación local de la corrección:
+
+- El ejemplo «To War! → To War!2» se reprodujo primero con dos pruebas fallidas y
+  pasa tras corregirlo: escritura conjunta de audio/NFO y corrección sólo del NFO
+  cuando el audio ya está actualizado y no hay diferencias generales de álbum.
+- Selección parcial, discos con la misma posición, posiciones ausentes/duplicadas,
+  vaciado de título, atributos/comentarios y duraciones conservados comprobados.
+- **633 passed, 6 skipped** en la suite completa; las omisiones siguen correspondiendo
+  a PowerShell y pruebas nativas Windows/macOS. Ruff, formato y mypy correctos.
+- El diálogo Qt comprueba la corrección de un título NFO con audio sin diferencias.
+  El diagnóstico GUI `offscreen` verifica `track/title` y conserva `track/duration`:
+  **0 errores**.
+- Wheel y sdist reconstruidos; el wheel pasa la escritura musical/NFO en un intérprete
+  aislado sin Qt y el probe GUI `offscreen` con la comprobación nueva de `track/title`.
+
+Esta corrección se verifica sobre archivos temporales; para aplicarla a una biblioteca
+abierta hay que reiniciar la aplicación y ejecutar **Escribir etiquetas** de nuevo.
+Sin publicación ni ejecución nueva de CI; la validación nativa multiplataforma sigue pendiente.
