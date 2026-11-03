@@ -118,7 +118,7 @@ def validate_edit_patch(values: EditableValues, patch: TrackEditPatch) -> TrackE
                 )
                 errors.append(FieldError(field, message))
                 continue
-        elif field in ("artists", "genres"):
+        elif field in ("artists", "genres", "album_artists"):
             if not isinstance(value, tuple) or any(not isinstance(item, str) for item in value):
                 errors.append(FieldError(field, "Introduce una lista de nombres completos."))
                 continue
@@ -209,7 +209,9 @@ def validate_batch_edit(originals: tuple[EditableTrack, ...], patch: TrackEditPa
     if not originals or len({item.file_id for item in originals}) != len(originals):
         raise CatalogEditError("Selecciona canciones distintas para editar en grupo.")
     if any(change.field not in BATCH_EDIT_FIELDS for change in patch.changes):
-        raise CatalogEditError("En grupo solo se pueden editar álbum, artistas, año y géneros.")
+        raise CatalogEditError(
+            "En grupo solo se pueden editar álbum, artistas de pista o álbum, año y géneros."
+        )
     for original in originals:
         validate_edit_patch(original.values, patch)
 

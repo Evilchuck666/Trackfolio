@@ -128,6 +128,18 @@ borra en todo el grupo. Artistas y géneros sustituyen la lista completa por la 
 El guardado es una única transacción: si una canción cambió externamente o falla la
 escritura, no se guarda ninguna y el borrador se conserva para revisarlo.
 
+## Consultar y editar álbumes
+
+La pestaña **Álbumes** permite buscar por nombre o artista y ver la portada, los datos
+comunes y las pistas ordenadas por disco y número. **Editar álbum** aplica los campos
+marcados a todas sus pistas en una transacción, conservando los artistas de cada
+canción. **Guardar álbum** modifica SQLite; **Escribir etiquetas del álbum…** publica
+los cambios en la música y actualiza sus NFO opcionales.
+
+Las ediciones se separan por biblioteca, carpeta y metadatos. Los subdirectorios de
+disco reconocidos se agrupan cuando coinciden con su numeración. Consulta las
+[reglas de agrupación y edición](docs/album-view.md).
+
 ## Escribir etiquetas en la música
 
 1. Guarda las correcciones en el catálogo y selecciona una o varias canciones.

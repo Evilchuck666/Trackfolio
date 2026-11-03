@@ -808,3 +808,54 @@ una incrustación fallida; otra evita usar SQLite o el NFO como fuente implícit
 | Escritorio gráfico real | Revisión visual manual pendiente; `offscreen` no acredita el escritorio. |
 
 No se ha ejecutado una nueva CI remota ni se ha hecho push.
+
+### Vista de álbum (2026-11-03)
+
+Implementada localmente sobre la rama activa `album-view`, sin crear ramas ni
+publicar cambios. Uso y reglas en [Vista de álbum](docs/album-view.md).
+
+La nueva pestaña consulta SQLite mediante cuatro consultas de datos ligeros, sin
+leer música ni cargar portadas/líricas de toda la biblioteca. El detalle obtiene
+una portada del catálogo al seleccionar un álbum. Agrupa por biblioteca, carpeta,
+título, año, fecha, artistas del álbum y total de discos; reconoce subdirectorios
+numerados de disco sólo cuando coinciden con los metadatos. Las recopilaciones
+conservan los intérpretes de sus pistas.
+
+El editor aplica únicamente los campos marcados: álbum, año, artistas del álbum y
+géneros. Reutiliza la validación, las instantáneas y la transacción de edición por
+lotes, preservando otras canciones y ediciones. Los artistas del álbum se escriben
+como `ALBUMARTIST`/`TPE2`, separados de `ARTIST`/`TPE1`. La carga de registros anteriores
+normaliza el nuevo valor de lista sin exigir una migración del esquema SQLite.
+
+El diálogo de escritura existente recibe todas las pistas del álbum y mantiene
+las reglas de portada por carpeta, NFO opcional, respaldo y recuperación. La
+navegación protege borradores con Guardar/Descartar/Cancelar. Las tareas antiguas
+no pueden abrir un editor de álbum sobre otra selección ni redirigir una edición
+posterior de canción. La búsqueda permanece disponible durante la lectura del detalle.
+
+Validación local en Linux, Python 3.13.15 y Qt 6.11.2:
+
+- Suite completa: **722 passed, 6 skipped**. Las omisiones corresponden a PowerShell
+  y verificaciones de atributos/bloqueos nativas Windows y macOS.
+- **193 passed, 2 skipped** en álbumes, GUI de álbum, etiquetas y NFO con CP1252
+  simulado para operaciones de pathlib sin codificación explícita.
+- Ruff, formato, mypy para Linux, Windows y macOS, y `git diff --check`: correctos.
+- Diagnóstico GUI `offscreen`: **0 errores**. El probe comprueba ahora también la
+  pestaña de álbum, sus pistas, portada y acciones; doctor y CI requieren la marca
+  `albums_viewed`.
+- Wheel y sdist construidos con `uv-build==0.12.10`. El código de verificación del
+  workflow actualizado pasa con el wheel instalado fuera del checkout: consulta
+  de álbumes y escritura musical sin Qt, seguida del probe GUI `offscreen`.
+- Captura Qt de la distribución inspeccionada con datos de ejemplo: navegación,
+  buscador, portada, datos comunes y tabla de pistas. No equivale a una prueba en
+  un escritorio nativo.
+
+Las nuevas regresiones cubren recopilaciones, varias bibliotecas/ediciones, discos
+múltiples, carpetas sin numeración fiable, consulta sin música, conservación de
+artistas de pista, conflictos con rollback completo, escritura FLAC/MP3 de nombres
+completos y vaciado de artistas de álbum, edición sin tocar audio, escritura de todas
+las pistas/NFO, borradores y atajos reales de teclado. Incluyen la navegación durante
+la carga del editor y un año inválido que no debe guardar parcialmente el álbum.
+
+Windows/macOS nativos y escritorio gráfico real quedan pendientes para esta nueva
+vista. No se ha hecho push ni se ha ejecutado CI remota.

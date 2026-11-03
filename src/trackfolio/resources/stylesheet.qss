@@ -172,3 +172,14 @@ QScrollBar::handle:hover { background-color: #697697; }
 QScrollBar::add-line, QScrollBar::sub-line { width: 0; height: 0; }
 QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
 QToolTip { background-color: #252b41; color: #eef0fa; border: 1px solid #596589; padding: 5px; }
+
+QTabWidget::pane { border: none; background-color: #10121b; }
+QTabBar::tab {
+    background-color: #151824;
+    color: #a1aac4;
+    padding: 10px 22px;
+    border-bottom: 2px solid #272d40;
+}
+QTabBar::tab:selected { color: #eef0fa; background-color: #202537; border-bottom-color: #a5abff; }
+QTabBar::tab:hover:!selected { background-color: #1b2030; color: #eef0fa; }
+QTabBar::tab:disabled { color: #6f7891; }

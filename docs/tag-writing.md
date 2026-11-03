@@ -1,7 +1,8 @@
 # Escritura de etiquetas y recuperación
 
 **Guardar** edita el catálogo. **Escribir etiquetas…** publica todas las diferencias
-entre sus diez campos editables guardados y los FLAC/MP3 seleccionados. Primero se
+entre sus campos editables guardados y los FLAC/MP3 seleccionados, incluidos los
+artistas del álbum editados desde la [vista de álbum](album-view.md). Primero se
 resuelven los cambios sin guardar mediante Guardar/Descartar/Cancelar.
 
 **Escribir etiquetas de todo el catálogo…**, sobre el listado principal, abre el mismo

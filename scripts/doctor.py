@@ -360,11 +360,18 @@ def check_qt(qt_platform: str | None, timeout: float) -> CheckResult:
             raise ValueError("No se comprobó Fusion o el ciclo de eventos.")
         if any(
             report.get(key) is not True
-            for key in ("imported", "edited", "tags_written", "nfo_written", "cover_written")
+            for key in (
+                "imported",
+                "edited",
+                "tags_written",
+                "nfo_written",
+                "cover_written",
+                "albums_viewed",
+            )
         ):
             raise ValueError(
                 "No se comprobó la importación y edición, "
-                "incluida la escritura musical, portada y NFO."
+                "incluidas la escritura musical, portada, NFO y vista de álbum."
             )
     except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
         return CheckResult("Qt/Fusion", False, f"El subproceso no confirmó la prueba Qt: {exc}")
@@ -377,7 +384,8 @@ def check_qt(qt_platform: str | None, timeout: float) -> CheckResult:
         "Qt/Fusion",
         True,
         f"Qt {qt_version}, Fusion, backend {backend}; "
-        f"importación, edición y escritura de etiquetas, portada y NFO comprobadas. {scope}",
+        "importación, edición, etiquetas, portada, NFO y vista de álbum comprobadas. "
+        f"{scope}",
     )
 
 

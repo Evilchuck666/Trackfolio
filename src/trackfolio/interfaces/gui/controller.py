@@ -13,6 +13,7 @@ from uuid import uuid4
 from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, QTimer, Signal, Slot
 from PySide6.QtWidgets import QDialog, QFileDialog, QMessageBox
 
+from trackfolio.application.albums import ListAlbums
 from trackfolio.application.catalog import CatalogSession, GetTrack, ListTrackSummaries
 from trackfolio.application.edit_catalog import (
     CatalogEditError,
@@ -35,6 +36,7 @@ from trackfolio.application.import_catalog import (
     ImportRequest,
 )
 from trackfolio.application.write_tags import TagWriteService
+from trackfolio.domain.album import Album
 from trackfolio.domain.catalog import CatalogEntry, CatalogSummary
 from trackfolio.domain.catalog_edit import ArtistChoice, EditableTrack, TrackEditPatch
 from trackfolio.domain.tag_write import (
@@ -150,6 +152,9 @@ _JobKind = Literal[
     "tag_write",
     "tag_list",
     "tag_covers",
+    "albums",
+    "album_detail",
+    "album_edit",
 ]
 
 
@@ -195,6 +200,9 @@ class CatalogController(QObject):
         self._tag_changed = False
         self._tag_token = 0
         self._tag_cancel = Event()
+        self._album_list_token = 0
+        self._album_detail_token = 0
+        self._album_edit = False
         self._edit_snapshot: EditableTrack | None = None
         self._batch_snapshots: tuple[EditableTrack, ...] = ()
         self._edit_path: Path | None = None
@@ -245,6 +253,146 @@ class CatalogController(QObject):
         window.write_tags_requested.connect(self.choose_tag_write)
         window.write_all_tags_requested.connect(self.choose_catalog_tag_write)
         self.tag_progress.connect(self._receive_tag_progress, Qt.ConnectionType.QueuedConnection)
+        album_view = window.album_view
+        album_view.edit_enabled = edit_factory is not None
+        album_view.write_enabled = tag_writer is not None
+        album_view.album_selected.connect(self.select_album)
+        album_view.edit_requested.connect(self.start_album_edit)
+        album_view.save_requested.connect(self.save_edit)
+        album_view.cancel_requested.connect(self.cancel_edit)
+        album_view.write_requested.connect(self.choose_album_tag_write)
+        album_view.track_requested.connect(self.open_album_track)
+        album_view.selection_guard = lambda key: self._guard_edit(
+            lambda: album_view.select_key(key)
+        )
+        window.view_guard = lambda index: self._guard_edit(
+            lambda: window.views.setCurrentIndex(index)
+        )
+        window.view_changed.connect(self.change_view)
+
+    @Slot(int)
+    def change_view(self, index: int) -> None:
+        if index == 1:
+            self.load_albums()
+        elif self.window.current_file_id() is not None:
+            self.select_track(cast(int, self.window.current_file_id()))
+
+    def load_albums(self) -> None:
+        if self._closed or self._session is None or self.saving or self.importing or self.tagging:
+            return
+        self._album_list_token += 1
+        self._album_detail_token += 1
+        self._submit(
+            ListAlbums(self._session).execute, "albums", self._album_list_token, self._session
+        )
+
+    @Slot(object)
+    def select_album(self, album: Album | None) -> None:
+        if self._closed or self._session is None or self.saving or self.tagging:
+            return
+        self._edit_token += 1
+        self._album_detail_token += 1
+        if album is None:
+            return
+        file_id = next((t.summary.file_id for t in album.tracks if t.has_cover), None)
+        session = self._session
+        self._submit(
+            lambda: session.get(file_id) if file_id is not None else None,
+            "album_detail",
+            self._album_detail_token,
+            session,
+        )
+
+    def _finish_album_job(self, job: _Job) -> None:
+        view = self.window.album_view
+        if job.task.error:
+            if job.kind == "album_edit":
+                self._album_edit = False
+            self.window.set_error(job.task.error)
+            return
+        if job.kind == "albums":
+            view.set_albums(cast(tuple[Album, ...], job.task.result))
+        elif job.kind == "album_detail":
+            entry = cast(CatalogEntry | None, job.task.result)
+            view.cover.set_cover(
+                entry.metadata.artwork.data if entry and entry.metadata.artwork else None
+            )
+        else:
+            originals = cast(tuple[EditableTrack, ...], job.task.result)
+            if not originals or self._session is None:
+                self._album_edit = False
+                return
+            self._album_edit = True
+            self._edit_snapshot = originals[0]
+            self._batch_snapshots = originals
+            self._edit_path = self._session.database_path
+            view.begin_edit(originals)
+            self.window.set_status("Editando datos del álbum · Cambios en el catálogo")
+            self.edit_started.emit(originals[0].file_id)
+
+    @Slot()
+    def start_album_edit(self) -> None:
+        view = self.window.album_view
+        album = view.current_album
+        if (
+            self._closed
+            or self.saving
+            or self.importing
+            or self.tagging
+            or self._session is None
+            or self._edit_factory is None
+            or album is None
+            or self._edit_snapshot is not None
+        ):
+            return
+        self._edit_token += 1
+        self._album_detail_token += 1
+        path, factory = self._session.database_path, self._edit_factory
+
+        def load() -> tuple[EditableTrack, ...]:
+            reader = factory.open_reader(path)
+            try:
+                originals = tuple(reader.get_editable(file_id) for file_id in album.file_ids)
+                if any(item is None for item in originals):
+                    raise CatalogRecordMissing(
+                        "Una pista del álbum ya no existe. Actualiza el catálogo."
+                    )
+                return cast(tuple[EditableTrack, ...], originals)
+            finally:
+                reader.close()
+
+        self._submit(load, "album_edit", self._edit_token, self._session)
+
+    @Slot()
+    def choose_album_tag_write(self) -> None:
+        album = self.window.album_view.current_album
+        if (
+            self._closed
+            or self.importing
+            or self.saving
+            or self.tagging
+            or self._session is None
+            or self._tag_writer is None
+            or album is None
+        ):
+            return
+        if not self._guard_edit(self.choose_album_tag_write):
+            return
+        self._tag_changed = False
+        summaries = {song.file_id: song for song in self.window.model.summaries()}
+        self._open_tag_dialog(
+            self._session.database_path,
+            tuple(summaries.get(track.summary.file_id, track.summary) for track in album.tracks),
+        )
+        if self._tag_dialog is not None:
+            self._tag_dialog.setWindowTitle("Escribir etiquetas del álbum")
+
+    @Slot(int)
+    def open_album_track(self, file_id: int) -> None:
+        if not self._guard_edit(lambda: self.open_album_track(file_id)):
+            return
+        self.window.views.setCurrentIndex(0)
+        self.window.select_file(file_id)
 
     @property
     def tagging(self) -> bool:
@@ -252,6 +400,9 @@ class CatalogController(QObject):
 
     @Slot()
     def choose_tag_write(self) -> None:
+        if self.window.views.currentIndex() == 1:
+            self.choose_album_tag_write()
+            return
         if (
             self._closed
             or self._close_pending
@@ -461,6 +612,8 @@ class CatalogController(QObject):
         return self._saving
 
     def _reset_edit(self) -> None:
+        self._album_edit = False
+        self.window.album_view.set_editing(False)
         self._edit_token += 1
         self._artist_token += 1
         self._genre_token += 1
@@ -503,7 +656,7 @@ class CatalogController(QObject):
             return False
         if self._edit_snapshot is None:
             return True
-        if not self.window.edit_dirty():
+        if not (self.window.album_view.dirty() if self._album_edit else self.window.edit_dirty()):
             self._reset_edit()
             return True
         answer = self._confirm_unsaved()
@@ -525,6 +678,9 @@ class CatalogController(QObject):
 
     @Slot()
     def start_edit(self) -> None:
+        if self.window.views.currentIndex() == 1:
+            self.start_album_edit()
+            return
         file_id = self.window.current_file_id()
         file_ids = self.window.selected_file_ids()
         if (
@@ -573,7 +729,10 @@ class CatalogController(QObject):
     def cancel_edit(self) -> None:
         if self.saving or self._edit_snapshot is None:
             return
+        album_edit = self._album_edit
         self._reset_edit()
+        if album_edit:
+            return
         file_id = self.window.current_file_id()
         if file_id is not None:
             self.select_track(file_id)
@@ -596,12 +755,16 @@ class CatalogController(QObject):
             return
         try:
             if self._batch_snapshots:
-                patch = self.window.edit_patch()
+                patch = (
+                    self.window.album_view.patch() if self._album_edit else self.window.edit_patch()
+                )
                 validate_batch_edit(self._batch_snapshots, patch)
             else:
                 patch = validate_edit_patch(self._edit_snapshot.values, self.window.edit_patch())
         except CatalogEditValidationError as exc:
             self.window.set_field_errors({error.field: error.message for error in exc.errors})
+            if self._album_edit:
+                self.window.album_view.error.setText(str(exc))
             self.window.set_error(str(exc))
             return
         if patch.empty:
@@ -618,7 +781,7 @@ class CatalogController(QObject):
         self._edit_token += 1
         self._artist_token += 1
         self._genre_token += 1
-        self.window.set_edit_state(True, saving=True)
+        self.window.set_edit_state(not self._album_edit, saving=True)
         self.window.set_error("")
         self.window.set_status("Guardando cambios…")
         self._begin_save_when_idle()
@@ -994,6 +1157,9 @@ class CatalogController(QObject):
             "tag_write": self._tag_token,
             "tag_list": self._tag_token,
             "tag_covers": self._tag_token,
+            "albums": self._album_list_token,
+            "album_detail": self._album_detail_token,
+            "album_edit": self._edit_token,
         }
         return job.request_token == token[job.kind]
 
@@ -1008,6 +1174,8 @@ class CatalogController(QObject):
                 result.session.close()
         elif job.kind in ("tag_write", "tag_list", "tag_covers"):
             self._finish_tag_job(job)
+        elif job.kind in ("albums", "album_detail", "album_edit"):
+            self._finish_album_job(job)
         elif job.kind == "save":
             self._finish_save(job)
         elif job.task.error is not None:
@@ -1031,6 +1199,8 @@ class CatalogController(QObject):
                     self._remember(result.session.database_path)
                 except OSError as exc:
                     self.window.set_error(f"No se pudo guardar la preferencia del catálogo: {exc}")
+            if self.window.views.currentIndex() == 1:
+                self.load_albums()
             self.catalog_loaded.emit()
         elif job.kind == "list" and self._session is not None:
             # An empty refreshed list emits no selection event to supersede an old detail.
@@ -1046,6 +1216,8 @@ class CatalogController(QObject):
                 self.window.current_file_id(),
                 selected_file_ids=self.window.selected_file_ids(),
             )
+            if self.window.views.currentIndex() == 1:
+                self.load_albums()
             self.catalog_loaded.emit()
         elif job.kind == "detail":
             entry = cast(CatalogEntry | None, result)
@@ -1090,12 +1262,15 @@ class CatalogController(QObject):
         self._begin_save_when_idle()
 
     def _finish_save(self, job: _Job) -> None:
+        album_edit = self._album_edit
         self._saving = False
         continuation = self._after_save
         self._after_save = None
         if job.task.error is not None:
             self._close_pending = False
-            self.window.set_edit_state(True)
+            self.window.set_edit_state(not album_edit)
+            if album_edit:
+                self.window.album_view.error.setText(job.task.error)
             error = job.task.exception
             if isinstance(error, CatalogEditValidationError):
                 self.window.set_field_errors({item.field: item.message for item in error.errors})
@@ -1133,6 +1308,8 @@ class CatalogController(QObject):
         else:
             self.window.set_status("No hay cambios que guardar.")
         outcome = result
+        if album_edit and not self._close_pending:
+            self.load_albums()
         if self._close_pending:
             self._close_when_idle()
         generation = (

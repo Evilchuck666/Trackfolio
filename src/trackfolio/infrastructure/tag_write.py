@@ -26,6 +26,7 @@ from trackfolio.infrastructure.metadata import _canonical_key, read_metadata
 _ALIASES: dict[EditField, tuple[str, ...]] = {
     "title": ("title", "tit2"),
     "artists": ("artist", "tpe1"),
+    "album_artists": ("albumartist", "album artist", "tpe2"),
     "album": ("album", "talb"),
     "album_year": ("date", "year", "tdrc", "tdrl", "tyer"),
     "track_number": ("tracknumber", "trck"),
@@ -38,6 +39,7 @@ _ALIASES: dict[EditField, tuple[str, ...]] = {
 _FLAC = {
     "title": "TITLE",
     "artists": "ARTIST",
+    "album_artists": "ALBUMARTIST",
     "album": "ALBUM",
     "album_year": "DATE",
     "track_number": "TRACKNUMBER",
@@ -50,6 +52,7 @@ _FLAC = {
 _ID3 = {
     "title": "TIT2",
     "artists": "TPE1",
+    "album_artists": "TPE2",
     "album": "TALB",
     "album_year": "TDRC",
     "track_number": "TRCK",

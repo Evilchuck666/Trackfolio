@@ -102,6 +102,7 @@ def test_headless_qt_success_does_not_claim_desktop_validation(doctor, monkeypat
         "tags_written": True,
         "nfo_written": True,
         "cover_written": True,
+        "albums_viewed": True,
     }
     output = doctor.QT_PROBE_PREFIX + json.dumps(report)
 
@@ -115,7 +116,8 @@ def test_headless_qt_success_does_not_claim_desktop_validation(doctor, monkeypat
 
 
 @pytest.mark.parametrize(
-    "missing", ["imported", "edited", "tags_written", "nfo_written", "cover_written"]
+    "missing",
+    ["imported", "edited", "tags_written", "nfo_written", "cover_written", "albums_viewed"],
 )
 def test_qt_report_requires_import_and_edit_confirmation(doctor, monkeypatch, missing):
     report = {
@@ -128,6 +130,7 @@ def test_qt_report_requires_import_and_edit_confirmation(doctor, monkeypatch, mi
         "tags_written": True,
         "nfo_written": True,
         "cover_written": True,
+        "albums_viewed": True,
     }
     report.pop(missing)
     output = doctor.QT_PROBE_PREFIX + json.dumps(report)

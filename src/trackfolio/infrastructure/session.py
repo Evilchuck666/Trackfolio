@@ -10,7 +10,9 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.pool import NullPool
 
 from trackfolio.application.catalog import CatalogAccessError, CatalogSession
+from trackfolio.domain.album import AlbumTrack
 from trackfolio.domain.catalog import CatalogEntry, CatalogSummary
+from trackfolio.infrastructure.album_catalog import read_album_tracks
 from trackfolio.infrastructure.catalog import SqliteCatalogRepository
 from trackfolio.infrastructure.database import _file_uri as _file_uri
 from trackfolio.infrastructure.schema_validation import validate_catalog_connection
@@ -56,6 +58,14 @@ class _SqliteCatalogSession:
                 "No se pudieron obtener las canciones. "
                 "Comprueba el catálogo y vuelve a intentarlo.",
             ) from exc
+
+    def list_album_tracks(self) -> tuple[AlbumTrack, ...]:
+        self._check_open()
+        try:
+            with self._engine.connect() as connection:
+                return read_album_tracks(connection)
+        except SQLAlchemyError as exc:
+            raise _access_error(exc, "No se pudieron obtener los álbumes.") from exc
 
     def get(self, file_id: int) -> CatalogEntry | None:
         self._check_open()

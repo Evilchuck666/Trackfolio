@@ -217,6 +217,11 @@ jobs:
                   "trackfolio/application/write_tags.py",
                   "trackfolio/application/album_nfo.py",
                   "trackfolio/application/cover_writes.py",
+                  "trackfolio/application/albums.py",
+                  "trackfolio/domain/album.py",
+                  "trackfolio/infrastructure/album_catalog.py",
+                  "trackfolio/interfaces/gui/album_view.py",
+                  "trackfolio/interfaces/gui/cover_widget.py",
                   "trackfolio/infrastructure/cover_files.py",
                   "trackfolio/interfaces/gui/cover_dialog.py",
                   "trackfolio/application/tag_write_errors.py",
@@ -422,6 +427,14 @@ jobs:
           assert sidecar.nfo_results[0].state == "updated", sidecar
           assert ElementTree.parse(nfo).findtext("review") == "Keep"
           assert not (audio.parent / ".trackfolio-backups").exists()
+          from trackfolio.application.albums import ListAlbums
+          from trackfolio.infrastructure.session import open_catalog
+          session = open_catalog(target)
+          try:
+              editions = ListAlbums(session).execute()
+              assert any(imported.file_id in edition.file_ids for edition in editions), editions
+          finally:
+              session.close()
           assert find_spec("PySide6") is None
           legacy = target.with_name("legacy.tfo")
           with sqlite3.connect(legacy) as connection:
@@ -503,6 +516,7 @@ jobs:
           assert report["tags_written"] is True, report
           assert report["nfo_written"] is True, report
           assert report["cover_written"] is True, report
+          assert report["albums_viewed"] is True, report
           print("Wheel GUI instalado fuera del checkout:", report)
           """
               subprocess.run(

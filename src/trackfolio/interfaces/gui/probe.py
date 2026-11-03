@@ -273,7 +273,32 @@ def run_probe(argv: list[str]) -> dict[str, object]:
                 state["failure"] = ""
                 if controller._tag_dialog is not None:
                     controller._tag_dialog.reject()
-                QTimer.singleShot(100, app.quit)
+                state["failure"] = "La vista de álbum no confirmó sus datos."
+                QTimer.singleShot(0, request_albums)
+            except Exception as exc:
+                fail(str(exc) or type(exc).__name__)
+
+        def request_albums() -> None:
+            window.views.setCurrentIndex(1)
+            QTimer.singleShot(20, inspect_albums)
+
+        def inspect_albums() -> None:
+            if controller._jobs:
+                QTimer.singleShot(20, inspect_albums)
+                return
+            try:
+                view = window.album_view
+                assert view.list.count() == 1 and view.current_album is not None
+                assert view.title.text() == "Álbum de prueba"
+                assert view.table.rowCount() == 1
+                title_cell, artist_cell = view.table.item(0, 2), view.table.item(0, 3)
+                assert title_cell is not None and title_cell.text() == "Catalog correction"
+                assert artist_cell is not None and artist_cell.text() == "Accept"
+                assert view.cover.pixmap() is not None and not view.cover.pixmap().isNull()
+                assert view.edit_button.isEnabled() and view.write_button.isEnabled()
+                state["albums_viewed"] = True
+                state["failure"] = ""
+                app.quit()
             except Exception as exc:
                 fail(str(exc) or type(exc).__name__)
 
@@ -291,7 +316,7 @@ def run_probe(argv: list[str]) -> dict[str, object]:
         controller.shutdown()
         app.close_guard = None
         dispose_window(window)
-        if exit_code != 0 or not state["events"] or not state.get("tags_written"):
+        if exit_code != 0 or not state["events"] or not state.get("albums_viewed"):
             raise RuntimeError(str(state["failure"]))
         return {
             "platform": app.platformName(),
@@ -303,4 +328,5 @@ def run_probe(argv: list[str]) -> dict[str, object]:
             "tags_written": bool(state.get("tags_written")),
             "nfo_written": bool(state.get("nfo_written")),
             "cover_written": bool(state.get("cover_written")),
+            "albums_viewed": bool(state.get("albums_viewed")),
         }

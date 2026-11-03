@@ -3,6 +3,7 @@
 from pathlib import Path
 from typing import Protocol
 
+from trackfolio.domain.album import AlbumTrack
 from trackfolio.domain.catalog import CatalogEntry, CatalogSummary
 from trackfolio.domain.metadata import TrackMetadata
 
@@ -76,6 +77,8 @@ class CatalogSession(TrackLookup, SummaryListing, Protocol):
     """Catálogo abierto para lectura; la interfaz no conoce su motor de BD."""
 
     database_path: Path
+
+    def list_album_tracks(self) -> tuple[AlbumTrack, ...]: ...
 
     def close(self) -> None: ...
 

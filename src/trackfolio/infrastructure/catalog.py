@@ -486,6 +486,11 @@ class SqliteCatalogRepository:
         )
 
     def list_summaries(self) -> tuple[CatalogSummary, ...]:
+        with self.engine.connect() as connection:
+            return self.summaries_from_connection(connection)
+
+    @staticmethod
+    def summaries_from_connection(connection: Connection) -> tuple[CatalogSummary, ...]:
         """Leer todas las filas de la lista sin cargar el detalle de cada archivo."""
         statement = (
             select(
@@ -508,22 +513,21 @@ class SqliteCatalogRepository:
         )
         summaries: dict[int, CatalogSummary] = {}
         credits: dict[int, list[str]] = {}
-        with self.engine.connect() as connection:
-            for row in connection.execute(statement).mappings():
-                file_id = int(row["file_id"])
-                if file_id not in summaries:
-                    summaries[file_id] = CatalogSummary(
-                        file_id=file_id,
-                        track_id=int(row["track_id"]),
-                        title=row["title"],
-                        artists=(),
-                        album=row["album_title"],
-                        album_year=row["album_year"],
-                        relative_path=row["relative_path"],
-                    )
-                    credits[file_id] = []
-                if row["artist_name"] is not None:
-                    credits[file_id].append(row["artist_name"])
+        for row in connection.execute(statement).mappings():
+            file_id = int(row["file_id"])
+            if file_id not in summaries:
+                summaries[file_id] = CatalogSummary(
+                    file_id=file_id,
+                    track_id=int(row["track_id"]),
+                    title=row["title"],
+                    artists=(),
+                    album=row["album_title"],
+                    album_year=row["album_year"],
+                    relative_path=row["relative_path"],
+                )
+                credits[file_id] = []
+            if row["artist_name"] is not None:
+                credits[file_id].append(row["artist_name"])
         return tuple(
             CatalogSummary(
                 file_id=summary.file_id,

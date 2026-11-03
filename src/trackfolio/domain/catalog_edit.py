@@ -12,6 +12,7 @@ EditField = Literal[
     "artists",
     "album",
     "album_year",
+    "album_artists",
     "track_number",
     "track_total",
     "disc_number",
@@ -25,6 +26,7 @@ EDIT_FIELDS: tuple[EditField, ...] = (
     "artists",
     "album",
     "album_year",
+    "album_artists",
     "track_number",
     "track_total",
     "disc_number",
@@ -32,7 +34,13 @@ EDIT_FIELDS: tuple[EditField, ...] = (
     "genres",
     "lyrics",
 )
-BATCH_EDIT_FIELDS: tuple[EditField, ...] = ("album", "artists", "album_year", "genres")
+BATCH_EDIT_FIELDS: tuple[EditField, ...] = (
+    "album",
+    "artists",
+    "album_year",
+    "genres",
+    "album_artists",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,6 +55,7 @@ class EditableValues:
     disc_total: int | None = None
     genres: tuple[str, ...] = ()
     lyrics: str | None = None
+    album_artists: tuple[str, ...] = ()
 
     def as_dict(self) -> dict[EditField, EditValue]:
         return {

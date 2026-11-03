@@ -214,6 +214,17 @@ def test_automatic_write_removes_alias_overriding_an_already_matching_uslt(setup
 def prepare_change(setup_tags, tmp_path, *, kind="flac", fields=("title",), **changes):
     database, repository, catalog, codec, files = setup_tags
     source = make_source(tmp_path, kind)
+    if "album_artists" in changes:
+        if kind == "flac":
+            tags = FLAC(source)
+            tags["ALBUMARTIST"] = ["Original album artist"]
+            tags.save()
+        else:
+            from mutagen.id3 import TPE2
+
+            tags = ID3(source)
+            tags.add(TPE2(encoding=3, text=["Original album artist"]))
+            tags.save(source)
     entry = repository.save(read_metadata(source), source.parent, source.name)
     edit(database, entry.file_id, **(changes or {"title": "Corrected"}))
     preview = PreviewTagWrites(catalog, codec, files).execute(
@@ -225,7 +236,7 @@ def prepare_change(setup_tags, tmp_path, *, kind="flac", fields=("title",), **ch
 @pytest.mark.parametrize("kind", ["flac", "mp3"])
 @pytest.mark.parametrize("field", EDIT_FIELDS)
 def test_explicit_clearing_of_each_field(setup_tags, tmp_path, kind, field):
-    value = () if field in ("artists", "genres") else None
+    value = () if field in ("artists", "genres", "album_artists") else None
     source, entry, preview = prepare_change(
         setup_tags, tmp_path, kind=kind, fields=(field,), **{field: value}
     )

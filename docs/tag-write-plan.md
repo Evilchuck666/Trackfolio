@@ -14,7 +14,7 @@ Editar y guardar los valores en el catálogo, seleccionar una o varias canciones
 pulsar **Escribir etiquetas…**. El diálogo muestra inmediatamente las canciones,
 la salida del progreso y únicamente **Cerrar** y **Escribir etiquetas**.
 
-Pulsar escribir sobrescribe automáticamente todas las diferencias entre los diez
+Pulsar escribir sobrescribe automáticamente todas las diferencias entre los
 campos editables guardados y los archivos. Cada canción utiliza sus propios valores;
 la selección múltiple no iguala títulos, artistas ni numeración por sí misma. Un valor
 vacío guardado elimina su etiqueta. Los archivos sin diferencias se omiten.
@@ -39,6 +39,7 @@ antigua ni cambiar automáticamente los destinatarios.
 | --- | --- | --- |
 | Canción | `TITLE` | `TIT2` |
 | Artistas | Valores repetidos de `ARTIST` | Lista `TPE1` |
+| Artistas del álbum | Valores repetidos de `ALBUMARTIST` | Lista `TPE2` |
 | Álbum | `ALBUM` | `TALB` |
 | Año | `DATE` | `TDRC`, o representación v2.3 |
 | Pista / total | `TRACKNUMBER` / `TRACKTOTAL` | `TRCK` |
@@ -138,7 +139,7 @@ exponer su granularidad en la GUI. El esquema `002` y las dependencias no cambia
 
 La aceptación verifica:
 
-- Editar → guardar → escribir → importar en otro catálogo y recuperar los diez campos.
+- Editar → guardar → escribir → importar en otro catálogo y recuperar los campos editables.
 - Eliminaciones, Unicode, listas, fechas, numeración y USLT, sin cambiar metadatos ajenos.
 - Hash del audio real y conservación de imágenes, bloques, frames desconocidos y APEv2.
 - Fallos antes/después de publicar, espacio insuficiente, archivos modificados, permisos,

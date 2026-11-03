@@ -140,6 +140,7 @@ def _read_snapshot(connection: Connection, file_id: int) -> _Snapshot | None:
         disc_total=track["disc_total"],
         genres=tuple(name for _position, name in genre_credits),
         lyrics=track["lyrics"],
+        album_artists=tuple(name for role, _, name in album_credits if role == "album_artist"),
     )
     return _Snapshot(EditableTrack(file_id, track_id, values, token), file, album, album_credits)
 
@@ -222,6 +223,11 @@ class _SqliteCatalogEditSession:
         date = changes.get("album_date", old_album.get("date"))
         disc_total = old_album.get("disc_total")
         credits = snapshot.album_credits
+        if "album_artists" in changes:
+            credits = tuple(credit for credit in credits if credit[0] != "album_artist") + tuple(
+                ("album_artist", position, name)
+                for position, name in enumerate(changes["album_artists"])
+            )
         if title is None and year is None and date is None and disc_total is None and not credits:
             return None
         library_id = int(snapshot.file["library_id"])
@@ -303,9 +309,9 @@ class _SqliteCatalogEditSession:
         track_values: dict[str, Any] = {
             field: value
             for field, value in changes.items()
-            if field not in ("artists", "genres", "album", "album_year")
+            if field not in ("artists", "genres", "album", "album_year", "album_artists")
         }
-        if "album" in changes or "album_year" in changes:
+        if any(field in changes for field in ("album", "album_year", "album_artists")):
             track_values["album_id"] = self._edited_album_id(connection, snapshot, changes)
         if track_values:
             connection.execute(update(tracks).where(tracks.c.id == track_id).values(**track_values))

@@ -343,7 +343,12 @@ def _copy(
 
 def _values(data: dict[str, Any]) -> EditableValues:
     return EditableValues(
-        **{**data, "artists": tuple(data["artists"]), "genres": tuple(data["genres"])}
+        **{
+            **data,
+            "artists": tuple(data["artists"]),
+            "genres": tuple(data["genres"]),
+            "album_artists": tuple(data.get("album_artists", ())),
+        }
     )
 
 

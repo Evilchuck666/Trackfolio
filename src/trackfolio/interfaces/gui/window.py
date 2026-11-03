@@ -25,7 +25,6 @@ from PySide6.QtGui import (
     QKeyEvent,
     QKeySequence,
     QMouseEvent,
-    QPixmap,
     QRegularExpressionValidator,
     QResizeEvent,
     QShortcut,
@@ -46,6 +45,7 @@ from PySide6.QtWidgets import (
     QSizePolicy,
     QSplitter,
     QTableView,
+    QTabWidget,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -59,50 +59,11 @@ from trackfolio.domain.catalog_edit import (
     FieldChange,
     TrackEditPatch,
 )
+from trackfolio.interfaces.gui.album_view import AlbumView
 from trackfolio.interfaces.gui.catalog_model import CatalogTableModel
+from trackfolio.interfaces.gui.cover_widget import CoverLabel
 from trackfolio.interfaces.gui.ordered_labels import OrderedLabels
 from trackfolio.interfaces.gui.theme import icon
-
-
-class CoverLabel(QLabel):
-    """Scale a cover from the catalog, preserving aspect ratio at each screen scale."""
-
-    def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self.setObjectName("Cover")
-        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.setFixedSize(184, 184)
-        self.setAccessibleName("Portada del álbum")
-        self._original = QPixmap()
-
-    def set_cover(self, data: bytes | None) -> None:
-        self._original = QPixmap()
-        if data is not None:
-            self._original.loadFromData(data)
-        self._redraw()
-
-    def _redraw(self) -> None:
-        if self._original.isNull():
-            self.clear()
-            return
-        ratio = self.devicePixelRatioF()
-        scaled = self._original.scaled(
-            self.size() * ratio,
-            Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.SmoothTransformation,
-        )
-        scaled.setDevicePixelRatio(ratio)
-        self.setPixmap(scaled)
-
-    def resizeEvent(self, event: QResizeEvent) -> None:
-        super().resizeEvent(event)
-        self._redraw()
-
-    def event(self, event: QEvent) -> bool:
-        result = super().event(event)
-        if event.type() == QEvent.Type.DevicePixelRatioChange and hasattr(self, "_original"):
-            self._redraw()
-        return result
 
 
 class TitleBar(QWidget):
@@ -256,6 +217,7 @@ class MainWindow(QMainWindow):
     dirty_changed = Signal(bool)
     suggestions_requested = Signal(str, str)
     closing = Signal()
+    view_changed = Signal(int)
 
     def __init__(self) -> None:
         super().__init__()
@@ -267,6 +229,8 @@ class MainWindow(QMainWindow):
         self.quit_shortcut.activated.connect(self.close)
         self.resize(1320, 840)
         self.setMinimumSize(960, 640)
+        self.view_guard: Callable[[int], bool] | None = None
+        self._view_index = 0
         self._catalog_path: Path | None = None
         self._busy = False
         self._importing = False
@@ -322,7 +286,20 @@ class MainWindow(QMainWindow):
         self.splitter.setStretchFactor(0, 1)
         self.splitter.setStretchFactor(1, 1)
         self.splitter.setSizes([620, 620])
-        content_layout.addWidget(self.splitter, 1)
+        self.views = QTabWidget(content)
+        self.views.setAccessibleName("Vistas de la biblioteca")
+        self.views.addTab(self.splitter, "Canciones")
+        self.album_view = AlbumView(self.views)
+        self.views.addTab(self.album_view, "Álbumes")
+        self.album_view.draft_changed.connect(self._update_actions)
+        for field in (
+            self.album_view.search,
+            *self.album_view.fields.values(),
+            *(labels.name_edit for labels in self.album_view.labels.values()),
+        ):
+            field.installEventFilter(self)
+        self.views.currentChanged.connect(self._view_changed)
+        content_layout.addWidget(self.views, 1)
 
         footer = QHBoxLayout()
         self.status_label = QLabel("Abre un catálogo o importa música para comenzar.", content)
@@ -337,6 +314,16 @@ class MainWindow(QMainWindow):
         content_layout.addLayout(footer)
         self._handles = self._build_resize_handles()
         self.set_busy(False)
+
+    def _view_changed(self, index: int) -> None:
+        if self.view_guard is not None and not self.view_guard(index):
+            blocker = QSignalBlocker(self.views)
+            self.views.setCurrentIndex(self._view_index)
+            del blocker
+            return
+        self._view_index = index
+        self.view_changed.emit(index)
+        self._update_actions()
 
     def _build_toolbar(self, layout: QVBoxLayout) -> None:
         toolbar = QHBoxLayout()
@@ -662,6 +649,8 @@ class MainWindow(QMainWindow):
         if preferred is None and path == self._catalog_path:
             preferred = self._current_file_id
         self._catalog_path = path
+        if path is None:
+            self.album_view.set_albums(())
         blocker = QSignalBlocker(self.table.selectionModel())
         self.model.set_summaries(rows)
         self.table.clearSelection()
@@ -980,6 +969,8 @@ class MainWindow(QMainWindow):
             self._catalog_path is not None and not self._busy and navigating
         )
         self.table.setEnabled(navigating)
+        self.views.tabBar().setEnabled(navigating)
+        self.album_view.set_busy(self._busy or not navigating, blocked=not navigating)
         self.edit_action.setEnabled(
             self._edit_enabled
             and self._detail_loaded
@@ -1012,6 +1003,18 @@ class MainWindow(QMainWindow):
             and self.edit_dirty()
         )
         self.cancel_edit_action.setEnabled(self._editing and not self._saving)
+        if self.views.currentIndex() == 1:
+            album_editing = self.album_view._editing
+            self.edit_action.setEnabled(
+                self._edit_enabled
+                and self.album_view.current_album is not None
+                and not self._busy
+                and navigating
+                and not album_editing
+            )
+            self.save_action.setEnabled(album_editing and self.album_view.dirty() and navigating)
+            self.cancel_edit_action.setEnabled(album_editing and not self._saving)
+
         for action, button in (
             (self.edit_action, self.edit_button),
             (self.save_action, self.save_button),

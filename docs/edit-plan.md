@@ -35,8 +35,10 @@ conservando los créditos de las demás canciones y la identidad de ambos artist
 | Género(s) | Lista ordenada de nombres, o lista vacía. |
 | Líricas | Texto plano, con sus saltos de línea; vacío se guarda como `NULL`. |
 
-Son los diez campos que muestra actualmente el detalle. Fecha y artistas de álbum,
-portada, rutas y propiedades técnicas conservarán sus valores. El año se tratará como
+Son los diez campos del detalle de canción. La [vista de álbum](album-view.md),
+añadida posteriormente, permite editar también los artistas del álbum y publicarlos
+en las etiquetas. Fecha, portada, rutas y propiedades técnicas conservan sus valores
+al guardar el catálogo. El año se tratará como
 un dato explícito del catálogo: cambiarlo no reescribirá la fecha de álbum importada.
 La edición por lotes se añadió posteriormente: permite seleccionar varios `file_id` y
 aplicar álbum, artistas, año y géneros mediante `UpdateCatalogTracks`. La GUI muestra
