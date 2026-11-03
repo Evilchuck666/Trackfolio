@@ -668,3 +668,24 @@ Validación local de la corrección:
 Esta corrección se verifica sobre archivos temporales; para aplicarla a una biblioteca
 abierta hay que reiniciar la aplicación y ejecutar **Escribir etiquetas** de nuevo.
 Sin publicación ni ejecución nueva de CI; la validación nativa multiplataforma sigue pendiente.
+
+### Cabecera XML y representación de artistas en NFO (2026-11-03)
+
+La escritura conserva la declaración XML original, el salto de línea que la separa
+del contenido y los saltos finales, respetando LF/CRLF y la codificación admitida.
+Una cabecera pegada a `<album>` se repara incluso sin diferencias musicales.
+
+No se añade `albumArtistCredits` a un NFO que no lo contiene. Se sincroniza el
+`artist` directo si existe. Al existir esa representación, se retiran los bloques
+de créditos simples redundantes de versiones anteriores; los créditos con IDs,
+atributos o anotaciones se conservan con sus verificaciones de protección.
+
+Validación local: **649 passed, 6 skipped**, Ruff, formato y mypy correctos y
+diagnóstico GUI `offscreen` con **0 errores**. Las pruebas incluyen LF, CRLF,
+separación con líneas en blanco, UTF-8, UTF-16 e ISO-8859-1, salto final,
+reparación sólo de NFO con audio sin diferencias, limpieza de bloques simples,
+conservación de créditos enriquecidos e idempotencia del segundo intento.
+El probe comprueba la separación de la cabecera y la ausencia de créditos añadidos.
+
+Para aplicar el cambio en una sesión abierta, reiniciar Trackfolio y ejecutar
+**Escribir etiquetas**. Validación nativa y ejecución nueva de CI pendientes.

@@ -40,7 +40,7 @@ catalogadas de cada carpeta, sin escribir audio fuera de la selección:
 | `year` | Año guardado, coincidente en todas las pistas. |
 | `releasedate` existente | Actualiza el año conservando mes/día válidos; una fecha inválida se reduce al año. No cambia `originalreleasedate`. |
 | `genre` | Unión de géneros sin duplicados exactos, según ruta relativa y orden de cada lista. |
-| `albumArtistCredits/artist` | Créditos de álbum coincidentes; si todos carecen de ellos, artistas de pista cuando coincidan en todas las canciones. |
+| `artist` o `albumArtistCredits/artist` existentes | Créditos de álbum coincidentes; si todos carecen de ellos, artistas de pista cuando coincidan en todas las canciones. Se conserva la representación existente, sin añadir bloques de créditos donde no existen. |
 | `artistdesc` existente | Descripción de los artistas resueltos, separados por ` / `. No se divide ningún nombre. |
 | `track/title` en una lista de pistas existente | Título guardado de cada canción destinataria; se asocia por `position` y `discnumber` si existe en la pista o el álbum. |
 
@@ -48,6 +48,9 @@ Los valores vacíos coherentes eliminan sus elementos gestionados. Si faltan cr�
 de álbum y difieren los artistas de pista, conserva los créditos NFO existentes,
 como en una recopilación. Se conservan los identificadores asociados a los mismos
 artistas; sustituir un crédito enriquecido por otro artista produce un conflicto.
+Si hay un `artist` directo, se usa esa representación y se retiran los bloques simples
+`albumArtistCredits` redundantes; se conservan los bloques con identificadores, atributos o
+anotaciones. Esto permite limpiar los bloques redundantes añadidos por versiones anteriores.
 
 Álbumes, años o créditos contradictorios, audio sin catalogar y pistas catalogadas
 ausentes dejan el NFO intacto con una incidencia. Un XML no compatible o malformado
@@ -65,7 +68,10 @@ Se conservan reseñas, sellos, imágenes, identificadores, puntuaciones, campos
 desconocidos y el resto de los datos de las listas de pistas, además de los atributos y comentarios
 de los elementos conservados y las instrucciones de procesamiento. Al escribir
 puede normalizarse la representación XML; se mantiene la codificación admitida,
-el BOM UTF-8 y el uso de CRLF cuando existen. Sin diferencias semánticas, no cambia
+el BOM UTF-8 y el uso de CRLF cuando existen. Se conserva la declaración XML original,
+su separación respecto al contenido y los saltos finales. Si la declaración y `<album>`
+estaban pegados por una escritura anterior, se separan con un salto de línea, incluso
+sin diferencias musicales. Sin cambios de datos ni reparación de cabecera, no cambia
 el contenido, la fecha ni el archivo físico.
 
 Cada NFO se publica después de que sus audios destinatarios hayan terminado

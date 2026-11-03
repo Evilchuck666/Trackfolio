@@ -7,6 +7,10 @@ Este documento conserva el diseño de la entrega. No se han creado ramas ni publ
 Corrección posterior: se amplía el alcance a los títulos `track/title` tras reproducir
 el caso «To War! → To War!2» de un NFO con lista de pistas. La primera entrega sólo
 sincronizaba los datos generales del álbum.
+La escritura conserva ahora la separación de la declaración XML y no añade
+`albumArtistCredits` a documentos que no lo contienen. Se prefiere el `artist` directo
+frente a los bloques simples redundantes, reparando los NFO generados por la primera entrega;
+los créditos enriquecidos se conservan. La reparación también separa una cabecera pegada.
 
 ## Resultado esperado y alcance
 

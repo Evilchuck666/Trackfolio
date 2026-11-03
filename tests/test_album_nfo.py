@@ -137,6 +137,69 @@ def test_encoding_bom_and_crlf(tmp_path, encoding, bom):
         assert result.startswith(codecs.BOM_UTF8)
 
 
+@pytest.mark.parametrize("encoding", ["utf-8", "utf-16", "iso-8859-1"])
+@pytest.mark.parametrize("gap", ["\n", "\r\n", "\n\n  "])
+def test_xml_declaration_gap_and_final_newline_are_preserved(tmp_path, encoding, gap):
+    header = f'<?xml version="1.0" encoding="{encoding}"?>'
+    newline = "\r\n" if "\r\n" in gap else "\n"
+    original = f"{header}{gap}<album><title>Old</title><artist>Abbath</artist></album>{newline}"
+    target = change_xml(tmp_path, original.encode(encoding), replace(VALUES, artists=("Abbath",)))
+    written = target.read_bytes().decode(encoding)
+    assert written.startswith(header + gap + "<album>")
+    assert written.endswith("</album>" + newline)
+    assert "albumArtistCredits" not in written
+
+
+def test_joined_header_can_be_repaired_without_metadata_differences(tmp_path):
+    values = AlbumNfoValues("Abbath", None, (), ("Abbath",))
+    target = change_xml(
+        tmp_path,
+        '<?xml version="1.0" encoding="utf-8"?><album><title>Abbath</title>'
+        "<artist>Abbath</artist></album>",
+        values,
+    )
+    assert target.read_text().startswith('<?xml version="1.0" encoding="utf-8"?>\n<album>')
+    assert "albumArtistCredits" not in target.read_text()
+
+
+@pytest.mark.parametrize("credit_name", ["Abbath", "Stale credits"])
+def test_plain_duplicate_artist_credits_are_removed_without_other_changes(tmp_path, credit_name):
+    values = AlbumNfoValues("Abbath", None, (), ("Abbath",))
+    target = change_xml(
+        tmp_path,
+        '<?xml version="1.0" encoding="utf-8"?>\n<album><title>Abbath</title>'
+        "<artist>Abbath</artist>\n"
+        f"<albumArtistCredits><artist>{credit_name}</artist></albumArtistCredits></album>\n",
+        values,
+    )
+    assert xml_values(target, "artist") == ["Abbath"]
+    assert "albumArtistCredits" not in target.read_text()
+    assert target.read_text().endswith("</album>\n")
+
+
+def test_rich_artist_credits_are_preserved_when_direct_artist_also_exists(tmp_path):
+    target = change_xml(
+        tmp_path,
+        "<album><title>Old</title><artist>Abbath</artist>"
+        "<albumArtistCredits><artist>Abbath</artist>"
+        "<musicBrainzArtistID>keep-id</musicBrainzArtistID></albumArtistCredits></album>",
+        replace(VALUES, artists=("Abbath",)),
+    )
+    assert "<musicBrainzArtistID>keep-id</musicBrainzArtistID>" in target.read_text()
+
+
+def test_artist_updates_use_existing_representation_without_new_credits(tmp_path):
+    target = change_xml(tmp_path, "<album><artist>Old</artist></album>")
+    assert xml_values(target, "artist") == ["Artist & Ω"]
+    assert "albumArtistCredits" not in target.read_text()
+
+
+def test_missing_artist_representation_does_not_create_credit_elements(tmp_path):
+    target = change_xml(tmp_path, "<album><title>Old</title></album>")
+    assert not xml_values(target, "artist")
+    assert "albumArtistCredits" not in target.read_text()
+
+
 @pytest.mark.parametrize(
     "content",
     [
@@ -230,6 +293,27 @@ def test_nfo_only_operation_and_exact_idempotence(album):
     assert nfo.stat().st_ino == stat.st_ino
     journal = json.loads(report.journal_path.read_text())
     assert journal["schema"] == 2 and journal["closed"]
+
+
+def test_service_repairs_old_joined_header_and_duplicate_credits_without_audio_changes(album):
+    database, _, source, entry, nfo, service = album
+    assert service.execute(database, (entry.file_id,)).nfo_results[0].state == "updated"
+    original_audio = source.read_bytes()
+    text = nfo.read_text().replace("?>\n", "?>")
+    text = text.replace(
+        "</album>",
+        "<artist>Artist</artist>"
+        "<albumArtistCredits><artist>Artist</artist></albumArtistCredits></album>",
+    )
+    nfo.write_text(text)
+    report = service.execute(database, (entry.file_id,))
+    assert report.results[0].state == "unchanged"
+    assert report.nfo_results[0].state == "updated", report
+    assert nfo.read_text().startswith('<?xml version="1.0" encoding="utf-8"?>\n<album>')
+    assert xml_values(nfo, "artist") == ["Artist"]
+    assert "albumArtistCredits" not in nfo.read_text()
+    assert source.read_bytes() == original_audio
+    assert service.execute(database, (entry.file_id,)).nfo_results[0].state == "unchanged"
 
 
 @pytest.mark.parametrize("write_audio_first", [False, True])
@@ -629,6 +713,7 @@ def test_album_artist_credits_override_track_artist_fallback(album):
     repository.save(
         replace(read_metadata(source), album_artists=("Album artist",)), source.parent, source.name
     )
+    nfo.write_text("<album><title>Old</title><artist>Old</artist></album>")
     report = service.execute(database, (entry.file_id,))
     assert report.nfo_results[0].state == "updated"
     assert "<artist>Album artist</artist>" in nfo.read_text()

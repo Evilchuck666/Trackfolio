@@ -196,7 +196,9 @@ def run_probe(argv: list[str]) -> dict[str, object]:
                 state["failure"] = "La ventana no confirmó la escritura de etiquetas."
                 _audio_source(Path(directory))
                 (source.parent / "album.nfo").write_text(
-                    "<album><title>Outdated</title><review>Keep this review</review>"
+                    '<?xml version="1.0" encoding="utf-8"?>\n'
+                    "<album><title>Outdated</title><artist>Artista de prueba</artist>"
+                    "<review>Keep this review</review>"
                     "<track><position>3</position><title>Canción de prueba</title>"
                     "<duration>0:02</duration></track></album>",
                     encoding="utf-8",
@@ -236,8 +238,12 @@ def run_probe(argv: list[str]) -> dict[str, object]:
                 assert nfo.findtext("review") == "Keep this review"
                 assert nfo.findtext("track/title") == "Catalog correction"
                 assert nfo.findtext("track/duration") == "0:02"
-                assert nfo.findtext("albumArtistCredits/artist") == "Accept", ElementTree.tostring(
-                    nfo
+                assert nfo.findtext("artist") == "Accept", ElementTree.tostring(nfo)
+                assert nfo.find("albumArtistCredits") is None
+                assert (
+                    (source.parent / "album.nfo")
+                    .read_text(encoding="utf-8")
+                    .startswith('<?xml version="1.0" encoding="utf-8"?>\n<album>')
                 )
                 state["tags_written"] = True
                 state["nfo_written"] = True

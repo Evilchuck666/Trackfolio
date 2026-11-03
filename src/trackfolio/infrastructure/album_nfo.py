@@ -126,8 +126,19 @@ def _artists(root: minidom.Element, artists: tuple[str, ...]) -> bool:
         if len(nodes) != 1:
             raise TagWriteError("Crédito NFO sin un único nombre de artista.")
         names.append(_text(nodes[0]))
-    changed = tuple(names) != artists
-    if changed:
+    direct = _elements(root, "artist")
+    changed = False
+    # Prefer the existing direct artist representation over simple credit blocks.
+    # Rich credits (IDs, attributes or annotations) retain their representation.
+    if direct and credits and not any(_rich_credit(credit) for credit in credits):
+        for credit in credits:
+            root.removeChild(credit)
+        credits = []
+        changed = True
+    if direct:
+        changed = _set_values(root, "artist", artists) or changed
+    if credits and tuple(names) != artists:
+        changed = True
         available = list(zip(names, credits, strict=True))
         ordered: list[minidom.Element] = []
         for name in artists:
@@ -228,18 +239,43 @@ def _apply(document: minidom.Document, values: AlbumNfoValues) -> bool:
     return changed
 
 
+def _declaration(text: str) -> re.Match[str] | None:
+    return re.match(r"\ufeff?(<\?xml\s.*?\?>)([ \t\r\n]*)", text, re.DOTALL)
+
+
+def _needs_header_break(document: minidom.Document, original: bytes) -> bool:
+    encoding = document.encoding or (
+        "utf-16" if original.startswith((b"\xff\xfe", b"\xfe\xff")) else "utf-8"
+    )
+    header = _declaration(original.decode(encoding))
+    return header is not None and not any(char in header[2] for char in "\r\n")
+
+
 def _serialize(document: minidom.Document, original: bytes) -> bytes:
     encoding = document.encoding or (
         "utf-16" if original.startswith((b"\xff\xfe", b"\xfe\xff")) else "utf-8"
     )
     try:
         codecs.lookup(encoding)
-        result = document.toxml(encoding=encoding, standalone=document.standalone)
-        text = result.decode(encoding)
+        text = document.toxml(encoding=encoding, standalone=document.standalone).decode(encoding)
         # XML parsers normalize source line endings; preserve the original convention.
         original_text = original.decode(encoding)
+        previous_header = _declaration(original_text)
+        generated_header = _declaration(text)
+        assert generated_header is not None
+        gap = previous_header[2] if previous_header else ""
+        if not any(char in gap for char in "\r\n"):
+            gap = "\n"
+        # Keep the declaration spelling and the whitespace discarded by minidom.
+        gap = gap.replace("\r\n", "\n").replace("\r", "\n")
+        declaration = previous_header[1] if previous_header else generated_header[1]
+        text = declaration + gap + text[generated_header.end() :]
+        trailing = re.search(r"[ \t\r\n]*\Z", original_text)
+        assert trailing is not None
+        text += trailing[0].replace("\r\n", "\n").replace("\r", "\n")
         if "\r\n" in original_text:
-            result = text.replace("\n", "\r\n").encode(encoding)
+            text = text.replace("\n", "\r\n")
+        result = text.encode(encoding)
         if original.startswith(codecs.BOM_UTF8) and not result.startswith(codecs.BOM_UTF8):
             result = codecs.BOM_UTF8 + result
         return result
@@ -265,9 +301,10 @@ class XmlAlbumNfoCodec:
         return data
 
     def plan(self, path: Path, values: AlbumNfoValues) -> bool:
-        document = _parse(self._read(path))
+        original = self._read(path)
+        document = _parse(original)
         try:
-            return _apply(document, values)
+            return _apply(document, values) or _needs_header_break(document, original)
         finally:
             document.unlink()
 
