@@ -279,6 +279,7 @@ class MainWindow(QMainWindow):
         content_layout.addWidget(self.error_label)
 
         self.splitter = QSplitter(Qt.Orientation.Horizontal, content)
+        self.splitter.setContentsMargins(0, 12, 0, 0)
         self.splitter.setChildrenCollapsible(False)
         self.splitter.setHandleWidth(14)
         self.splitter.addWidget(self._build_catalog())
