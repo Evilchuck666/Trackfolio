@@ -86,6 +86,39 @@ def test_codec_changes_managed_fields_and_preserves_document(tmp_path):
         assert kept in text
 
 
+@pytest.mark.parametrize("indent", ["    ", "\t"])
+@pytest.mark.parametrize("newline", ["\n", "\r\n"])
+def test_added_genres_stay_together_and_preserve_indentation(tmp_path, indent, newline):
+    original = newline.join(
+        [
+            '<?xml version="1.0" encoding="utf-8"?>',
+            "<album>",
+            f"{indent}<title>Abbath</title>",
+            f"{indent}<genre>Thrash Metal</genre>",
+            f"{indent}<track><position>1</position><title>Keep</title></track>",
+            "</album>",
+            "",
+        ]
+    )
+    values = AlbumNfoValues("Abbath", None, ("Thrash Metal", "Black Metal", "Metal"), None)
+    target = change_xml(tmp_path, original, values)
+    expected = original.replace(
+        "<genre>Thrash Metal</genre>",
+        f"<genre>Thrash Metal</genre>{newline}{indent}<genre>Black Metal</genre>"
+        f"{newline}{indent}<genre>Metal</genre>",
+    )
+    assert target.read_bytes() == expected.encode()
+
+
+def test_missing_field_is_inserted_before_closing_indentation(tmp_path):
+    original = '<?xml version="1.0"?>\n<album>\n  <title>Abbath</title>\n</album>\n'
+    target = change_xml(tmp_path, original, AlbumNfoValues("Abbath", None, ("Metal",), None))
+    assert (
+        target.read_bytes()
+        == original.replace("\n</album>", "\n  <genre>Metal</genre>\n</album>").encode()
+    )
+
+
 def test_namespaced_extension_fields_are_preserved(tmp_path):
     target = change_xml(tmp_path, '<album><title xmlns="urn:extension">Keep</title></album>')
     doc = minidom.parse(str(target))

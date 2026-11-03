@@ -75,12 +75,32 @@ def _set_values(parent: minidom.Element, name: str, values: tuple[str, ...]) -> 
         else:
             node = parent.ownerDocument.createElement(name)
             node.appendChild(parent.ownerDocument.createTextNode(value))
-            parent.appendChild(node)
+            _insert_value(parent, node)
     for node in nodes[len(values) :]:
         # Removing a managed value removes that element intentionally. Nested fields
         # are rejected by _text, rather than silently dropping unknown structures.
         parent.removeChild(node)
     return True
+
+
+def _insert_value(parent: minidom.Element, node: minidom.Element) -> None:
+    """Insert beside matching fields, borrowing their existing whitespace."""
+    assert parent.ownerDocument is not None
+    siblings = _elements(parent, node.tagName)
+    if not siblings:
+        siblings = [child for child in parent.childNodes if isinstance(child, minidom.Element)]
+    if not siblings:
+        parent.insertBefore(node, parent.firstChild)
+        return
+    anchor = siblings[-1]
+    following = anchor.nextSibling
+    assert following is None or isinstance(
+        following, (minidom.Element, minidom.Text, minidom.Comment, minidom.ProcessingInstruction)
+    )
+    spacing = anchor.previousSibling
+    if isinstance(spacing, minidom.Text) and not spacing.data.strip():
+        parent.insertBefore(parent.ownerDocument.createTextNode(spacing.data), following)
+    parent.insertBefore(node, following)
 
 
 def _release_date(previous: str, year: int) -> str:
