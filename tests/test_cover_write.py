@@ -74,11 +74,14 @@ def test_no_images_preserves_existing_cover_and_allows_text_write(setup_tags, tm
     source = make_source(tmp_path, kind)
     before = pictures(source)
     entry = repository.save(read_metadata(source), source.parent, source.name)
+    nfo = source.parent / "album.nfo"
+    nfo.write_text("<album><thumb>old.jpg</thumb></album>", encoding="utf-8")
     edit(database, entry.file_id, title="Text only")
     report = service_for(setup_tags).execute(database, (entry.file_id,))
     assert report.results[0].state == "confirmed", report
     assert pictures(source) == before
     assert report.results[0].cover_action == "preserved"
+    assert "<thumb>old.jpg</thumb>" in nfo.read_text(encoding="utf-8")
 
 
 def test_multiple_images_require_explicit_choice_before_any_write(setup_tags, tmp_path):
@@ -104,6 +107,35 @@ def test_multiple_images_require_explicit_choice_before_any_write(setup_tags, tm
     )
     assert report.results[0].state == "confirmed", report
     assert front(source) == [("image/png", second.read_bytes())]
+    assert "<thumb>other.png</thumb>" in nfo.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("existing", ["", "    <thumb>old.jpg</thumb>\n"])
+@pytest.mark.parametrize("already_embedded", [False, True])
+def test_selected_cover_updates_nfo_even_when_audio_matches(
+    setup_tags, tmp_path, existing, already_embedded
+):
+    database, repository, _, _, files = setup_tags
+    source = make_source(tmp_path, "flac")
+    entry = repository.save(read_metadata(source), source.parent, source.name)
+    data = front(source)[0][1] if already_embedded else png(3, 2, (0, 255, 0))
+    (source.parent / "new & cover.png").write_bytes(data)
+    nfo = source.parent / "album.nfo"
+    nfo.write_text(
+        '<?xml version="1.0"?>\n<album>\n    <title>Old album</title>\n' + existing + "</album>\n",
+        encoding="utf-8",
+    )
+    service = service_for(setup_tags)
+    report = service.execute(database, (entry.file_id,))
+    assert report.nfo_results[0].state == "updated", report
+    assert "    <thumb>new &amp; cover.png</thumb>\n" in nfo.read_text(encoding="utf-8")
+    assert front(source) == [("image/png", data)]
+    recovered = files.load_journal(report.journal_path)
+    assert recovered.preview.nfo_items[0].values.thumb == "new & cover.png"
+    before = nfo.read_bytes()
+    again = service.execute(database, (entry.file_id,))
+    assert again.nfo_results[0].state == "unchanged", again
+    assert nfo.read_bytes() == before
 
 
 def test_skip_preserves_cover_and_allows_other_tags(setup_tags, tmp_path):
@@ -113,6 +145,8 @@ def test_skip_preserves_cover_and_allows_other_tags(setup_tags, tmp_path):
     for name in ("a.jpg", "b.png"):
         (source.parent / name).write_bytes(png(3, 2))
     old = pictures(source)
+    nfo = source.parent / "album.nfo"
+    nfo.write_text("<album><thumb>old.jpg</thumb></album>", encoding="utf-8")
     edit(database, entry.file_id, title="Text only")
     service = service_for(setup_tags)
     discovery = service.discover_covers(database, (entry.file_id,))
@@ -124,6 +158,7 @@ def test_skip_preserves_cover_and_allows_other_tags(setup_tags, tmp_path):
     )
     assert report.results[0].state == "confirmed", report
     assert report.results[0].cover_action == "skipped" and pictures(source) == old
+    assert "<thumb>old.jpg</thumb>" in nfo.read_text(encoding="utf-8")
 
 
 def test_catalogue_only_refresh_does_not_replace_audio(setup_tags, tmp_path):

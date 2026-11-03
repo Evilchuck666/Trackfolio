@@ -101,6 +101,7 @@ class AlbumNfoValues:
     genres: tuple[str, ...]
     artists: tuple[str, ...] | None  # None preserves existing compilation credits.
     songs: tuple[AlbumNfoSong, ...] = ()
+    thumb: str | None = None  # None preserves the existing thumbnail reference.
 
 
 @dataclass(frozen=True, slots=True)

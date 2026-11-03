@@ -113,6 +113,17 @@ class AlbumNfoWrites:
                         "La carpeta contiene audio sin catalogar o pistas ausentes."
                     )
                 values = album_values(tracks, item.file_ids)
+                covers = {
+                    audio.tags.cover.path.name
+                    for audio in preview.items
+                    if audio.file_id in item.file_ids
+                    and audio.tags is not None
+                    and audio.tags.cover is not None
+                }
+                if len(covers) > 1:
+                    raise TagWriteConflict("Se han seleccionado distintas portadas para el NFO.")
+                if covers:
+                    values = replace(values, thumb=next(iter(covers)))
                 item = replace(item, values=values)
                 changed = self.codec.plan(path, values)
                 self.check(preview, item, cancelled)

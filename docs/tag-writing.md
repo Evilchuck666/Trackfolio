@@ -76,6 +76,7 @@ catalogadas de cada carpeta, sin escribir audio fuera de la selección:
 | `year` | Año guardado, coincidente en todas las pistas. |
 | `releasedate` existente | Actualiza el año conservando mes/día válidos; una fecha inválida se reduce al año. No cambia `originalreleasedate`. |
 | `genre` | Unión de géneros sin duplicados exactos, según ruta relativa y orden de cada lista. |
+| `thumb` | Nombre del archivo de portada elegido para incrustar, también si el audio ya la contiene. Se añade si falta; sin imagen o al conservar la portada actual, no se modifica. |
 | `artist` o `albumArtistCredits/artist` existentes | Créditos de álbum coincidentes; si todos carecen de ellos, artistas de pista cuando coincidan en todas las canciones. Se conserva la representación existente, sin añadir bloques de créditos donde no existen. |
 | `artistdesc` existente | Descripción de los artistas resueltos, separados por ` / `. No se divide ningún nombre. |
 | `track/title` en una lista de pistas existente | Título guardado de cada canción destinataria; se asocia por `position` y `discnumber` si existe en la pista o el álbum. |
@@ -100,7 +101,7 @@ debe identificar una única canción y una única entrada XML: una asociación a
 o ambigua produce un conflicto. Se aceptan ceros iniciales en posición/disco. No se
 crea una lista de pistas donde no existe ni se cambia su orden, posición o duración.
 
-Se conservan reseñas, sellos, imágenes, identificadores, puntuaciones, campos
+Se conservan reseñas, sellos, otras imágenes, identificadores, puntuaciones, campos
 desconocidos y el resto de los datos de las listas de pistas, además de los atributos y comentarios
 de los elementos conservados y las instrucciones de procesamiento. Al escribir
 puede normalizarse la representación XML; se mantiene la codificación admitida,

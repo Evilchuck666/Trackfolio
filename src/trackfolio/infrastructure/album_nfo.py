@@ -248,6 +248,8 @@ def _apply(document: minidom.Document, values: AlbumNfoValues) -> bool:
     assert root is not None
     changed = _set_values(root, "title", (values.title,) if values.title else ())
     changed = _set_values(root, "genre", values.genres) or changed
+    if values.thumb is not None:
+        changed = _set_values(root, "thumb", (values.thumb,)) or changed
     changed = _set_values(root, "year", (f"{values.year:04d}",) if values.year else ()) or changed
     dates = _elements(root, "releasedate")
     if dates:
