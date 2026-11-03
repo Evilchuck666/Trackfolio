@@ -100,11 +100,13 @@ class AlbumView(QWidget):
         self.stats = QLabel(panel)
         self.stats.setProperty("role", "secondary")
         self.stats.setWordWrap(True)
+        self.genres = QLabel(panel)
+        self.genres.setWordWrap(True)
         self.path = QLabel(panel)
         self.path.setProperty("role", "secondary")
         self.path.setWordWrap(True)
         self.path.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        for label in (self.title, self.artists, self.stats, self.path):
+        for label in (self.title, self.artists, self.stats, self.genres, self.path):
             label.setTextFormat(Qt.TextFormat.PlainText)
             info.addWidget(label)
         info.addStretch()
@@ -169,9 +171,6 @@ class AlbumView(QWidget):
         self.error.setWordWrap(True)
         form.addWidget(self.error, 5, 0, 1, 2)
         right.addWidget(self.editor)
-        self.genres = QLabel(panel)
-        self.genres.setWordWrap(True)
-        right.addWidget(self.genres)
         self.table = QTableWidget(0, 5, panel)
         self.table.setHorizontalHeaderLabels(
             ("Disco", "Pista", "Canción", "Artista(s)", "Duración")
@@ -294,7 +293,8 @@ class AlbumView(QWidget):
             f"{discs_label} · {duration_label}"
         )
         self.path.setText(str(album.library_root / album.directory))
-        self.genres.setText(" · ".join(album.genres))
+        self.genres.setText(f"Géneros: {', '.join(album.genres)}" if album.genres else "")
+        self.genres.setVisible(bool(album.genres))
         self.cover.set_cover(None)
         self.table.setRowCount(len(album.tracks))
         for row, track in enumerate(album.tracks):
