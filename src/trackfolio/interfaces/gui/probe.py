@@ -279,7 +279,7 @@ def run_probe(argv: list[str]) -> dict[str, object]:
                 fail(str(exc) or type(exc).__name__)
 
         def request_albums() -> None:
-            window.views.setCurrentIndex(1)
+            window.views.setCurrentWidget(window.album_view)
             QTimer.singleShot(20, inspect_albums)
 
         def inspect_albums() -> None:

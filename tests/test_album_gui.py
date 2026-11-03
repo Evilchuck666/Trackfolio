@@ -41,7 +41,7 @@ def library(setup_tags, tmp_path):
 
 
 def show_albums(app, window, controller):
-    window.views.setCurrentIndex(1)
+    window.views.setCurrentWidget(window.album_view)
     wait_until(app, lambda: not controller._jobs and window.album_view.current_album is not None)
     view = window.album_view
     for row in range(view.list.count()):
@@ -70,7 +70,7 @@ def test_album_view_works_offline_and_opens_an_individual_track(qt_app, setup_ta
         assert sum(not view.list.item(row).isHidden() for row in range(view.list.count())) == 1
         controller.open_album_track(entries[1].file_id)
         wait_until(qt_app, lambda: not controller._jobs)
-        assert window.views.currentIndex() == 0
+        assert window.views.currentWidget() is window.splitter
         assert window.current_file_id() == entries[1].file_id
         assert window.fields["title"].text() == "Track 2"
     finally:
@@ -124,9 +124,11 @@ def test_switching_views_guards_an_unsaved_album(qt_app, setup_tags, tmp_path, m
         monkeypatch.setattr(
             controller, "_confirm_unsaved", lambda: getattr(QMessageBox.StandardButton, answer)
         )
-        window.views.setCurrentIndex(0)
+        window.views.setCurrentWidget(window.splitter)
         wait_until(qt_app, lambda: not controller._jobs and not controller.saving)
-        assert window.views.currentIndex() == (1 if answer == "Cancel" else 0)
+        assert window.views.currentWidget() is (
+            window.album_view if answer == "Cancel" else window.splitter
+        )
         assert repository.get(entries[0].file_id).metadata.album == (
             "Edited" if answer == "Save" else "Old album"
         )
@@ -155,7 +157,7 @@ def test_album_write_targets_all_its_tracks_and_updates_nfo(qt_app, setup_tags, 
         assert "Album artist" in nfo.read_text(encoding="utf-8")
         dialog.reject()
         wait_until(qt_app, lambda: not controller._jobs)
-        assert window.views.currentIndex() == 1
+        assert window.views.currentWidget() is window.album_view
     finally:
         teardown(window, controller)
 
@@ -177,7 +179,7 @@ def test_album_keyboard_shortcuts_use_the_visible_editor(qt_app, setup_tags, tmp
         QTest.keySequence(view.fields["album_year"], window.save_action.shortcut())
         wait_until(qt_app, lambda: not controller._jobs and not controller.saving)
         assert repository.get(entries[0].file_id).metadata.album_year == 1985
-        assert window.views.currentIndex() == 1 and not view._editing
+        assert window.views.currentWidget() is window.album_view and not view._editing
     finally:
         teardown(window, controller)
 
@@ -205,7 +207,7 @@ def test_leaving_while_album_editor_loads_does_not_redirect_later_song_edits(
         controller.start_album_edit()
         wait_until(qt_app, started.is_set)
         if destination == "songs":
-            window.views.setCurrentIndex(0)
+            window.views.setCurrentWidget(window.splitter)
         elif destination == "empty_search":
             window.album_view.search.setText("No matching album")
         else:
@@ -217,7 +219,7 @@ def test_leaving_while_album_editor_loads_does_not_redirect_later_song_edits(
         release.set()
         wait_until(qt_app, lambda: not controller._jobs)
         assert not controller._album_edit and controller._edit_snapshot is None
-        window.views.setCurrentIndex(0)
+        window.views.setCurrentWidget(window.splitter)
         wait_until(qt_app, lambda: not controller._jobs)
         monkeypatch.setattr(controller._edit_factory, "open_reader", original)
         controller.start_edit()

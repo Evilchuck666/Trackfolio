@@ -272,7 +272,7 @@ class CatalogController(QObject):
 
     @Slot(int)
     def change_view(self, index: int) -> None:
-        if index == 1:
+        if self.window.views.widget(index) is self.window.album_view:
             self.load_albums()
         elif self.window.current_file_id() is not None:
             self.select_track(cast(int, self.window.current_file_id()))
@@ -391,7 +391,7 @@ class CatalogController(QObject):
     def open_album_track(self, file_id: int) -> None:
         if not self._guard_edit(lambda: self.open_album_track(file_id)):
             return
-        self.window.views.setCurrentIndex(0)
+        self.window.views.setCurrentWidget(self.window.splitter)
         self.window.select_file(file_id)
 
     @property
@@ -400,7 +400,7 @@ class CatalogController(QObject):
 
     @Slot()
     def choose_tag_write(self) -> None:
-        if self.window.views.currentIndex() == 1:
+        if self.window.views.currentWidget() is self.window.album_view:
             self.choose_album_tag_write()
             return
         if (
@@ -678,7 +678,7 @@ class CatalogController(QObject):
 
     @Slot()
     def start_edit(self) -> None:
-        if self.window.views.currentIndex() == 1:
+        if self.window.views.currentWidget() is self.window.album_view:
             self.start_album_edit()
             return
         file_id = self.window.current_file_id()
@@ -1199,7 +1199,7 @@ class CatalogController(QObject):
                     self._remember(result.session.database_path)
                 except OSError as exc:
                     self.window.set_error(f"No se pudo guardar la preferencia del catálogo: {exc}")
-            if self.window.views.currentIndex() == 1:
+            if self.window.views.currentWidget() is self.window.album_view:
                 self.load_albums()
             self.catalog_loaded.emit()
         elif job.kind == "list" and self._session is not None:
@@ -1216,7 +1216,7 @@ class CatalogController(QObject):
                 self.window.current_file_id(),
                 selected_file_ids=self.window.selected_file_ids(),
             )
-            if self.window.views.currentIndex() == 1:
+            if self.window.views.currentWidget() is self.window.album_view:
                 self.load_albums()
             self.catalog_loaded.emit()
         elif job.kind == "detail":

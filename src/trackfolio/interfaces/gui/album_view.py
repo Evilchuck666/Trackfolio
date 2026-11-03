@@ -55,6 +55,7 @@ class AlbumView(QWidget):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 12, 0, 0)
         split = QSplitter(self)
+        split.setHandleWidth(14)
         layout.addWidget(split)
         navigation = QFrame(split)
         navigation.setObjectName("CatalogPanel")

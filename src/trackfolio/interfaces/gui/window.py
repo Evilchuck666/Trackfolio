@@ -288,9 +288,11 @@ class MainWindow(QMainWindow):
         self.splitter.setSizes([620, 620])
         self.views = QTabWidget(content)
         self.views.setAccessibleName("Vistas de la biblioteca")
-        self.views.addTab(self.splitter, "Canciones")
         self.album_view = AlbumView(self.views)
         self.views.addTab(self.album_view, "Álbumes")
+        self.views.addTab(self.splitter, "Canciones")
+        self.views.setCurrentWidget(self.splitter)
+        self._view_index = self.views.currentIndex()
         self.album_view.draft_changed.connect(self._update_actions)
         for field in (
             self.album_view.search,
@@ -1003,7 +1005,7 @@ class MainWindow(QMainWindow):
             and self.edit_dirty()
         )
         self.cancel_edit_action.setEnabled(self._editing and not self._saving)
-        if self.views.currentIndex() == 1:
+        if self.views.currentWidget() is self.album_view:
             album_editing = self.album_view._editing
             self.edit_action.setEnabled(
                 self._edit_enabled
