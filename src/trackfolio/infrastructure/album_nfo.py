@@ -79,6 +79,18 @@ def _set_values(parent: minidom.Element, name: str, values: tuple[str, ...]) -> 
     for node in nodes[len(values) :]:
         # Removing a managed value removes that element intentionally. Nested fields
         # are rejected by _text, rather than silently dropping unknown structures.
+        before, after = node.previousSibling, node.nextSibling
+        if (
+            isinstance(before, minidom.Text)
+            and not before.data.strip()
+            and isinstance(after, minidom.Text)
+            and re.match(r"[ \t]*\n", after.data)
+        ):
+            # Remove only this line's prefix; keep intentional blank lines and
+            # the following sibling's indentation (including the closing tag).
+            before.data = re.sub(r"\n[ \t]*\Z", "", before.data)
+            if not before.data:
+                parent.removeChild(before)
         parent.removeChild(node)
     return True
 

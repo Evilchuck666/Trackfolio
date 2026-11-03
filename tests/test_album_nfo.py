@@ -110,6 +110,29 @@ def test_added_genres_stay_together_and_preserve_indentation(tmp_path, indent, n
     assert target.read_bytes() == expected.encode()
 
 
+@pytest.mark.parametrize("indent", ["    ", "\t"])
+@pytest.mark.parametrize("newline", ["\n", "\r\n"])
+@pytest.mark.parametrize("remaining", [("Metal",), ()])
+def test_removed_genres_leave_no_empty_lines(tmp_path, indent, newline, remaining):
+    prefix = f'<?xml version="1.0"?>{newline}<album>{newline}{indent}<title>A</title>'
+    # The intentional blank line and comment must survive the edit.
+    suffix = f"{newline}{newline}{indent}<!--keep-->{newline}</album>{newline}"
+    original = (
+        prefix
+        + f"{newline}{indent}<genre>Metal</genre>{newline}{indent}<genre>Rock</genre>"
+        + suffix
+    )
+    target = change_xml(tmp_path, original, AlbumNfoValues("A", None, remaining, None))
+    expected = prefix + (f"{newline}{indent}<genre>Metal</genre>" if remaining else "") + suffix
+    assert target.read_bytes() == expected.encode()
+
+
+def test_removed_inline_genre_preserves_adjacent_comment(tmp_path):
+    original = '<?xml version="1.0"?>\n<album>\n  <genre>Rock</genre><!--keep-->\n</album>'
+    target = change_xml(tmp_path, original, AlbumNfoValues(None, None, (), None))
+    assert target.read_bytes() == original.replace("<genre>Rock</genre>", "").encode()
+
+
 def test_missing_field_is_inserted_before_closing_indentation(tmp_path):
     original = '<?xml version="1.0"?>\n<album>\n  <title>Abbath</title>\n</album>\n'
     target = change_xml(tmp_path, original, AlbumNfoValues("Abbath", None, ("Metal",), None))
