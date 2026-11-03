@@ -78,7 +78,10 @@ class AlbumNfoWrites:
             if audio.snapshot is not None:
                 snapshot = audio.snapshot
                 root = snapshot.library_root
-                path = (root / snapshot.relative_path).parent / "album.nfo"
+                # Root aliases are allowed by audio writes (e.g. /var on macOS).
+                # Keep the imported spelling for catalogue queries, but use the
+                # physical root for all sidecar filesystem operations.
+                path = (root.resolve() / snapshot.relative_path).parent / "album.nfo"
                 groups.setdefault(path, []).append(audio.file_id)
                 roots.setdefault(path, set()).add(root)
         items = []

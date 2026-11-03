@@ -5,6 +5,7 @@ import json
 import os
 import shutil
 from dataclasses import replace
+from pathlib import PureWindowsPath
 from xml.dom import minidom
 
 import pytest
@@ -60,7 +61,7 @@ def test_codec_changes_managed_fields_and_preserves_document(tmp_path):
  <albumArtistCredits><artist>Old</artist></albumArtistCredits><artistdesc>Old</artistdesc>
 </album><!--after--><?after keep?>""",
     )
-    text = target.read_text()
+    text = target.read_text(encoding="utf-8")
     assert xml_values(target, "title") == ["New & Ω"]
     assert xml_values(target, "year") == ["2021"]
     assert xml_values(target, "releasedate") == ["2021"]  # Invalid leap day is reduced.
@@ -158,8 +159,10 @@ def test_joined_header_can_be_repaired_without_metadata_differences(tmp_path):
         "<artist>Abbath</artist></album>",
         values,
     )
-    assert target.read_text().startswith('<?xml version="1.0" encoding="utf-8"?>\n<album>')
-    assert "albumArtistCredits" not in target.read_text()
+    assert target.read_text(encoding="utf-8").startswith(
+        '<?xml version="1.0" encoding="utf-8"?>\n<album>'
+    )
+    assert "albumArtistCredits" not in target.read_text(encoding="utf-8")
 
 
 @pytest.mark.parametrize("credit_name", ["Abbath", "Stale credits"])
@@ -173,8 +176,8 @@ def test_plain_duplicate_artist_credits_are_removed_without_other_changes(tmp_pa
         values,
     )
     assert xml_values(target, "artist") == ["Abbath"]
-    assert "albumArtistCredits" not in target.read_text()
-    assert target.read_text().endswith("</album>\n")
+    assert "albumArtistCredits" not in target.read_text(encoding="utf-8")
+    assert target.read_text(encoding="utf-8").endswith("</album>\n")
 
 
 def test_rich_artist_credits_are_preserved_when_direct_artist_also_exists(tmp_path):
@@ -185,19 +188,21 @@ def test_rich_artist_credits_are_preserved_when_direct_artist_also_exists(tmp_pa
         "<musicBrainzArtistID>keep-id</musicBrainzArtistID></albumArtistCredits></album>",
         replace(VALUES, artists=("Abbath",)),
     )
-    assert "<musicBrainzArtistID>keep-id</musicBrainzArtistID>" in target.read_text()
+    assert "<musicBrainzArtistID>keep-id</musicBrainzArtistID>" in target.read_text(
+        encoding="utf-8"
+    )
 
 
 def test_artist_updates_use_existing_representation_without_new_credits(tmp_path):
     target = change_xml(tmp_path, "<album><artist>Old</artist></album>")
     assert xml_values(target, "artist") == ["Artist & Ω"]
-    assert "albumArtistCredits" not in target.read_text()
+    assert "albumArtistCredits" not in target.read_text(encoding="utf-8")
 
 
 def test_missing_artist_representation_does_not_create_credit_elements(tmp_path):
     target = change_xml(tmp_path, "<album><title>Old</title></album>")
     assert not xml_values(target, "artist")
-    assert "albumArtistCredits" not in target.read_text()
+    assert "albumArtistCredits" not in target.read_text(encoding="utf-8")
 
 
 @pytest.mark.parametrize(
@@ -213,6 +218,18 @@ def test_missing_artist_representation_does_not_create_credit_elements(tmp_path)
         '<!DOCTYPE album SYSTEM "file:///etc/passwd"><album/>'.encode("utf-16"),
         b"<album><title><custom>keep</custom></title></album>",
         b"<album/>" + b" " * MAX_NFO_BYTES,
+    ],
+    ids=[
+        "empty",
+        "text",
+        "url",
+        "malformed",
+        "wrong-root",
+        "namespace",
+        "entity",
+        "utf16-dtd",
+        "nested-title",
+        "oversized",
     ],
 )
 def test_unsupported_documents_are_never_written(tmp_path, content):
@@ -246,7 +263,8 @@ def test_rich_artist_credits_reorder_without_reassigning_ids(tmp_path):
 def test_rich_artist_replacement_is_conflict(tmp_path):
     source = tmp_path / "album.nfo"
     source.write_text(
-        "<album><albumArtistCredits><artist>A</artist><musicBrainzArtistID>id-a</musicBrainzArtistID></albumArtistCredits></album>"
+        "<album><albumArtistCredits><artist>A</artist><musicBrainzArtistID>id-a</musicBrainzArtistID></albumArtistCredits></album>",
+        encoding="utf-8",
     )
     with pytest.raises(TagWriteConflict, match="enriquecidos"):
         XmlAlbumNfoCodec().plan(source, VALUES)
@@ -258,7 +276,10 @@ def album(setup_tags, tmp_path):
     source = make_source(tmp_path, "flac")
     entry = repository.save(read_metadata(source), source.parent, source.name)
     nfo = source.parent / "album.nfo"
-    nfo.write_text("<album><title>Outdated</title><year>1990</year><review>Keep</review></album>")
+    nfo.write_text(
+        "<album><title>Outdated</title><year>1990</year><review>Keep</review></album>",
+        encoding="utf-8",
+    )
     service = TagWriteService(catalog, codec, files, nfo_codec=XmlAlbumNfoCodec())
     return database, repository, source, entry, nfo, service
 
@@ -284,34 +305,112 @@ def test_nfo_only_operation_and_exact_idempotence(album):
     assert xml_values(nfo, "title") == ["Old album"]
     assert xml_values(nfo, "year") == ["2020"]
     assert xml_values(nfo, "genre") == ["Metal"]
-    assert "<review>Keep</review>" in nfo.read_text()
+    assert "<review>Keep</review>" in nfo.read_text(encoding="utf-8")
     assert not (source.parent / ".trackfolio-backups").exists()
     original, stat = nfo.read_bytes(), nfo.stat()
     repeated = service.execute(database, (entry.file_id,))
     assert repeated.nfo_results[0].state == "unchanged"
     assert nfo.read_bytes() == original and nfo.stat().st_mtime_ns == stat.st_mtime_ns
     assert nfo.stat().st_ino == stat.st_ino
-    journal = json.loads(report.journal_path.read_text())
+    journal = json.loads(report.journal_path.read_text(encoding="utf-8"))
     assert journal["schema"] == 2 and journal["closed"]
+
+
+@pytest.mark.parametrize("alias_level", ["root", "ancestor"])
+def test_nfo_uses_canonical_folder_for_imported_library_alias(album, tmp_path, alias_level):
+    database, repository, source, _, nfo, service = album
+    alias = tmp_path / "library-alias"
+    try:
+        alias.symlink_to(
+            source.parent if alias_level == "root" else tmp_path, target_is_directory=True
+        )
+    except OSError:
+        pytest.skip("Directory aliases unavailable")
+    root = alias if alias_level == "root" else alias / source.parent.name
+    entry = repository.save(read_metadata(source), root, source.name)
+    report = service.execute(database, (entry.file_id,))
+    assert report.results[0].state == "unchanged", report
+    assert report.nfo_results[0].state == "updated", report
+    assert report.nfo_results[0].path == nfo.resolve()
+    assert xml_values(nfo, "title") == ["Old album"]
+    loaded = service.files.load_journal(report.journal_path).preview
+    assert loaded.nfo_items[0].library_root == root
+    assert loaded.nfo_items[0].path == nfo.resolve()
+    assert service.reviewer.execute(report.journal_path).nfo_results[0].state == "updated"
+    assert service.execute(database, (entry.file_id,)).nfo_results[0].state == "unchanged"
+
+
+def test_album_query_uses_portable_windows_root_stored_by_repository(album):
+    database, repository, source, _, _, service = album
+
+    class WindowsRoot(PureWindowsPath):
+        # Exercise real Windows string/posix spellings against SQLite on any host.
+        # Only physical resolution is mapped to the test's local music folder.
+        def resolve(self):
+            return source.parent.resolve()
+
+    root = WindowsRoot("C:/Music/Música Ω")
+    entry = repository.save(read_metadata(source), root, source.name)
+    records = service.writer.catalog.album_tracks(database, root, source.parent)
+    assert [record.file_id for record in records] == [entry.file_id]
+    assert records[0].title == "Original"
+
+
+def test_retargeted_library_alias_does_not_publish_nfo(album, tmp_path):
+    database, repository, source, _, nfo, service = album
+    alias = tmp_path / "library-alias"
+    try:
+        alias.symlink_to(source.parent, target_is_directory=True)
+    except OSError:
+        pytest.skip("Directory aliases unavailable")
+    entry = repository.save(read_metadata(source), alias, source.name)
+    preview = prepare(service, database, (entry.file_id,))
+    original = nfo.read_bytes()
+    other = tmp_path / "Other library"
+    other.mkdir()
+    alias.unlink()
+    alias.symlink_to(other, target_is_directory=True)
+    report = service.writer.execute(preview, ())
+    assert report.nfo_results[0].state == "conflict", report
+    assert nfo.read_bytes() == original
+    assert not (other / "album.nfo").exists()
+
+
+def test_directory_links_below_library_root_remain_blocked(album, tmp_path):
+    database, repository, source, _, nfo, service = album
+    root = tmp_path / "Library"
+    root.mkdir()
+    link = root / "Album"
+    try:
+        link.symlink_to(source.parent, target_is_directory=True)
+    except OSError:
+        pytest.skip("Directory aliases unavailable")
+    entry = repository.save(read_metadata(source), root, "Album/" + source.name)
+    original = nfo.read_bytes()
+    report = service.execute(database, (entry.file_id,))
+    assert report.nfo_results[0].state == "conflict", report
+    assert nfo.read_bytes() == original
 
 
 def test_service_repairs_old_joined_header_and_duplicate_credits_without_audio_changes(album):
     database, _, source, entry, nfo, service = album
     assert service.execute(database, (entry.file_id,)).nfo_results[0].state == "updated"
     original_audio = source.read_bytes()
-    text = nfo.read_text().replace("?>\n", "?>")
+    text = nfo.read_text(encoding="utf-8").replace("?>\n", "?>")
     text = text.replace(
         "</album>",
         "<artist>Artist</artist>"
         "<albumArtistCredits><artist>Artist</artist></albumArtistCredits></album>",
     )
-    nfo.write_text(text)
+    nfo.write_text(text, encoding="utf-8")
     report = service.execute(database, (entry.file_id,))
     assert report.results[0].state == "unchanged"
     assert report.nfo_results[0].state == "updated", report
-    assert nfo.read_text().startswith('<?xml version="1.0" encoding="utf-8"?>\n<album>')
+    assert nfo.read_text(encoding="utf-8").startswith(
+        '<?xml version="1.0" encoding="utf-8"?>\n<album>'
+    )
     assert xml_values(nfo, "artist") == ["Artist"]
-    assert "albumArtistCredits" not in nfo.read_text()
+    assert "albumArtistCredits" not in nfo.read_text(encoding="utf-8")
     assert source.read_bytes() == original_audio
     assert service.execute(database, (entry.file_id,)).nfo_results[0].state == "unchanged"
 
@@ -331,13 +430,16 @@ def test_song_title_from_reported_nfo_updates_without_changing_album_or_duration
     tags["GENRE"] = "Black Metal"
     tags.save()
     repository.save(read_metadata(source), source.parent, source.name)
-    nfo.write_text("""<?xml version="1.0" encoding="utf-8"?><album>
+    nfo.write_text(
+        """<?xml version="1.0" encoding="utf-8"?><album>
   <title>Abbath</title><artist>Abbath</artist><year>2016</year>
   <releasedate>2016</releasedate><thumb>folder.jpg</thumb><genre>Black Metal</genre>
   <discnumber>01</discnumber><disctotal>01</disctotal><tracktotal>10</tracktotal>
   <track><position>1</position><title>To War!</title><duration>5:35</duration></track>
   <track><position>2</position><title>Winterbane</title><duration>6:50</duration></track>
-</album>""")
+</album>""",
+        encoding="utf-8",
+    )
     if write_audio_first:
         assert service.execute(database, (entry.file_id,)).nfo_results[0].state == "updated"
     edit(database, entry.file_id, title="To War!2")
@@ -371,10 +473,13 @@ def test_partial_selection_updates_only_selected_track_title(album):
     )
     edit(database, entry.file_id, title="Selected correction")
     edit(database, other.file_id, title="Unpublished correction")
-    nfo.write_text("""<album>
+    nfo.write_text(
+        """<album>
 <track><position>1</position><title>First</title><duration>5:35</duration></track>
 <track><position>2</position><title>Second</title><duration>6:50</duration></track>
-</album>""")
+</album>""",
+        encoding="utf-8",
+    )
     report = service.execute(database, (entry.file_id,))
     assert report.nfo_results[0].state == "updated", report
     document = minidom.parse(str(nfo))
@@ -402,7 +507,7 @@ def test_codec_disambiguates_same_position_by_disc_and_preserves_track_data(tmp_
 </album>""",
         values,
     )
-    text = target.read_text()
+    text = target.read_text(encoding="utf-8")
     assert "<title>First</title>" in text
     assert '<title sort="keep"><!--keep-->Second disc corrected</title>' in text
     assert "<duration>4:56</duration><unknown>keep</unknown>" in text
@@ -413,9 +518,12 @@ def test_codec_disambiguates_same_position_by_disc_and_preserves_track_data(tmp_
 @pytest.mark.parametrize("position", [None, 1, 3])
 def test_unmatched_or_ambiguous_track_titles_are_conflicts(tmp_path, position):
     source = tmp_path / "album.nfo"
-    source.write_text("""<album><title>Keep</title>
+    source.write_text(
+        """<album><title>Keep</title>
 <track><position>1</position><title>First</title></track>
-<track><position>1</position><title>Duplicate</title></track></album>""")
+<track><position>1</position><title>Duplicate</title></track></album>""",
+        encoding="utf-8",
+    )
     original = source.read_bytes()
     values = replace(VALUES, songs=(AlbumNfoSong(1, "Correction", position, 1, True),))
     with pytest.raises(TagWriteConflict):
@@ -425,7 +533,9 @@ def test_unmatched_or_ambiguous_track_titles_are_conflicts(tmp_path, position):
 
 def test_duplicate_catalogue_positions_do_not_overwrite_one_xml_track(tmp_path):
     source = tmp_path / "album.nfo"
-    source.write_text("<album><track><position>1</position><title>Keep</title></track></album>")
+    source.write_text(
+        "<album><track><position>1</position><title>Keep</title></track></album>", encoding="utf-8"
+    )
     values = replace(
         VALUES,
         songs=(
@@ -452,13 +562,13 @@ def test_clearing_song_title_preserves_position_and_duration(tmp_path):
 def test_previous_version_two_nfo_journal_without_song_fields_is_readable(album):
     database, _, _, entry, _, service = album
     report = service.execute(database, (entry.file_id,))
-    data = json.loads(report.journal_path.read_text())
+    data = json.loads(report.journal_path.read_text(encoding="utf-8"))
     for nfo in data["preview"]["nfo_items"]:
         nfo["values"].pop("songs")
         for track in nfo["tracks"]:
             for key in ("title", "track_number", "disc_number"):
                 track.pop(key)
-    report.journal_path.write_text(json.dumps(data))
+    report.journal_path.write_text(json.dumps(data), encoding="utf-8")
     loaded = service.files.load_journal(report.journal_path).preview
     assert loaded.nfo_items[0].values.songs == ()
     assert loaded.nfo_items[0].tracks[0].title is None
@@ -517,7 +627,7 @@ def test_disagreement_preserves_whole_nfo(album, field, value):
     report = service.execute(database, (entry.file_id,))
     assert report.nfo_results[0].state == "conflict"
     assert nfo.read_bytes() == original
-    assert not json.loads(report.journal_path.read_text())["closed"]
+    assert not json.loads(report.journal_path.read_text(encoding="utf-8"))["closed"]
 
 
 def test_uncatalogued_audio_is_conflict(album):
@@ -536,12 +646,14 @@ def test_compilation_preserves_existing_credits(album):
     other = repository.save(read_metadata(second), second.parent, second.name)
     edit(database, other.file_id, artists=("Different",))
     nfo.write_text(
-        "<album><albumArtistCredits><artist>Various</artist><musicBrainzArtistID>keep</musicBrainzArtistID></albumArtistCredits></album>"
+        "<album><albumArtistCredits><artist>Various</artist><musicBrainzArtistID>keep</musicBrainzArtistID></albumArtistCredits></album>",
+        encoding="utf-8",
     )
     report = service.execute(database, (entry.file_id,))
     assert report.nfo_results[0].state == "updated"
     assert (
-        "<artist>Various</artist><musicBrainzArtistID>keep</musicBrainzArtistID>" in nfo.read_text()
+        "<artist>Various</artist><musicBrainzArtistID>keep</musicBrainzArtistID>"
+        in nfo.read_text(encoding="utf-8")
     )
 
 
@@ -552,7 +664,7 @@ def test_concurrent_changes_are_conflicts(album, mutation):
         nfo.unlink()
     preview = prepare(service, database, (entry.file_id,))
     if mutation in ("nfo", "appears"):
-        nfo.write_text("<album><review>External change</review></album>")
+        nfo.write_text("<album><review>External change</review></album>", encoding="utf-8")
     elif mutation == "disappears":
         nfo.unlink()
     elif mutation == "catalog":
@@ -678,11 +790,11 @@ def test_old_journal_is_still_readable(album):
     database, _, _, entry, _, service = album
     preview = service.previewer.execute(TagWriteRequest(database, (entry.file_id,), EDIT_FIELDS))
     journal = service.files.journal(preview)
-    data = json.loads(journal.path.read_text())
+    data = json.loads(journal.path.read_text(encoding="utf-8"))
     data["schema"] = 1
     data.pop("nfos")
     data["preview"].pop("nfo_items")
-    journal.path.write_text(json.dumps(data))
+    journal.path.write_text(json.dumps(data), encoding="utf-8")
     loaded = service.files.load_journal(journal.path)
     assert loaded.preview.nfo_items == ()
     assert service.reviewer.execute(journal.path).nfo_results == ()
@@ -691,16 +803,16 @@ def test_old_journal_is_still_readable(album):
 def test_review_detects_external_nfo_changes(album):
     database, _, _, entry, nfo, service = album
     report = service.execute(database, (entry.file_id,))
-    nfo.write_text("<album><review>External</review></album>")
+    nfo.write_text("<album><review>External</review></album>", encoding="utf-8")
     reviewed = service.reviewer.execute(report.journal_path, reconcile=True)
     assert reviewed.nfo_results[0].state == "conflict"
-    assert not json.loads(report.journal_path.read_text())["closed"]
+    assert not json.loads(report.journal_path.read_text(encoding="utf-8"))["closed"]
 
 
 def test_audio_date_confirmation_does_not_invalidate_album_values(album):
     database, _, source, entry, nfo, service = album
     edit(database, entry.file_id, album="Correct album", album_year=2021)
-    nfo.write_text("<album><releasedate>2020-02-29</releasedate></album>")
+    nfo.write_text("<album><releasedate>2020-02-29</releasedate></album>", encoding="utf-8")
     report = service.execute(database, (entry.file_id,))
     assert report.results[0].state == "confirmed", report
     assert report.nfo_results[0].state == "updated", report
@@ -713,11 +825,11 @@ def test_album_artist_credits_override_track_artist_fallback(album):
     repository.save(
         replace(read_metadata(source), album_artists=("Album artist",)), source.parent, source.name
     )
-    nfo.write_text("<album><title>Old</title><artist>Old</artist></album>")
+    nfo.write_text("<album><title>Old</title><artist>Old</artist></album>", encoding="utf-8")
     report = service.execute(database, (entry.file_id,))
     assert report.nfo_results[0].state == "updated"
-    assert "<artist>Album artist</artist>" in nfo.read_text()
-    assert "<artist>Artist</artist>" not in nfo.read_text()
+    assert "<artist>Album artist</artist>" in nfo.read_text(encoding="utf-8")
+    assert "<artist>Artist</artist>" not in nfo.read_text(encoding="utf-8")
 
 
 def test_conflicting_album_credits_are_not_guessed(album):
@@ -741,8 +853,8 @@ def test_other_albums_continue_and_backups_are_kept_on_any_nfo_failure(album, tm
     shutil.copyfile(source, second)
     other = repository.save(read_metadata(second), other_root, second.name)
     other_nfo = other_root / "album.nfo"
-    other_nfo.write_text("<album/>")
-    nfo.write_text("broken XML")
+    other_nfo.write_text("<album/>", encoding="utf-8")
+    nfo.write_text("broken XML", encoding="utf-8")
     edit(database, entry.file_id, title="First")
     edit(database, other.file_id, title="Second")
     report = service.execute(database, (entry.file_id, other.file_id))
@@ -751,7 +863,7 @@ def test_other_albums_continue_and_backups_are_kept_on_any_nfo_failure(album, tm
     assert by_path[nfo].state == "failed" and by_path[other_nfo].state == "updated"
     assert by_path[other_nfo].backup_path.is_file()
     assert all(result.backup_path.is_file() for result in report.results)
-    assert nfo.read_text() == "broken XML"
+    assert nfo.read_text(encoding="utf-8") == "broken XML"
 
 
 @pytest.mark.parametrize("stage", ["temporary_verified", "written", "updated"])
@@ -827,7 +939,7 @@ def test_nested_album_under_imported_root_and_sql_wildcards(setup_tags, tmp_path
         replace(read_metadata(other), album="Different"), root, other.relative_to(root).as_posix()
     )
     nfo = folder / "album.nfo"
-    nfo.write_text("<album/>")
+    nfo.write_text("<album/>", encoding="utf-8")
     report = TagWriteService(catalog, codec, files, XmlAlbumNfoCodec()).execute(
         database, (entry.file_id,)
     )

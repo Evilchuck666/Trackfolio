@@ -689,3 +689,47 @@ El probe comprueba la separación de la cabecera y la ausencia de créditos aña
 
 Para aplicar el cambio en una sesión abierta, reiniciar Trackfolio y ejecutar
 **Escribir etiquetas**. Validación nativa y ejecución nueva de CI pendientes.
+
+### Corrección de los fallos de CI en Windows y macOS (2026-11-03)
+
+Se analizaron los registros adjuntos de la [ejecución 41619108486](https://github.com/Evilchuck666/Trackfolio/actions/runs/41619108486),
+correspondiente a `05d3a7577ec78eab2a707e3f07e301bf9b9ab614`. Linux terminó
+correctamente; Windows falló en las pruebas del núcleo y ambos macOS en la
+verificación del wheel instalado. Las suites del núcleo y GUI de macOS sí pasaron.
+
+Causas identificadas y corregidas:
+
+- **Windows, consulta de biblioteca:** el repositorio guarda `root_path` mediante
+  `as_posix()`, pero la consulta NFO usaba `str(root)`, con barras invertidas. La
+  consulta no devolvía pistas y producía conflictos de composición de carpeta.
+  Se utiliza la misma representación POSIX para guardar y consultar.
+- **Windows, parametrización de pytest:** el identificador automático de la prueba
+  con 16 MiB de contenido acababa en `PYTEST_CURRENT_TEST`, superando los 32767
+  caracteres permitidos por Windows. Esto causaba errores de setup/teardown y un
+  registro de aproximadamente 67 MB. Los casos tienen ahora identificadores cortos.
+  Los archivos de texto de estas pruebas especifican UTF-8 para no depender de la
+  codificación regional del runner.
+- **macOS, alias de rutas:** el wheel se probaba bajo `/var/...`, mientras el audio
+  se normalizaba a `/private/var/...`. El NFO conservaba la ruta sin normalizar y se
+  rechazaba como carpeta distinta. Se normaliza la raíz para localizar el NFO y
+  comparar carpetas, manteniendo la raíz importada original en las consultas SQLite.
+
+Validación local de la corrección en Linux:
+
+- **654 passed, 6 skipped**; las omisiones corresponden a PowerShell y verificaciones
+  nativas Windows/macOS. Ruff, formato y mypy correctos, incluido el análisis con
+  plataformas `win32` y `darwin`; `git diff --check` correcto.
+- Cinco regresiones cubren alias de raíz y de ancestro, lectura del registro y
+  reintento, representación Windows contra SQLite, cambio de destino de un alias
+  y bloqueo de enlaces dentro de la biblioteca. Los dos casos de alias reprodujeron
+  el conflicto antes de corregir el código.
+- **89 pruebas NFO** pasan simulando CP1252 como codificación implícita de pathlib.
+  El identificador más largo de los casos NFO tiene **110 caracteres**; el documento
+  sobredimensionado se identifica como `oversized`.
+- Wheel y sdist reconstruidos con el backend fijado `uv-build==0.12.10` disponible
+  localmente. Se ejecutó el código exacto de verificación del workflow extraído de
+  `release.yml`: el núcleo instalado pasó sin Qt, usando una raíz temporal con alias,
+  y después pasó el probe GUI `offscreen` desde ese wheel, fuera del checkout.
+
+Los cambios están en la rama local `main`. No se han publicado ni reejecutado los
+trabajos del commit antiguo: una nueva ejecución de CI con la corrección queda pendiente.

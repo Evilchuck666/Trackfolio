@@ -11,6 +11,9 @@ La escritura conserva ahora la separación de la declaración XML y no añade
 `albumArtistCredits` a documentos que no lo contienen. Se prefiere el `artist` directo
 frente a los bloques simples redundantes, reparando los NFO generados por la primera entrega;
 los créditos enriquecidos se conservan. La reparación también separa una cabecera pegada.
+La validación del workflow identificó además diferencias de rutas entre plataformas:
+se usa el formato POSIX guardado por el catálogo para consultar raíces Windows y
+la ruta física normalizada para operar con raíces que son alias en macOS.
 
 ## Resultado esperado y alcance
 

@@ -121,6 +121,10 @@ Antes de escribir se comprueba ese espacio por volumen, con un margen adicional 
 No se siguen enlaces simbólicos/junctions, no se reemplazan enlaces duros ni destinos
 fuera de su raíz importada. Un original ausente o de solo lectura queda bloqueado;
 esto no impide editar sus datos en SQLite.
+La propia raíz importada puede ser un alias, como `/var` en macOS: se normaliza para
+operar sobre el NFO y se conserva su representación guardada para consultar el catálogo.
+Los enlaces dentro de la biblioteca y los cambios de destino durante la operación
+siguen bloqueados.
 
 En Linux se copian y comprueban modo, propietario/grupo y atributos extendidos,
 incluidas las ACL que se representen mediante esos atributos. En macOS se utiliza

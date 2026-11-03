@@ -57,14 +57,16 @@ class SqliteTagCatalog:
             session.close()
 
     def album_tracks(self, path: Path, root: Path, folder: Path) -> tuple[AlbumNfoTrack, ...]:
-        relative_folder = PurePosixPath(folder.relative_to(root).as_posix())
+        # The catalogue retains the imported root spelling; filesystem callers
+        # supply canonical folders, including macOS /private/var aliases.
+        relative_folder = PurePosixPath(folder.resolve().relative_to(root.resolve()).as_posix())
         session = cast(_SqliteCatalogEditSession, self._factory.open_reader(path))
         try:
             with session._engine.connect() as connection, connection.begin():
                 query = (
                     select(audio_files.c.id, audio_files.c.relative_path)
                     .join(libraries, libraries.c.id == audio_files.c.library_id)
-                    .where(libraries.c.root_path == str(root))
+                    .where(libraries.c.root_path == root.as_posix())
                     .order_by(audio_files.c.relative_path)
                 )
                 if relative_folder != PurePosixPath("."):
