@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
@@ -21,6 +21,54 @@ class FileFingerprint:
     size: int
     modified_ns: int
     sha256: str
+
+
+CoverAction = Literal["preserved", "embedded", "replaced", "unchanged", "skipped"]
+
+
+@dataclass(frozen=True, slots=True)
+class CoverCandidate:
+    path: Path
+    fingerprint: FileFingerprint | None = None
+    mime_type: str = ""
+    width: int = 0
+    height: int = 0
+    error: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class CoverImage:
+    path: Path
+    library_root: Path
+    fingerprint: FileFingerprint
+    mime_type: str
+    width: int
+    height: int
+    data: bytes | None = field(default=None, repr=False)
+
+
+@dataclass(frozen=True, slots=True)
+class CoverFolder:
+    path: Path
+    library_root: Path
+    file_ids: tuple[int, ...]
+    candidates: tuple[CoverCandidate, ...] = ()
+    error: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class CoverDiscovery:
+    database_path: Path
+    file_ids: tuple[int, ...]
+    catalog_identity: tuple[int, int]
+    snapshots: tuple[TagCatalogSnapshot, ...]
+    folders: tuple[CoverFolder, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class CoverChoice:
+    folder: Path
+    image: Path | None  # None explicitly preserves the current cover.
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,6 +133,10 @@ class TagCatalogSnapshot:
     values: EditableValues
     album_date: str | None
     token: str
+    cover_sha256: str | None = None
+    cover_source: str | None = None
+    cover_relative_path: str | None = None
+    cover_known: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,6 +146,8 @@ class TagWriteRequest:
     fields: tuple[EditField, ...]
     allow_date_loss: bool = False
     lyrics_keys: tuple[tuple[int, str], ...] = ()
+    covers: tuple[tuple[int, CoverImage], ...] = ()
+    cover_skipped_ids: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,6 +170,10 @@ class PlannedTags:
     lyrics_keys: tuple[str, ...] = ()
     selected_lyrics: str | None = None
     error: str | None = None
+    cover: CoverImage | None = None
+    cover_changed: bool = False
+    cover_catalog_changed: bool = False
+    cover_action: CoverAction = "preserved"
 
 
 @dataclass(frozen=True, slots=True)
@@ -136,6 +194,7 @@ class TagWritePreview:
     catalog_identity: tuple[int, int]
     items: tuple[TagWriteItem, ...]
     nfo_items: tuple[AlbumNfoItem, ...] = ()
+    cover_folders: tuple[CoverFolder, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -153,6 +212,9 @@ class TagWriteResult:
     state: TagResultState
     message: str = ""
     backup_path: Path | None = None
+    cover_action: CoverAction = "preserved"
+    cover_path: Path | None = None
+    catalog_updated: bool = False
 
 
 @dataclass(frozen=True, slots=True)

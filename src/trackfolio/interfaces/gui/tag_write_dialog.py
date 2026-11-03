@@ -47,6 +47,14 @@ _NFO_STATES = {
     "failed": "NFO fallido",
 }
 
+_COVER_STATES = {
+    "preserved": "Portada conservada",
+    "embedded": "Portada incrustada",
+    "replaced": "Portada sustituida",
+    "unchanged": "Portada ya coincidente",
+    "skipped": "Portada conservada por elección",
+}
+
 
 def report_text(report: TagWriteReport) -> str:
     lines = ["Escritura de etiquetas" + (" · Cancelada" if report.cancelled else "")]
@@ -56,6 +64,10 @@ def report_text(report: TagWriteReport) -> str:
         lines.append(f"\n{item.path}\n{_STATES[item.state]}")
         if item.message:
             lines.append(item.message)
+        if item.cover_action != "preserved" or item.cover_path:
+            lines.append(_COVER_STATES[item.cover_action])
+            if item.cover_path:
+                lines.append(f"Imagen fuente: {item.cover_path}")
         if item.backup_path:
             lines.append(f"Respaldo: {item.backup_path}")
     for nfo in report.nfo_results:
@@ -104,6 +116,8 @@ class TagWriteDialog(QDialog):
         description = QLabel(
             "Se escribirán todas las etiquetas modificadas con los valores guardados "
             "de cada canción y se actualizará album.nfo si existe junto al audio. "
+            "Las imágenes JPG/PNG de la carpeta se incrustarán como portada; "
+            "si hay varias, podrás elegir cuál usar. "
             "El respaldo se eliminará si todo termina correctamente.",
             self,
         )
@@ -172,6 +186,7 @@ class TagWriteDialog(QDialog):
     def set_progress(self, progress: TagWriteProgress) -> None:
         names = {
             "preview": "Preparando canciones",
+            "cover_discovery": "Buscando portadas",
             "reading": "Leyendo etiquetas",
             "checking": "Comprobando archivo",
             "backup": "Creando respaldo",
@@ -217,6 +232,10 @@ class TagWriteDialog(QDialog):
             self.output.appendPlainText(f"{item.path} · {_STATES[item.state]}")
             if item.message:
                 self.output.appendPlainText(item.message)
+            if item.cover_action != "preserved" or item.cover_path:
+                self.output.appendPlainText(_COVER_STATES[item.cover_action])
+                if item.cover_path:
+                    self.output.appendPlainText(f"Imagen fuente: {item.cover_path}")
             if (row := self._rows.get(item.file_id)) is not None:
                 cell = self.table.item(row, 3)
                 assert cell is not None

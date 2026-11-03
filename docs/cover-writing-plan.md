@@ -1,7 +1,8 @@
 # Plan de incrustación de miniaturas al escribir etiquetas
 
-Estado: propuesta pendiente de implementación, del 3 de noviembre de 2026.
-Trabajo previsto sobre la rama local activa `thumbnail`, sin crear ramas ni publicar cambios.
+Estado: implementado localmente el 3 de noviembre de 2026, sobre la rama `thumbnail`.
+Sin crear ramas ni publicar cambios. Validación y pendientes de CI/escritorio en
+[VALIDATION.md](../VALIDATION.md#incrustación-de-portadas-al-escribir-etiquetas-2026-11-03).
 
 ## Resultado esperado
 

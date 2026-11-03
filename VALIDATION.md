@@ -757,3 +757,54 @@ de caracteres que en el registro. Tras corregir las lecturas:
 - Las **20 pruebas del diálogo** pasan; Ruff, formato, mypy y `git diff --check` correctos.
 
 Corrección local en `main`, sin push. La nueva ejecución nativa de CI queda pendiente.
+
+### Incrustación de portadas al escribir etiquetas (2026-11-03)
+
+Implementado el [plan de portadas](docs/cover-writing-plan.md) en la rama local
+`thumbnail`, sin crear ramas ni publicar cambios. La guía de uso está en
+[Escritura de etiquetas](docs/tag-writing.md#incrustación-de-portadas).
+
+La escritura descubre JPEG/PNG por carpeta en un trabajador; el selector Qt resuelve
+las carpetas ambiguas antes de crear respaldos o publicar audio/NFO. Una imagen se
+usa automáticamente; sin imágenes o con omisión explícita se conserva la portada
+actual. Se sustituyen únicamente las frontales, con verificación directa de los
+bloques/frames incrustados y del audio, conservando las imágenes de otros tipos.
+La observación confirmada actualiza SQLite y el detalle al cerrar el diálogo.
+El registro de versión 3 guarda fuentes y huellas sin bytes de imagen, y sigue
+admitiendo las versiones 1/2.
+
+Validación local en Linux, Python 3.13.15 y Qt 6.11.2:
+
+- `QT_QPA_PLATFORM=offscreen .venv/bin/pytest -q`: **695 passed, 6 skipped**.
+  Las omisiones corresponden a PowerShell y verificaciones nativas Windows/macOS.
+- **148 pruebas NFO/portadas/GUI** correctas con CP1252 simulado para lecturas y
+  escrituras de pathlib que no especifican codificación. Los fixtures nuevos
+  usan UTF-8 explícitamente y los parámetros binarios tienen identificadores cortos.
+- Ruff, formato, mypy (Linux, `win32` y `darwin`) y `git diff --check`: correctos.
+- `scripts/doctor.py --gui --platform offscreen`: **0 errores**. El probe comprueba
+  los bytes de la frontal FLAC, la miniatura confirmada en SQLite y el resultado
+  `cover_written`; el diagnóstico rechaza informes que omitan esa comprobación.
+- Wheel y sdist reconstruidos con `uv-build==0.12.10`. El código de verificación
+  extraído del workflow actualizado pasa desde el wheel instalado fuera del
+  checkout: primero el núcleo sin Qt, con raíz temporal mediante alias, y después
+  el probe GUI `offscreen`. Ambos demuestran la incrustación con Mutagen.
+
+Las regresiones cubren FLAC/MP3, JPEG real y PNG, extensiones en mayúsculas, escritura
+sólo de portada, idempotencia, sincronización sólo del catálogo, selección parcial,
+varias carpetas, omisión y cancelación/cierre del selector. Incluyen frontales
+duplicadas, contraportadas y descripciones APIC en conflicto, ID3v2.3/v2.4, hashes
+del audio codificado, fuentes inválidas o de sólo lectura, límites de tamaño,
+enlaces y raíces con alias. Se comprueban cambios de fuente/inventario/SQLite,
+cambio de destino del alias, falta de espacio y recuperación del catálogo pendiente
+sin necesitar la fuente. Una regresión impide que la alternativa `album.jpg` oculte
+una incrustación fallida; otra evita usar SQLite o el NFO como fuente implícita.
+
+| Entorno | Estado de esta implementación |
+| --- | --- |
+| Linux, pruebas y GUI `offscreen` | Correcto localmente. |
+| Linux, wheel instalado sin Qt y con GUI | Correcto localmente. |
+| Windows | Análisis de tipos y simulación CP1252 correctos en Linux; CI nativa pendiente. |
+| macOS Intel/ARM | Análisis de tipos y regresiones de alias correctos en Linux; CI nativa pendiente. |
+| Escritorio gráfico real | Revisión visual manual pendiente; `offscreen` no acredita el escritorio. |
+
+No se ha ejecutado una nueva CI remota ni se ha hecho push.

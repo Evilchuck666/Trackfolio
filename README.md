@@ -133,7 +133,8 @@ escritura, no se guarda ninguna y el borrador se conserva para revisarlo.
 1. Guarda las correcciones en el catálogo y selecciona una o varias canciones.
 2. Pulsa **Escribir etiquetas…**. El diálogo muestra inmediatamente el listado completo.
 3. Pulsa **Escribir etiquetas** para sobrescribir todas las etiquetas modificadas con
-   los valores guardados de cada canción. Los archivos sin diferencias se omiten.
+   los valores guardados de cada canción e incrustar la portada local. Los archivos sin
+   diferencias de texto ni portada se omiten.
 
 Para escribir todas las etiquetas guardadas de todas las canciones, pulsa
 **Escribir etiquetas de todo el catálogo…**, sobre el listado de canciones.
@@ -142,8 +143,14 @@ Revisa el listado y pulsa **Escribir etiquetas** en el diálogo para iniciar el 
 
 El diálogo contiene el listado, la salida del progreso y los botones **Cerrar** y
 **Escribir etiquetas**. Un valor guardado vacío elimina la etiqueta correspondiente.
-La selección múltiple conserva los valores particulares de cada canción. El audio,
-las portadas y las etiquetas ajenas a los campos del catálogo se conservan y verifican.
+La selección múltiple conserva los valores particulares de cada canción. Se conserva
+el audio, las imágenes de otros tipos y las etiquetas ajenas a los campos modificados.
+
+Se buscan `.jpg`, `.jpeg` y `.png` junto a cada canción. Una imagen se usa automáticamente;
+si hay varias, se pregunta una vez por carpeta con vista previa y opción de conservar
+la portada actual. La elegida sustituye la portada frontal, incluso sin cambios de texto.
+Sin imágenes se conserva la portada existente o su ausencia. Cancelar el selector cancela
+el intento antes de publicar. Consulta las [reglas de portadas](docs/tag-writing.md#incrustación-de-portadas).
 
 Si existe `album.nfo` en la misma carpeta del audio, también se actualizan sus datos
 de álbum y los títulos de las canciones destinatarias que ya figuran en su lista

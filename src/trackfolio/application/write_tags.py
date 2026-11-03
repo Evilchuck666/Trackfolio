@@ -10,6 +10,7 @@ from typing import Protocol, cast
 from uuid import uuid4
 
 from trackfolio.application.album_nfo import AlbumNfoCodec, AlbumNfoWrites, review_nfos
+from trackfolio.application.cover_writes import CoverSources, discover_covers, resolve_covers
 from trackfolio.application.edit_catalog import validate_edit_patch
 from trackfolio.application.tag_write_errors import (
     TagJournalError as TagJournalError,
@@ -32,6 +33,8 @@ from trackfolio.domain.tag_write import (
     AlbumNfoItem,
     AlbumNfoResult,
     AlbumNfoTrack,
+    CoverChoice,
+    CoverDiscovery,
     FileFingerprint,
     PendingTagOperation,
     PlannedTags,
@@ -58,7 +61,12 @@ class TagCatalog(Protocol):
     def check(self, path: Path, snapshot: TagCatalogSnapshot) -> None: ...
 
     def confirm(
-        self, path: Path, snapshot: TagCatalogSnapshot, observed: TrackMetadata, date_written: bool
+        self,
+        path: Path,
+        snapshot: TagCatalogSnapshot,
+        observed: TrackMetadata,
+        date_written: bool,
+        cover_written: bool = False,
     ) -> None: ...
 
 
@@ -199,7 +207,13 @@ class PreviewTagWrites:
                         tuple(FieldChange(diff.field, diff.after) for diff in tags.differences)
                     ),
                 )
-                state = "blocked" if tags.error else "ready" if tags.differences else "unchanged"
+                state = (
+                    "blocked"
+                    if tags.error
+                    else "ready"
+                    if (tags.differences or tags.cover_changed or tags.cover_catalog_changed)
+                    else "unchanged"
+                )
                 item = TagWriteItem(
                     file_id,
                     path,
@@ -227,6 +241,24 @@ class PreviewTagWrites:
         return TagWritePreview(uuid4().hex, request, identity, tuple(items))
 
 
+def _cover_results(report: TagWriteReport, preview: TagWritePreview) -> TagWriteReport:
+    plans = {item.file_id: item.tags for item in preview.items}
+    results = []
+    for result in report.results:
+        plan = plans.get(result.file_id)
+        if plan is not None:
+            action = (
+                plan.cover_action
+                if result.state in ("confirmed", "catalog_pending", "unchanged")
+                else "preserved"
+            )
+            result = replace(
+                result, cover_action=action, cover_path=plan.cover.path if plan.cover else None
+            )
+        results.append(result)
+    return replace(report, results=tuple(results))
+
+
 class WriteTagWrites:
     def __init__(
         self,
@@ -234,9 +266,27 @@ class WriteTagWrites:
         codec: TagCodec,
         files: TagFiles,
         nfo_writer: AlbumNfoWrites | None = None,
+        cover_sources: CoverSources | None = None,
     ) -> None:
         self.catalog, self.codec, self.files = catalog, codec, files
         self.nfo_writer = nfo_writer
+        self.cover_sources = cover_sources
+
+    def _check_cover(
+        self, preview: TagWritePreview, item: TagWriteItem, cancelled: Callable[[], bool]
+    ) -> None:
+        if self.cover_sources is None or item.file_id in preview.request.cover_skipped_ids:
+            return
+        for folder in preview.cover_folders:
+            if item.file_id in folder.file_ids:
+                if (
+                    item.snapshot is None
+                    or item.snapshot.library_root.resolve() != folder.library_root
+                    or item.path.parent != folder.path
+                ):
+                    raise TagWriteConflict("La biblioteca cambió durante la elección de portada.")
+                self.cover_sources.check(folder, item.tags.cover if item.tags else None, cancelled)
+                return
 
     def _check_catalog(self, preview: TagWritePreview) -> None:
         try:
@@ -281,7 +331,13 @@ class WriteTagWrites:
         try:
             self.files.reserve(
                 tuple(
-                    [item for item in preview.items if item.file_id in selected_ids]
+                    [
+                        item
+                        for item in preview.items
+                        if item.file_id in selected_ids
+                        and item.tags is not None
+                        and (item.tags.differences or item.tags.cover_changed)
+                    ]
                     + [item for item in preview.nfo_items if item.state == "ready"]
                 )
             )
@@ -310,6 +366,32 @@ class WriteTagWrites:
                 self._check_catalog(preview)
                 self.catalog.check(preview.request.database_path, item.snapshot)
                 self.files.check(item, is_cancelled)
+                self._check_cover(preview, item, is_cancelled)
+                if (
+                    item.tags.cover is not None
+                    and not item.tags.cover_changed
+                    and not item.tags.differences
+                ):
+                    assert item.fingerprint is not None
+                    journal.record(item, "confirming_cover", after_hash=item.fingerprint.sha256)
+                    self.catalog.confirm(
+                        preview.request.database_path,
+                        item.snapshot,
+                        self.codec.observed(item.path),
+                        False,
+                        cover_written=True,
+                    )
+                    journal.record(item, "confirmed")
+                    results.append(
+                        TagWriteResult(
+                            item.file_id,
+                            item.path,
+                            "unchanged",
+                            "Portada coincidente; miniatura del catálogo actualizada.",
+                            catalog_updated=True,
+                        )
+                    )
+                    continue
                 on_progress(TagWriteProgress("backup", index, len(preview.items), item.path))
                 self.files.backup(item, backup, is_cancelled)
                 backed_up = True
@@ -329,6 +411,7 @@ class WriteTagWrites:
                 self._check_catalog(preview)
                 self.catalog.check(preview.request.database_path, item.snapshot)
                 self.files.check(item, is_cancelled)
+                self._check_cover(preview, item, is_cancelled)
                 journal.record(item, "publishing", after_hash=after.sha256)
                 # Once published, always record the outcome even if cancellation arrives.
                 self.files.publish(item, temporary)
@@ -337,12 +420,19 @@ class WriteTagWrites:
                 if self.files.fingerprint(item.path, _never_cancel).sha256 != after.sha256:
                     raise TagWriteConflict("El archivo cambió después de publicarse.")
                 self._check_catalog(preview)
-                self.catalog.confirm(
-                    preview.request.database_path,
-                    item.snapshot,
-                    observed,
-                    any(diff.field == "album_year" for diff in item.tags.differences),
-                )
+                date_written = any(diff.field == "album_year" for diff in item.tags.differences)
+                if item.tags.cover is not None:
+                    self.catalog.confirm(
+                        preview.request.database_path,
+                        item.snapshot,
+                        observed,
+                        date_written,
+                        cover_written=True,
+                    )
+                else:
+                    self.catalog.confirm(
+                        preview.request.database_path, item.snapshot, observed, date_written
+                    )
                 journal.record(item, "confirmed", after_hash=after.sha256)
                 results.append(
                     TagWriteResult(item.file_id, item.path, "confirmed", backup_path=backup)
@@ -393,6 +483,7 @@ class WriteTagWrites:
         report = TagWriteReport(
             preview.operation_id, tuple(results), journal.path, is_cancelled(), fatal, nfo_results
         )
+        report = _cover_results(report, preview)
         try:
             journal.finish(report)
         except Exception as exc:
@@ -491,12 +582,21 @@ class ReviewTagWrites:
                         if item.snapshot is None or item.tags is None:
                             raise TagWriteError("La instantánea del registro está incompleta.")
                         observed = self.codec.observed(item.path)
-                        self.catalog.confirm(
-                            preview.request.database_path,
-                            item.snapshot,
-                            observed,
-                            any(diff.field == "album_year" for diff in item.tags.differences),
+                        date_written = any(
+                            diff.field == "album_year" for diff in item.tags.differences
                         )
+                        if item.tags.cover is not None:
+                            self.catalog.confirm(
+                                preview.request.database_path,
+                                item.snapshot,
+                                observed,
+                                date_written,
+                                cover_written=True,
+                            )
+                        else:
+                            self.catalog.confirm(
+                                preview.request.database_path, item.snapshot, observed, date_written
+                            )
                         journal.record(item, "confirmed")
                         results.append(
                             TagWriteResult(
@@ -547,8 +647,11 @@ class ReviewTagWrites:
                     )
                 )
         nfo_results = review_nfos(preview, journal, self.files, is_cancelled, reconcile)
-        report = TagWriteReport(
-            preview.operation_id, tuple(results), path, is_cancelled(), nfo_results=nfo_results
+        report = _cover_results(
+            TagWriteReport(
+                preview.operation_id, tuple(results), path, is_cancelled(), nfo_results=nfo_results
+            ),
+            preview,
         )
         if reconcile and not report.cancelled:
             # Conflicts must remain discoverable instead of becoming silently closed.
@@ -569,14 +672,37 @@ class TagWriteService:
         codec: TagCodec,
         files: TagFiles,
         nfo_codec: AlbumNfoCodec | None = None,
+        cover_sources: CoverSources | None = None,
     ) -> None:
         self.previewer = PreviewTagWrites(catalog, codec, files)
         self.nfo_writer = (
             AlbumNfoWrites(catalog, files, nfo_codec) if nfo_codec is not None else None
         )
-        self.writer = WriteTagWrites(catalog, codec, files, self.nfo_writer)
+        self.cover_sources = cover_sources
+        self.catalog = catalog
+        self.writer = WriteTagWrites(catalog, codec, files, self.nfo_writer, cover_sources)
         self.reviewer = ReviewTagWrites(catalog, codec, files)
         self.files = files
+
+    def discover_covers(
+        self,
+        database: Path,
+        file_ids: tuple[int, ...],
+        *,
+        is_cancelled: Callable[[], bool] = _never_cancel,
+        on_progress: Callable[[TagWriteProgress], None] = _ignore_progress,
+    ) -> CoverDiscovery:
+        if self.cover_sources is None:
+            return CoverDiscovery(database, file_ids, self.files.identity(database), (), ())
+        return discover_covers(
+            self.catalog,
+            self.files,
+            self.cover_sources,
+            database,
+            file_ids,
+            is_cancelled,
+            on_progress,
+        )
 
     def execute(
         self,
@@ -585,10 +711,37 @@ class TagWriteService:
         *,
         is_cancelled: Callable[[], bool] = _never_cancel,
         on_progress: Callable[[TagWriteProgress], None] = _ignore_progress,
+        cover_discovery: CoverDiscovery | None = None,
+        cover_choices: tuple[CoverChoice, ...] = (),
     ) -> TagWriteReport:
         """Publish every saved difference in one action, with internal verification."""
         request = TagWriteRequest(database, file_ids, EDIT_FIELDS, allow_date_loss=True)
         try:
+            cover_errors: dict[int, str] = {}
+            if self.cover_sources is not None:
+                discovery = cover_discovery or self.discover_covers(
+                    database, file_ids, is_cancelled=is_cancelled, on_progress=on_progress
+                )
+                if (
+                    discovery.database_path != database
+                    or discovery.file_ids != file_ids
+                    or (discovery.catalog_identity != self.files.identity(database))
+                ):
+                    raise TagWriteConflict("La selección cambió durante la elección de portada.")
+                for snapshot in discovery.snapshots:
+                    self.catalog.check(database, snapshot)
+                    if any(
+                        snapshot.file_id in folder.file_ids
+                        and snapshot.library_root.resolve() != folder.library_root
+                        for folder in discovery.folders
+                    ):
+                        raise TagWriteConflict(
+                            "La biblioteca cambió durante la elección de portada."
+                        )
+                covers, skipped, cover_errors = resolve_covers(
+                    discovery, cover_choices, self.cover_sources, is_cancelled
+                )
+                request = replace(request, covers=covers, cover_skipped_ids=skipped)
             preview = self.previewer.execute(
                 request, is_cancelled=is_cancelled, on_progress=on_progress
             )
@@ -616,6 +769,17 @@ class TagWriteService:
                         on_progress,
                     ),
                 )
+            if self.cover_sources is not None:
+                preview = replace(
+                    preview,
+                    cover_folders=discovery.folders,
+                    items=tuple(
+                        replace(item, state="blocked", message=cover_errors[item.file_id])
+                        if item.file_id in cover_errors
+                        else item
+                        for item in preview.items
+                    ),
+                )
         except TagWriteCancelled:
             return TagWriteReport(uuid4().hex, (), cancelled=True)
         ready = tuple(item.file_id for item in preview.items if item.state == "ready")
@@ -628,21 +792,24 @@ class TagWriteService:
             if self.nfo_writer is not None
             else ()
         )
-        return TagWriteReport(
-            preview.operation_id,
-            tuple(
-                TagWriteResult(
-                    item.file_id,
-                    item.path,
-                    "unchanged"
-                    if item.state == "unchanged"
-                    else "conflict"
-                    if item.state == "conflict"
-                    else "failed",
-                    item.message,
-                )
-                for item in preview.items
+        return _cover_results(
+            TagWriteReport(
+                preview.operation_id,
+                tuple(
+                    TagWriteResult(
+                        item.file_id,
+                        item.path,
+                        "unchanged"
+                        if item.state == "unchanged"
+                        else "conflict"
+                        if item.state == "conflict"
+                        else "failed",
+                        item.message,
+                    )
+                    for item in preview.items
+                ),
+                cancelled=is_cancelled(),
+                nfo_results=nfo_results,
             ),
-            cancelled=is_cancelled(),
-            nfo_results=nfo_results,
+            preview,
         )

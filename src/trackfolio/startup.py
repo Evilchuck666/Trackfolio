@@ -24,6 +24,7 @@ def create_window(
     from trackfolio.infrastructure.album_nfo import XmlAlbumNfoCodec
     from trackfolio.infrastructure.audio_scan import FileSystemAudioScanner
     from trackfolio.infrastructure.catalog_edit import SqliteCatalogEditSessionFactory
+    from trackfolio.infrastructure.cover_files import FileCoverAccess
     from trackfolio.infrastructure.import_target import SqliteImportTargetFactory
     from trackfolio.infrastructure.metadata import read_metadata
     from trackfolio.infrastructure.session import open_catalog
@@ -55,6 +56,7 @@ def create_window(
                 tag_journal_root or user_data_path("Trackfolio", appauthor=False) / "tag-writes"
             ),
             nfo_codec=XmlAlbumNfoCodec(),
+            cover_sources=FileCoverAccess(),
         ),
     )
     return window, controller

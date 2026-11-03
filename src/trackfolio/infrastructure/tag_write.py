@@ -9,8 +9,8 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any, BinaryIO, cast
 
-from mutagen.flac import FLAC
-from mutagen.id3 import ID3, Frames, ID3NoHeaderError
+from mutagen.flac import FLAC, Picture
+from mutagen.id3 import APIC, ID3, Frames, ID3NoHeaderError
 
 from trackfolio.application.write_tags import TagWriteError
 from trackfolio.domain.catalog_edit import EditableValues, EditField
@@ -61,8 +61,9 @@ _ID3 = {
 }
 
 
-def _hash_stream(stream: BinaryIO, length: int | None = None) -> str:
+def _hash_stream(stream: BinaryIO, length: int | None = None, prefix: bytes = b"") -> str:
     digest = hashlib.sha256()
+    digest.update(prefix)
     while length is None or length > 0:
         chunk = stream.read(1024 * 1024 if length is None else min(length, 1024 * 1024))
         if not chunk:
@@ -75,7 +76,9 @@ def _hash_stream(stream: BinaryIO, length: int | None = None) -> str:
     return digest.hexdigest()
 
 
-def _flac_layout(path: Path) -> tuple[str, tuple[tuple[int, str], ...]]:
+def _flac_layout(
+    path: Path, *, replace_front: bool = False
+) -> tuple[str, tuple[tuple[int, str], ...]]:
     blocks = []
     with path.open("rb") as stream:
         if stream.read(4) != b"fLaC":
@@ -85,8 +88,16 @@ def _flac_layout(path: Path) -> tuple[str, tuple[tuple[int, str], ...]]:
             if len(header) != 4:
                 raise TagWriteError("Bloques FLAC incompletos.")
             kind, length = header[0] & 0x7F, int.from_bytes(header[1:], "big")
-            digest = _hash_stream(stream, length)
-            if kind not in (1, 4):
+            front = False
+            if kind == 6 and replace_front:
+                if length < 4:
+                    raise TagWriteError("Bloque de imagen FLAC incompleto.")
+                prefix = stream.read(4)
+                front = int.from_bytes(prefix, "big") == 3
+                digest = _hash_stream(stream, length - 4, prefix)
+            else:
+                digest = _hash_stream(stream, length)
+            if kind not in (1, 4) and not front:
                 blocks.append((kind, digest))
             if header[0] & 0x80:
                 return _hash_stream(stream), tuple(blocks)
@@ -342,7 +353,7 @@ class MutagenTagCodec:
         except Exception as exc:
             error = str(exc)
             changes = []
-        return PlannedTags(
+        plan = PlannedTags(
             before,
             after,
             before_date,
@@ -353,6 +364,39 @@ class MutagenTagCodec:
             candidates,
             selected,
             error,
+        )
+        cover = dict(request.covers).get(snapshot.file_id)
+        if cover is not None and not plan.error:
+            fronts = self._fronts(path, plan.audio_format)
+            same = len(fronts) == 1 and fronts[0] == (cover.mime_type, cover.data)
+            return replace(
+                plan,
+                cover=cover,
+                cover_changed=not same,
+                cover_catalog_changed=(
+                    snapshot.cover_sha256 != cover.fingerprint.sha256
+                    or snapshot.cover_source != "embedded"
+                    or snapshot.cover_relative_path is not None
+                ),
+                cover_action="unchanged" if same else "replaced" if fronts else "embedded",
+            )
+        return replace(
+            plan,
+            cover_action="skipped"
+            if snapshot.file_id in request.cover_skipped_ids
+            else "preserved",
+        )
+
+    def _fronts(self, path: Path, audio_format: str) -> tuple[tuple[str, bytes], ...]:
+        if audio_format == "flac":
+            audio = cast(Any, FLAC)(str(path))
+            return tuple(
+                (picture.mime, picture.data) for picture in audio.pictures if picture.type == 3
+            )
+        return tuple(
+            (cast(Any, frame).mime, cast(Any, frame).data)
+            for frame in _id3(path).values()
+            if isinstance(frame, APIC) and cast(Any, frame).type == 3
         )
 
     def write_verified(self, backup: Path, temporary: Path, plan: PlannedTags) -> TrackMetadata:
@@ -366,6 +410,14 @@ class MutagenTagCodec:
         else:
             raise TagWriteError("Formato de escritura desconocido.")
         self._verify_preservation(backup, temporary, plan, fields)
+        if plan.cover is not None and (
+            plan.cover.data is None
+            or self._fronts(temporary, plan.audio_format)
+            != ((plan.cover.mime_type, plan.cover.data),)
+        ):
+            raise TagWriteError(
+                "La portada no está incrustada correctamente en el archivo musical."
+            )
         actual = self.observed(temporary)
         actual_values = EditableValues.from_metadata(actual)
         for field in actual_values.as_dict():
@@ -393,6 +445,21 @@ class MutagenTagCodec:
             value = plan.after_date if field == "album_year" else getattr(plan.after, field)
             if value is not None and value != ():
                 audio.tags[_FLAC[field]] = list(value) if isinstance(value, tuple) else [str(value)]
+        if plan.cover_changed and plan.cover is not None:
+            cover = plan.cover
+            if cover.data is None:
+                raise TagWriteError(
+                    "La imagen del plan no está disponible; prepara otra escritura."
+                )
+            remaining = [picture for picture in audio.pictures if picture.type != 3]
+            audio.clear_pictures()
+            for picture in remaining:
+                audio.add_picture(picture)
+            picture = cast(Any, Picture)()
+            picture.type, picture.mime, picture.desc = 3, cover.mime_type, "Cover (front)"
+            picture.width, picture.height, picture.depth = cover.width, cover.height, 24
+            picture.data = cover.data
+            audio.add_picture(picture)
         audio.save()
 
     def _write_mp3(self, path: Path, plan: PlannedTags, fields: set[EditField]) -> None:
@@ -443,13 +510,36 @@ class MutagenTagCodec:
                     text=plan.after.lyrics,
                 )
             )
+        if plan.cover_changed and plan.cover is not None:
+            cover = plan.cover
+            if cover.data is None:
+                raise TagWriteError(
+                    "La imagen del plan no está disponible; prepara otra escritura."
+                )
+            for key, frame in list(tags.items()):
+                if isinstance(frame, APIC) and cast(Any, frame).type == 3:
+                    del tags[key]
+            description = "Cover (front)"
+            while f"APIC:{description}" in tags:
+                description += " (Trackfolio)"
+            tags.add(
+                cast(Any, APIC)(
+                    encoding=encoding,
+                    mime=cover.mime_type,
+                    type=3,
+                    desc=description,
+                    data=cover.data,
+                )
+            )
         tags.save(str(path), v1=0, v2_version=version)
 
     def _verify_preservation(
         self, backup: Path, temporary: Path, plan: PlannedTags, fields: set[EditField]
     ) -> None:
         if plan.audio_format == "flac":
-            if _flac_layout(backup) != _flac_layout(temporary):
+            if _flac_layout(backup, replace_front=plan.cover_changed) != _flac_layout(
+                temporary, replace_front=plan.cover_changed
+            ):
                 raise TagWriteError("Cambió el audio o un bloque FLAC no seleccionado.")
 
             def flac_signature(path: Path) -> object:
@@ -478,6 +568,11 @@ class MutagenTagCodec:
                     key: _frame_value(frame)
                     for key, frame in tags.items()
                     if not _owned(key, fields, plan.selected_lyrics)
+                    and not (
+                        plan.cover_changed
+                        and isinstance(frame, APIC)
+                        and cast(Any, frame).type == 3
+                    )
                 }
                 data["unknown_frames"] = [
                     hashlib.sha256(frame).hexdigest() for frame in tags.unknown_frames

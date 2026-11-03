@@ -7,8 +7,10 @@ import struct
 import tempfile
 import zlib
 from pathlib import Path
+from typing import Any, cast
 from xml.etree import ElementTree
 
+from mutagen.flac import FLAC
 from PySide6.QtCore import Qt, QTimer, qVersion
 from PySide6.QtTest import QTest
 
@@ -30,8 +32,8 @@ def _image() -> bytes:
     return header + dib + b"\xff\x80\x30\x00"
 
 
-def _audio_source(root: Path) -> Path:
-    """A metadata-only FLAC exercises Mutagen and imports without external music."""
+def _png(color: bytes = b"\xff\x80\x30") -> bytes:
+    """A complete one-pixel PNG for embedded and external cover checks."""
 
     def chunk(kind: bytes, payload: bytes) -> bytes:
         return (
@@ -41,12 +43,17 @@ def _audio_source(root: Path) -> Path:
             + struct.pack(">I", binascii.crc32(kind + payload))
         )
 
-    image = (
+    return (
         b"\x89PNG\r\n\x1a\n"
         + chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0))
-        + chunk(b"IDAT", zlib.compress(b"\x00\xff\x80\x30"))
+        + chunk(b"IDAT", zlib.compress(b"\x00" + color))
         + chunk(b"IEND", b"")
     )
+
+
+def _audio_source(root: Path) -> Path:
+    """A metadata-only FLAC exercises Mutagen without external music."""
+    image = _png()
     properties = (44100 << 44) | (1 << 41) | (15 << 36) | 88200
     stream_info = b"\x10\x00\x10\x00" + b"\x00" * 6 + properties.to_bytes(8, "big") + b"\x00" * 16
     tags = (
@@ -195,6 +202,7 @@ def run_probe(argv: list[str]) -> dict[str, object]:
                 state["edited"] = True
                 state["failure"] = "La ventana no confirmó la escritura de etiquetas."
                 _audio_source(Path(directory))
+                (source.parent / "folder.png").write_bytes(_png(b"\x10\xee\x20"))
                 (source.parent / "album.nfo").write_text(
                     '<?xml version="1.0" encoding="utf-8"?>\n'
                     "<album><title>Outdated</title><artist>Artista de prueba</artist>"
@@ -229,6 +237,20 @@ def run_probe(argv: list[str]) -> dict[str, object]:
                 actual = read_metadata(source)
                 assert actual.title == "Catalog correction" and actual.artists == ("Accept",)
                 assert actual.artwork is not None
+                selected_cover = _png(b"\x10\xee\x20")
+                assert [(p.type, p.mime, p.data) for p in cast(Any, FLAC)(source).pictures] == [
+                    (3, "image/png", selected_cover)
+                ]
+                assert actual.artwork.data == selected_cover
+                assert report.results[0].cover_action == "replaced"
+                session = open_catalog(database)
+                try:
+                    entry = session.get(report.results[0].file_id)
+                    assert entry is not None and entry.metadata.artwork is not None
+                    assert entry.metadata.artwork.data == selected_cover
+                    assert entry.metadata.artwork.source == "embedded"
+                finally:
+                    session.close()
                 assert len(report.nfo_results) == 1 and report.nfo_results[0].state == "updated", (
                     report
                 )
@@ -247,6 +269,7 @@ def run_probe(argv: list[str]) -> dict[str, object]:
                 )
                 state["tags_written"] = True
                 state["nfo_written"] = True
+                state["cover_written"] = True
                 state["failure"] = ""
                 if controller._tag_dialog is not None:
                     controller._tag_dialog.reject()
@@ -279,4 +302,5 @@ def run_probe(argv: list[str]) -> dict[str, object]:
             "edited": bool(state.get("edited")),
             "tags_written": bool(state.get("tags_written")),
             "nfo_written": bool(state.get("nfo_written")),
+            "cover_written": bool(state.get("cover_written")),
         }

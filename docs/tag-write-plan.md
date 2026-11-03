@@ -46,8 +46,10 @@ antigua ni cambiar automáticamente los destinatarios.
 | Géneros | Valores repetidos de `GENRE` | Lista `TCON` |
 | Líricas | `LYRICS` | Primera versión `USLT` expuesta por el lector |
 
-- Se escribe únicamente lo que difiere; el audio, las imágenes y los metadatos ajenos
-  al catálogo se conservan. No se incrusta `album.jpg` ni se renombran archivos.
+- Se escribe únicamente lo que difiere, incluida la portada frontal elegida entre los
+  JPEG/PNG de la carpeta según el [plan de portadas](cover-writing-plan.md).
+  Se conservan el audio, las demás imágenes y los metadatos ajenos al catálogo.
+  Sin imágenes se conserva la portada actual. No se renombran archivos.
   Si existe `album.nfo` junto al audio, se sincroniza una vez por carpeta con los
   valores coherentes de todas sus pistas catalogadas, sin ampliar la selección musical.
 - Se actualiza la familia de alias de cada campo modificado, incluidos los `TXXX`

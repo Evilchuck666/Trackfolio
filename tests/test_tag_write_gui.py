@@ -529,3 +529,63 @@ def test_cancel_button_uses_the_current_operation_cancellation(
     finally:
         release.set()
         teardown(window, controller)
+
+
+@pytest.mark.parametrize("action", ["select", "skip", "cancel", "close"])
+def test_cover_selection_happens_before_publication_and_refreshes_detail(
+    qt_app, setup_tags, tmp_path, action
+):
+    from PySide6.QtWidgets import QDialogButtonBox
+    from test_cover_write import front, service_for
+    from test_metadata import png
+
+    _, repository, _, _, files = setup_tags
+    source = make_source(tmp_path, "flac")
+    entry = repository.save(read_metadata(source), source.parent, source.name)
+    original = source.read_bytes()
+    for size, name in ((2, "one.png"), (4, "two.PNG")):
+        (source.parent / name).write_bytes(png(size, 3))
+    window, controller = open_window(qt_app, setup_tags, entry)
+    controller._tag_writer = service_for(setup_tags)
+    reports = []
+    controller.tag_write_finished.connect(reports.append)
+    try:
+        dialog = open_dialog(qt_app, window, controller)
+        QTest.mouseClick(dialog.write_button, Qt.MouseButton.LeftButton)
+        wait_until(qt_app, lambda: controller._cover_dialog is not None)
+        chooser = controller._cover_dialog
+        assert chooser.thread() == qt_app.thread()
+        assert len(chooser.rows) == 1
+        assert source.read_bytes() == original and not files.journal_root.exists()
+        ok = chooser.buttons.button(QDialogButtonBox.StandardButton.Ok)
+        assert not ok.isEnabled()
+        if action == "close":
+            window.close()
+        elif action == "cancel":
+            chooser.reject()
+        else:
+            chooser.rows[0][1].setCurrentIndex(3 if action == "select" else 1)
+            assert ok.isEnabled()
+            if action == "select":
+                assert not chooser.rows[0][2].pixmap().isNull()
+            QTest.mouseClick(ok, Qt.MouseButton.LeftButton)
+        wait_until(qt_app, lambda: bool(reports) and not controller._tag_running)
+        if action in ("close", "cancel"):
+            assert reports[0].cancelled
+            assert source.read_bytes() == original and not files.journal_root.exists()
+            if action == "cancel":
+                assert dialog.write_button.isEnabled()
+            else:
+                wait_until(qt_app, lambda: controller._closed)
+        elif action == "skip":
+            assert reports[0].results[0].cover_action == "skipped"
+            assert source.read_bytes() == original
+        else:
+            assert front(source) == [("image/png", png(4, 3))]
+            assert reports[0].results[0].cover_action == "replaced"
+            dialog.reject()
+            wait_until(qt_app, lambda: not controller._jobs)
+            assert window.cover.pixmap().width() > 0
+            assert controller._session.get(entry.file_id).metadata.artwork.data == png(4, 3)
+    finally:
+        teardown(window, controller)

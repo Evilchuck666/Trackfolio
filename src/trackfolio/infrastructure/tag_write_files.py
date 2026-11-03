@@ -35,6 +35,9 @@ from trackfolio.domain.tag_write import (
     AlbumNfoSong,
     AlbumNfoTrack,
     AlbumNfoValues,
+    CoverCandidate,
+    CoverFolder,
+    CoverImage,
     FileFingerprint,
     PendingTagOperation,
     PlannedTags,
@@ -344,6 +347,49 @@ def _values(data: dict[str, Any]) -> EditableValues:
     )
 
 
+def _load_cover(data: dict[str, Any]) -> CoverImage:
+    return CoverImage(
+        Path(data["path"]),
+        Path(data["library_root"]),
+        FileFingerprint(**data["fingerprint"]),
+        data["mime_type"],
+        data["width"],
+        data["height"],
+    )
+
+
+def _load_cover_folder(data: dict[str, Any]) -> CoverFolder:
+    return CoverFolder(
+        Path(data["path"]),
+        Path(data["library_root"]),
+        tuple(data["file_ids"]),
+        tuple(
+            CoverCandidate(
+                **{
+                    **candidate,
+                    "path": Path(candidate["path"]),
+                    "fingerprint": FileFingerprint(**candidate["fingerprint"])
+                    if candidate["fingerprint"]
+                    else None,
+                }
+            )
+            for candidate in data["candidates"]
+        ),
+        data["error"],
+    )
+
+
+def _preview_data(preview: TagWritePreview) -> dict[str, Any]:
+    data = asdict(preview)
+    # Source pixels are frozen in memory for publishing, never serialized in journals.
+    for _, cover in data["request"]["covers"]:
+        cover.pop("data", None)
+    for item in data["items"]:
+        if item["tags"] and item["tags"].get("cover"):
+            item["tags"]["cover"].pop("data", None)
+    return data
+
+
 def _load_preview(data: dict[str, Any]) -> TagWritePreview:
     request = data["request"]
     items = []
@@ -365,6 +411,7 @@ def _load_preview(data: dict[str, Any]) -> TagWritePreview:
                     "before": _values(tags["before"]),
                     "after": _values(tags["after"]),
                     "lyrics_keys": tuple(tags["lyrics_keys"]),
+                    "cover": _load_cover(tags["cover"]) if tags.get("cover") else None,
                     "differences": tuple(
                         TagDifference(
                             **{
@@ -403,10 +450,13 @@ def _load_preview(data: dict[str, Any]) -> TagWritePreview:
             cast(tuple[EditField, ...], tuple(request["fields"])),
             request["allow_date_loss"],
             tuple(tuple(pair) for pair in request["lyrics_keys"]),
+            tuple((file_id, _load_cover(cover)) for file_id, cover in request.get("covers", [])),
+            tuple(request.get("cover_skipped_ids", [])),
         ),
         tuple(data["catalog_identity"]),
         tuple(items),
         tuple(_load_nfo(value) for value in data.get("nfo_items", [])),
+        tuple(_load_cover_folder(value) for value in data.get("cover_folders", [])),
     )
 
 
@@ -598,7 +648,15 @@ class FileTagAccess:
             device = item.path.parent.stat().st_dev
             path, total, largest = volumes.get(device, (item.path.parent, 0, 0))
             size = item.fingerprint.size
-            volumes[device] = path, total + size, max(largest, size)
+            growth = (
+                item.tags.cover.fingerprint.size
+                if isinstance(item, TagWriteItem)
+                and item.tags
+                and item.tags.cover_changed
+                and item.tags.cover is not None
+                else 0
+            )
+            volumes[device] = path, total + size + growth, max(largest, size + growth)
         for path, total, largest in volumes.values():
             if shutil.disk_usage(path).free < total + largest + 1024 * 1024:
                 raise OSError(
@@ -654,8 +712,8 @@ class FileTagAccess:
         journal = FileTagJournal(
             operation / "journal.json",
             {
-                "schema": 2,
-                "preview": asdict(preview),
+                "schema": 3 if preview.cover_folders or preview.request.covers else 2,
+                "preview": _preview_data(preview),
                 "closed": False,
                 "files": {str(item.file_id): {"state": "pending"} for item in preview.items},
                 "nfos": {str(item.path): {"state": "pending"} for item in preview.nfo_items},
@@ -761,20 +819,22 @@ class FileTagAccess:
         data = json.loads(path.read_text(encoding="utf-8"))
         if (
             not isinstance(data, dict)
-            or data.get("schema") not in (1, 2)
+            or data.get("schema") not in (1, 2, 3)
             or not isinstance(data.get("preview"), dict)
             or data["preview"].get("operation_id") != path.parent.name
             or not isinstance(data.get("files"), dict)
             or not isinstance(data.get("closed"), bool)
         ):
             raise TagJournalError("El formato del registro no es válido.")
-        if data["schema"] == 2 and not isinstance(data.get("nfos"), dict):
+        if data["schema"] >= 2 and not isinstance(data.get("nfos"), dict):
             raise TagJournalError("El registro NFO no es válido.")
         if data["schema"] == 1 and data["preview"].get("nfo_items"):
             raise TagJournalError("Un registro antiguo no puede contener trabajos NFO.")
         if not re.fullmatch(r"[0-9a-f]{32}", path.parent.name):
             raise TagJournalError("Identificador de registro no válido.")
         preview = _load_preview(data["preview"])
+        if data["schema"] < 3 and (preview.cover_folders or preview.request.covers):
+            raise TagJournalError("Un registro antiguo no puede contener planes de portada.")
         for item in preview.items:
             if item.snapshot is not None:
                 root = item.snapshot.library_root.resolve()
@@ -783,6 +843,27 @@ class FileTagAccess:
                 if not resolved.is_relative_to(root) or item.path != resolved:
                     raise TagJournalError("La ruta del registro no coincide con su biblioteca.")
         selected = {item.file_id: item for item in preview.items}
+        for folder in preview.cover_folders:
+            if folder.path.resolve() != folder.path or not folder.path.is_relative_to(
+                folder.library_root.resolve()
+            ):
+                raise TagJournalError(
+                    "La carpeta de portadas del registro está fuera de su biblioteca."
+                )
+            if any(candidate.path.parent != folder.path for candidate in folder.candidates):
+                raise TagJournalError("Una portada del registro está fuera de su carpeta.")
+        for item in preview.items:
+            if item.tags is not None and item.tags.cover is not None:
+                cover = item.tags.cover
+                if (
+                    item.snapshot is None
+                    or cover.library_root.resolve() != item.snapshot.library_root.resolve()
+                    or (
+                        cover.path.parent != item.path.parent
+                        or not cover.path.is_relative_to(cover.library_root.resolve())
+                    )
+                ):
+                    raise TagJournalError("La portada del registro no coincide con su canción.")
         for nfo in preview.nfo_items:
             root = nfo.library_root.resolve()
             if (

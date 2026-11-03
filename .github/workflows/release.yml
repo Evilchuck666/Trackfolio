@@ -216,6 +216,9 @@ jobs:
                   "trackfolio/application/edit_catalog.py",
                   "trackfolio/application/write_tags.py",
                   "trackfolio/application/album_nfo.py",
+                  "trackfolio/application/cover_writes.py",
+                  "trackfolio/infrastructure/cover_files.py",
+                  "trackfolio/interfaces/gui/cover_dialog.py",
                   "trackfolio/application/tag_write_errors.py",
                   "trackfolio/infrastructure/album_nfo.py",
                   "trackfolio/domain/tag_write.py",
@@ -397,10 +400,25 @@ jobs:
           from trackfolio.infrastructure.album_nfo import XmlAlbumNfoCodec
           from xml.etree import ElementTree
           nfo = audio.parent / "album.nfo"
-          nfo.write_text("<album><title>Outdated</title><review>Keep</review></album>")
-          sidecar = TagWriteService(tag_catalog, codec, tag_files, XmlAlbumNfoCodec()).execute(
-              target, (imported.file_id,))
-          assert sidecar.results[0].state == "unchanged", sidecar
+          nfo.write_text("<album><title>Outdated</title><review>Keep</review></album>", encoding="utf-8")
+          from trackfolio.infrastructure.cover_files import FileCoverAccess
+          from mutagen.flac import FLAC
+          import binascii
+          import struct
+          def chunk(kind, payload):
+              return (struct.pack(">I", len(payload)) + kind + payload
+                      + struct.pack(">I", binascii.crc32(kind + payload)))
+          cover = (b"\\x89PNG\\r\\n\\x1a\\n"
+                   + chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0))
+                   + chunk(b"IDAT", zlib.compress(b"\\x00\\x10\\xee\\x20"))
+                   + chunk(b"IEND", b""))
+          (audio.parent / "folder.png").write_bytes(cover)
+          service = TagWriteService(tag_catalog, codec, tag_files, XmlAlbumNfoCodec(), FileCoverAccess())
+          sidecar = service.execute(target, (imported.file_id,))
+          assert sidecar.results[0].state == "confirmed", sidecar
+          assert [(p.type, p.mime, p.data) for p in FLAC(audio).pictures] == [(3, "image/png", cover)]
+          assert read_metadata(audio).artwork.data == cover
+          assert service.execute(target, (imported.file_id,)).results[0].state == "unchanged"
           assert sidecar.nfo_results[0].state == "updated", sidecar
           assert ElementTree.parse(nfo).findtext("review") == "Keep"
           assert not (audio.parent / ".trackfolio-backups").exists()
@@ -484,6 +502,7 @@ jobs:
           assert report["edited"] is True, report
           assert report["tags_written"] is True, report
           assert report["nfo_written"] is True, report
+          assert report["cover_written"] is True, report
           print("Wheel GUI instalado fuera del checkout:", report)
           """
               subprocess.run(

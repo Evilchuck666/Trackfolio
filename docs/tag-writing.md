@@ -13,7 +13,8 @@ La acción de escribir la selección sigue disponible junto al detalle de la can
 El diálogo muestra todas las canciones desde que se abre, la salida del progreso y
 únicamente **Cerrar** y **Escribir etiquetas**. Pulsar escribir prepara y verifica los
 cambios internamente, sin selección de campos ni revisión manual de diferencias.
-Cada canción conserva sus propios valores; los archivos sin diferencias se omiten.
+Cada canción conserva sus propios valores; se omiten los archivos sin diferencias
+de texto ni portada.
 También se comprueba y actualiza `album.nfo` si existe junto al audio, incluso cuando
 las etiquetas musicales ya están actualizadas. Su ausencia es normal y no lo crea.
 Los errores abren un pop-up que ofrece guardar el informe JSON; una operación correcta
@@ -23,6 +24,40 @@ Tras completar la escritura correctamente, **Escribir etiquetas** queda deshabil
 y **Cerrar** sigue disponible. También se deshabilita si todos los archivos y NFO estaban
 ya actualizados, o los NFO no existen. Si hay errores o pendientes, permite reintentar
 en el mismo diálogo, incluido actualizar sólo el NFO después de escribir el audio.
+
+## Incrustación de portadas
+
+Al pulsar **Escribir etiquetas**, se buscan `.jpg`, `.jpeg` y `.png` en la misma
+carpeta de cada canción, sin distinguir mayúsculas. No se buscan imágenes en otras
+carpetas ni se usan SQLite o el NFO como fuentes.
+
+| Imágenes en la carpeta | Resultado |
+| --- | --- |
+| Ninguna | Conserva la portada incrustada actual; si no tiene portada, continúa sin ella. |
+| Una | La incrusta automáticamente, sustituyendo la frontal anterior. |
+| Varias | Abre **Elegir portadas**, con nombre, dimensiones y vista previa. Exige una elección por carpeta o **Conservar portada actual**. |
+
+Todas las elecciones se completan antes de publicar música o NFO. Cancelar el
+selector cancela el intento completo; se puede reintentar. La elección se comparte
+entre las canciones destinatarias de la carpeta, sin escribir las no seleccionadas.
+
+La portada elegida se copia con sus bytes y formato originales, sin convertirla ni
+modificar la imagen fuente. Se admite JPEG/PNG de hasta **15 MiB**. Una imagen inválida,
+ilegible o demasiado grande bloquea las canciones de esa carpeta; otras carpetas
+pueden continuar. Los cambios de fuente o inventario producen una incidencia y
+requieren un nuevo intento. No se siguen enlaces internos ni imágenes enlazadas;
+se admiten alias de la raíz importada.
+
+La escritura deja exactamente una portada frontal (`PICTURE` FLAC o `APIC` MP3 tipo 3).
+Conserva contraportadas, libretos, imágenes de otros tipos y la versión ID3 admitida.
+También funciona sin cambios de texto. Si ya coincide exactamente, no reemplaza el
+audio; si sólo está desactualizada la miniatura de SQLite, actualiza el catálogo.
+Tras una publicación correcta, la miniatura del detalle se refresca al cerrar el diálogo.
+
+El informe distingue portada conservada, incrustada, sustituida, coincidente u omitida
+por elección, y muestra la ruta fuente. La portada se verifica directamente dentro
+del audio y participa en el mismo respaldo, temporal y reemplazo que las etiquetas.
+Los fallos conservan los respaldos según las reglas del lote.
 
 ## Actualización opcional de album.nfo
 
@@ -91,7 +126,7 @@ El [plan de la entrega](album-nfo-plan.md) detalla contratos y criterios de acep
 
 | Caso | Comportamiento |
 | --- | --- |
-| FLAC | Modifica los comentarios Vorbis que difieren del catálogo; conserva imágenes, otros bloques y audio. |
+| FLAC | Modifica los comentarios Vorbis que difieren del catálogo; sustituye la portada frontal cuando se elige una fuente y conserva las demás imágenes, otros bloques y audio. |
 | MP3 con ID3v2.4 | Conserva v2.4 y las listas de artistas/géneros con orden y Unicode. |
 | MP3 con ID3v2.3 | Conserva v2.3; bloquea listas que se unirían al guardar. No convierte a v2.4. |
 | MP3 sin ID3 | Crea ID3v2.4. |
@@ -100,7 +135,7 @@ El [plan de la entrega](album-nfo-plan.md) detalla contratos y criterios de acep
 | Fechas completas | Cambia el año conservando la precisión válida y representable. Si la fecha resultante es inválida o no representable, guarda solo el año; vaciarlo elimina la fecha. |
 | Varias líricas USLT | Actualiza la primera versión de líricas que expone el lector y conserva las demás. El importador puede mostrar otra versión restante, porque solo expone un texto de líricas. |
 | Alias y TXXX | Retira o actualiza la familia del campo modificado para que un alias antiguo no prevalezca. |
-| Metadatos ajenos | Verifica comentarios, frames conocidos/desconocidos, imágenes y etiquetas APEv2 finales; si no puede preservarlos, no publica. |
+| Metadatos ajenos | Verifica comentarios, frames conocidos/desconocidos, imágenes no seleccionadas y etiquetas APEv2 finales; si no puede preservarlos, no publica. |
 
 Los números se serializan sin inventar valores; los años utilizan cuatro dígitos en
 el intervalo 1–9999. La escritura no divide nombres por comas, punto y coma ni `/`.
@@ -182,9 +217,10 @@ El registro persistente está en la carpeta de datos del usuario, en
 `Trackfolio/tag-writes/<operación>/journal.json`. En Linux normalmente es
 `~/.local/share/Trackfolio/tag-writes/`; se respeta `XDG_DATA_HOME` y en macOS/Windows
 se utiliza el equivalente de `platformdirs`. El registro guarda rutas, valores
-confirmados, hashes y estados, sin incluir las portadas binarias. Su versión `2`
-incluye trabajos y resultados NFO separados de las canciones; la revisión técnica
-sigue admitiendo los registros antiguos de versión `1`.
+confirmados, hashes y estados, sin incluir las portadas binarias. La versión `3`
+incorpora las fuentes, huellas e intenciones de portada. Se siguen admitiendo los
+registros `1` (audio) y `2` (audio y NFO). La revisión puede confirmar en SQLite una
+portada ya publicada sin necesitar de nuevo la imagen fuente; no reescribe audio.
 
 Los registros se conservan como historial. Los respaldos que permanecen después de un
 lote incompleto permiten recuperación manual.

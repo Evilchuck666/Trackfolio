@@ -8,9 +8,10 @@ from pathlib import Path
 from threading import Event
 from time import monotonic
 from typing import Literal, cast
+from uuid import uuid4
 
 from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, QTimer, Signal, Slot
-from PySide6.QtWidgets import QFileDialog, QMessageBox
+from PySide6.QtWidgets import QDialog, QFileDialog, QMessageBox
 
 from trackfolio.application.catalog import CatalogSession, GetTrack, ListTrackSummaries
 from trackfolio.application.edit_catalog import (
@@ -37,9 +38,12 @@ from trackfolio.application.write_tags import TagWriteService
 from trackfolio.domain.catalog import CatalogEntry, CatalogSummary
 from trackfolio.domain.catalog_edit import ArtistChoice, EditableTrack, TrackEditPatch
 from trackfolio.domain.tag_write import (
+    CoverChoice,
+    CoverDiscovery,
     TagWriteProgress,
     TagWriteReport,
 )
+from trackfolio.interfaces.gui.cover_dialog import CoverChoiceDialog
 from trackfolio.interfaces.gui.import_dialog import ImportDialog, ImportProgressDialog
 from trackfolio.interfaces.gui.tag_write_dialog import TagWriteDialog
 from trackfolio.interfaces.gui.window import MainWindow
@@ -145,6 +149,7 @@ _JobKind = Literal[
     "genres",
     "tag_write",
     "tag_list",
+    "tag_covers",
 ]
 
 
@@ -185,6 +190,7 @@ class CatalogController(QObject):
         self._edit_factory = edit_factory
         self._tag_writer = tag_writer
         self._tag_dialog: TagWriteDialog | None = None
+        self._cover_dialog: CoverChoiceDialog | None = None
         self._tag_running = False
         self._tag_changed = False
         self._tag_token = 0
@@ -304,7 +310,7 @@ class CatalogController(QObject):
         dialog = TagWriteDialog(database, songs, self.window, all_catalog=all_catalog)
         self._tag_dialog = dialog
         dialog.write_requested.connect(self.write_tags)
-        dialog.cancel_requested.connect(lambda: self._tag_cancel.set())
+        dialog.cancel_requested.connect(self._cancel_tag_write)
         dialog.finished.connect(self._tag_dialog_closed)
         self.window.set_writing_tags(True)
         dialog.show()
@@ -334,6 +340,42 @@ class CatalogController(QObject):
             return
         service, dialog = self._tag_writer, self._tag_dialog
         self._tag_cancel = Event()
+        if service.cover_sources is not None:
+            token = self._tag_token + 1
+            self._tag_operation(
+                lambda: service.discover_covers(
+                    dialog.database_path,
+                    dialog.file_ids,
+                    is_cancelled=self._tag_cancel.is_set,
+                    on_progress=lambda progress: self.tag_progress.emit(token, progress),
+                ),
+                "tag_covers",
+            )
+        else:
+            self._publish_tags()
+
+    def _cancel_tag_write(self) -> None:
+        self._tag_cancel.set()
+        if self._cover_dialog is not None:
+            self._cover_dialog.reject()
+
+    def _cancel_cover_attempt(self) -> None:
+        self._tag_running = False
+        report = TagWriteReport(uuid4().hex, (), cancelled=True)
+        if self._tag_dialog is not None:
+            self._tag_dialog.set_report(report, offer_report=False)
+        self.tag_write_finished.emit(report)
+        if self._close_pending:
+            QTimer.singleShot(0, self._close_when_idle)
+
+    def _publish_tags(
+        self,
+        discovery: CoverDiscovery | None = None,
+        choices: tuple[CoverChoice, ...] = (),
+    ) -> None:
+        service, dialog = self._tag_writer, self._tag_dialog
+        if service is None or dialog is None or self._closed:
+            return
         token = self._tag_token + 1
         self._tag_operation(
             lambda: service.execute(
@@ -341,6 +383,8 @@ class CatalogController(QObject):
                 dialog.file_ids,
                 is_cancelled=self._tag_cancel.is_set,
                 on_progress=lambda progress: self.tag_progress.emit(token, progress),
+                cover_discovery=discovery,
+                cover_choices=choices,
             ),
             "tag_write",
         )
@@ -352,6 +396,37 @@ class CatalogController(QObject):
 
     def _finish_tag_job(self, job: _Job) -> None:
         self._tag_running = False
+        if job.kind == "tag_covers":
+            if self._tag_cancel.is_set() or self._close_pending:
+                self._cancel_cover_attempt()
+            elif job.task.error:
+                if self._tag_dialog is not None:
+                    self._tag_dialog.set_error(job.task.error)
+            else:
+                discovery = cast(CoverDiscovery, job.task.result)
+                if any(len(folder.candidates) > 1 for folder in discovery.folders):
+                    chooser = CoverChoiceDialog(discovery, self._tag_dialog)
+                    self._cover_dialog = chooser
+                    self._tag_running = True
+
+                    def chosen(result: int) -> None:
+                        self._cover_dialog = None
+                        self._tag_running = False
+                        if not self._closed:
+                            if (
+                                result == QDialog.DialogCode.Accepted
+                                and not self._tag_cancel.is_set()
+                            ):
+                                self._publish_tags(discovery, chooser.choices())
+                            else:
+                                self._cancel_cover_attempt()
+                        chooser.deleteLater()
+
+                    chooser.finished.connect(chosen)
+                    chooser.open()
+                else:
+                    self._publish_tags(discovery)
+            return
         if job.kind == "tag_list":
             self.window.set_writing_tags(False)
             if self._close_pending:
@@ -372,7 +447,8 @@ class CatalogController(QObject):
         else:
             report = cast(TagWriteReport, job.task.result)
             self._tag_changed = self._tag_changed or any(
-                item.state in ("confirmed", "catalog_pending") for item in report.results
+                item.state in ("confirmed", "catalog_pending") or item.catalog_updated
+                for item in report.results
             )
             if self._tag_dialog is not None:
                 self._tag_dialog.set_report(report, offer_report=not self._close_pending)
@@ -756,7 +832,7 @@ class CatalogController(QObject):
             return True
         if self._tag_running:
             self._close_pending = True
-            self._tag_cancel.set()
+            self._cancel_tag_write()
             return False
         if self._tag_dialog is not None:
             self._tag_dialog.reject()
@@ -917,6 +993,7 @@ class CatalogController(QObject):
             "genres": self._genre_token,
             "tag_write": self._tag_token,
             "tag_list": self._tag_token,
+            "tag_covers": self._tag_token,
         }
         return job.request_token == token[job.kind]
 
@@ -929,7 +1006,7 @@ class CatalogController(QObject):
         if not self._is_current(job):
             if isinstance(result, _Opened):
                 result.session.close()
-        elif job.kind in ("tag_write", "tag_list"):
+        elif job.kind in ("tag_write", "tag_list", "tag_covers"):
             self._finish_tag_job(job)
         elif job.kind == "save":
             self._finish_save(job)
@@ -1111,7 +1188,7 @@ class CatalogController(QObject):
             return
         self._closed = True
         self._cancellation.set()
-        self._tag_cancel.set()
+        self._cancel_tag_write()
         # This synchronous drain is for final teardown after the event loop has stopped.
         # Normal window closure during import uses request_close and keeps events flowing.
         self._pool.clear()
