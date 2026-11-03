@@ -564,7 +564,7 @@ def test_cover_selection_happens_before_publication_and_refreshes_detail(
         elif action == "cancel":
             chooser.reject()
         else:
-            chooser.rows[0][1].setCurrentIndex(3 if action == "select" else 1)
+            chooser.rows[0][1].setCurrentRow(2 if action == "select" else 0)
             assert ok.isEnabled()
             if action == "select":
                 assert not chooser.rows[0][2].pixmap().isNull()
