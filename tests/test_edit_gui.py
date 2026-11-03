@@ -23,6 +23,7 @@ from trackfolio.interfaces.gui.window import MainWindow  # noqa: E402
 @pytest.fixture
 def window(qt_app):
     result = MainWindow()
+    result.views.setCurrentWidget(result.splitter)
     result.set_edit_enabled(True)
     result.show()
     qt_app.processEvents()

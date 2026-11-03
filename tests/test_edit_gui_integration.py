@@ -113,6 +113,7 @@ def begin_batch(app, window, controller, file_ids):
 def test_batch_save_updates_all_selected_rows_and_preserves_selection(qt_app, edit_catalog):
     database, first, second = edit_catalog
     window, controller = create_window()
+    window.views.setCurrentWidget(window.splitter)
     try:
         open_ready(qt_app, window, controller, database)
         begin_batch(qt_app, window, controller, (first.file_id, second.file_id))
@@ -153,6 +154,7 @@ def test_batch_unsaved_navigation_preserves_or_saves_whole_selection(
 ):
     database, first, second = edit_catalog
     window, controller = create_window()
+    window.views.setCurrentWidget(window.splitter)
     monkeypatch.setattr(
         controller, "_confirm_unsaved", lambda: getattr(QMessageBox.StandardButton, answer)
     )
@@ -227,6 +229,7 @@ def test_batch_unsaved_navigation_preserves_or_saves_whole_selection(
 def test_batch_conflict_keeps_whole_draft_without_partial_save(qt_app, edit_catalog):
     database, first, second = edit_catalog
     window, controller = create_window()
+    window.views.setCurrentWidget(window.splitter)
     try:
         open_ready(qt_app, window, controller, database)
         begin_batch(qt_app, window, controller, (first.file_id, second.file_id))
@@ -254,6 +257,7 @@ def test_batch_applying_unchanged_value_exits_editor_without_stale_save_status(
 ):
     database, first, second = edit_catalog
     window, controller = create_window()
+    window.views.setCurrentWidget(window.splitter)
     try:
         open_ready(qt_app, window, controller, database)
         begin_batch(qt_app, window, controller, (first.file_id, second.file_id))
@@ -275,6 +279,7 @@ def test_save_reopens_and_updates_summary_detail_and_unique_artist(qt_app, edit_
     database, first, second = edit_catalog
     preferences = CatalogPreferences(tmp_path / "settings.json")
     window, controller = create_window(preferences)
+    window.views.setCurrentWidget(window.splitter)
     finished = []
     controller.edit_finished.connect(finished.append)
     try:
@@ -308,6 +313,7 @@ def test_save_reopens_and_updates_summary_detail_and_unique_artist(qt_app, edit_
     finally:
         teardown(window, controller)
     reopened, reader = create_window(preferences)
+    reopened.views.setCurrentWidget(reopened.splitter)
     try:
         open_ready(qt_app, reopened, reader, database, "Corrected song")
         assert reopened.fields["artists"].text() == "Accept"
@@ -319,6 +325,7 @@ def test_save_reopens_and_updates_summary_detail_and_unique_artist(qt_app, edit_
 def test_cancel_reloads_external_changes_without_saving_draft(qt_app, edit_catalog, tmp_path):
     database, first, _second = edit_catalog
     window, controller = create_window(CatalogPreferences(tmp_path / "settings.json"))
+    window.views.setCurrentWidget(window.splitter)
     try:
         open_ready(qt_app, window, controller, database)
         begin_edit(qt_app, window, controller)
@@ -347,6 +354,7 @@ def test_selection_guard_discards_or_saves_before_navigation(
 ):
     database, first, second = edit_catalog
     window, controller = create_window(CatalogPreferences(tmp_path / "settings.json"))
+    window.views.setCurrentWidget(window.splitter)
     monkeypatch.setattr(controller, "_confirm_unsaved", lambda: answer)
     try:
         open_ready(qt_app, window, controller, database)
@@ -371,6 +379,7 @@ def test_selection_guard_discards_or_saves_before_navigation(
 def test_real_unsaved_dialog_cancel_restores_selection_and_draft(qt_app, edit_catalog, tmp_path):
     database, first, second = edit_catalog
     window, controller = create_window(CatalogPreferences(tmp_path / "settings.json"))
+    window.views.setCurrentWidget(window.splitter)
     seen = []
     try:
         open_ready(qt_app, window, controller, database)
@@ -401,6 +410,7 @@ def test_real_unsaved_dialog_cancel_restores_selection_and_draft(qt_app, edit_ca
 def test_conflict_keeps_draft_and_cancel_recovers_latest_record(qt_app, edit_catalog, tmp_path):
     database, first, _second = edit_catalog
     window, controller = create_window(CatalogPreferences(tmp_path / "settings.json"))
+    window.views.setCurrentWidget(window.splitter)
     results = []
     controller.edit_finished.connect(results.append)
     try:
@@ -433,6 +443,7 @@ def test_cancel_unsaved_guard_prevents_other_actions(
 ):
     database, first, _second = edit_catalog
     window, controller = create_window(CatalogPreferences(tmp_path / "settings.json"))
+    window.views.setCurrentWidget(window.splitter)
     confirmations = []
 
     def cancel():
@@ -481,6 +492,7 @@ def test_unsaved_guard_continues_requested_action_after_save_or_discard(
 ):
     database, first, _second = edit_catalog
     window, controller = create_window(CatalogPreferences(tmp_path / "settings.json"))
+    window.views.setCurrentWidget(window.splitter)
     monkeypatch.setattr(controller, "_confirm_unsaved", lambda: answer)
     finished = []
     imports = []
@@ -592,6 +604,7 @@ def test_close_during_save_stays_responsive_and_waits_for_writer(qt_app, edit_ca
     database, first, _second = edit_catalog
     gate = GateEditFactory(failure)
     window = MainWindow()
+    window.views.setCurrentWidget(window.splitter)
     controller = CatalogController(window, open_catalog, edit_factory=gate)
     closed = QSignalSpy(window.closing)
     finished = []
@@ -638,6 +651,7 @@ def test_failed_save_abandons_navigation_continuation_and_keeps_selected_draft(
     gate = GateEditFactory(failure=True)
     gate.release.set()
     window = MainWindow()
+    window.views.setCurrentWidget(window.splitter)
     controller = CatalogController(window, open_catalog, edit_factory=gate)
     monkeypatch.setattr(controller, "_confirm_unsaved", lambda: QMessageBox.StandardButton.Save)
     results = []
@@ -706,6 +720,7 @@ def test_late_edit_snapshot_cannot_replace_another_song_draft(qt_app, edit_catal
     database, first, second = edit_catalog
     gate = DelayedReadFactory(delay_file=first.file_id)
     window = MainWindow()
+    window.views.setCurrentWidget(window.splitter)
     controller = CatalogController(window, open_catalog, edit_factory=gate)
     started = []
     controller.edit_started.connect(started.append)
@@ -734,6 +749,7 @@ def test_late_suggestions_do_not_replace_latest_choices_or_dirty_draft(qt_app, e
     database, _first, _second = edit_catalog
     gate = DelayedReadFactory(delay_query="Ab")
     window = MainWindow()
+    window.views.setCurrentWidget(window.splitter)
     controller = CatalogController(window, open_catalog, edit_factory=gate)
     try:
         open_ready(qt_app, window, controller, database)
@@ -772,6 +788,7 @@ def test_old_catalogue_snapshot_cannot_replace_draft_in_new_catalogue(
         engine.dispose()
     gate = DelayedReadFactory(delay_file=first.file_id)
     window = MainWindow()
+    window.views.setCurrentWidget(window.splitter)
     controller = CatalogController(window, open_catalog, edit_factory=gate)
     edits = []
     controller.edit_started.connect(edits.append)
@@ -830,6 +847,7 @@ def test_refresh_started_before_edit_cannot_replace_draft_or_prompt_navigation(
     database, first, _second = edit_catalog
     gate = SummaryGate()
     window = MainWindow()
+    window.views.setCurrentWidget(window.splitter)
     controller = CatalogController(window, gate, edit_factory=SqliteCatalogEditSessionFactory())
     confirmations = []
 
@@ -878,6 +896,7 @@ def test_save_observer_opening_catalogue_supersedes_earlier_navigation_continuat
         destinations.append(path)
     deferred, observer_destination = destinations
     window, controller = create_window(CatalogPreferences(tmp_path / "settings.json"))
+    window.views.setCurrentWidget(window.splitter)
     monkeypatch.setattr(controller, "_confirm_unsaved", lambda: QMessageBox.StandardButton.Save)
     outcomes = []
 
@@ -919,6 +938,7 @@ def test_legacy_draft_invalid_save_and_cancel_do_not_migrate_then_valid_save_bac
     gate = GateEditFactory()
     gate.release.set()
     window = MainWindow()
+    window.views.setCurrentWidget(window.splitter)
     controller = CatalogController(window, open_catalog, edit_factory=gate)
     finished = []
     controller.edit_finished.connect(finished.append)

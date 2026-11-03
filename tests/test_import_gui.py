@@ -55,6 +55,7 @@ def progress_dialog(qt_app, tmp_path):
 @pytest.fixture
 def main_window(qt_app):
     window = MainWindow()
+    window.views.setCurrentWidget(window.splitter)
     window.show()
     qt_app.processEvents()
     yield window

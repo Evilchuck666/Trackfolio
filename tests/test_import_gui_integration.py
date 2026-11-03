@@ -54,6 +54,7 @@ def test_new_catalog_destination_uses_launch_mode_not_history(
     elsewhere.mkdir()
     monkeypatch.chdir(elsewhere)
     window, controller = create_window(preferences, dev_root=project if development else None)
+    window.views.setCurrentWidget(window.splitter)
     destinations = []
 
     def inspect_import():
@@ -122,6 +123,7 @@ def test_import_and_reimport_real_audio_then_read_without_music(qt_app, tmp_path
     database = tmp_path / "catalogo.tfo"
     preferences = CatalogPreferences(tmp_path / "settings.json")
     window, controller = create_window(preferences)
+    window.views.setCurrentWidget(window.splitter)
     reports = []
     controller.import_finished.connect(reports.append)
     window.show()
@@ -178,6 +180,7 @@ def test_update_legacy_catalog_migrates_only_when_writer_opens(qt_app, tmp_path)
         )
     original = database.read_bytes()
     window, controller = create_window(CatalogPreferences(tmp_path / "settings.json"))
+    window.views.setCurrentWidget(window.splitter)
     reports = []
     controller.import_finished.connect(reports.append)
     try:
@@ -242,6 +245,7 @@ def test_cancel_or_close_remains_responsive_and_keeps_committed_files(qt_app, tm
     gate = GateReader()
     importer = ImportCatalog(FileSystemAudioScanner(), gate, SqliteImportTargetFactory())
     window = MainWindow()
+    window.views.setCurrentWidget(window.splitter)
     controller = CatalogController(window, open_catalog, importer=importer)
     reports = []
     controller.import_finished.connect(reports.append)
@@ -294,6 +298,7 @@ def test_empty_import_restores_previous_catalog_and_selection(qt_app, tmp_path):
     write_flac(music / "a.flac", [("TITLE", "Anterior")])
     database = tmp_path / "previous.tfo"
     window, controller = create_window(CatalogPreferences(tmp_path / "settings.json"))
+    window.views.setCurrentWidget(window.splitter)
     reports = []
     controller.import_finished.connect(reports.append)
     try:
@@ -320,6 +325,7 @@ def test_dispose_window_defers_deletion_until_import_worker_finishes(qt_app, tmp
     write_flac(music / "b.flac")
     gate = GateReader()
     window = MainWindow()
+    window.views.setCurrentWidget(window.splitter)
     controller = CatalogController(
         window,
         open_catalog,
@@ -353,6 +359,7 @@ def test_import_waits_for_previous_detail_and_closes_reader(qt_app, tmp_path):
         return previous if path == previous.database_path else open_catalog(path)
 
     window = MainWindow()
+    window.views.setCurrentWidget(window.splitter)
     controller = CatalogController(
         window,
         opener,
@@ -407,6 +414,7 @@ def test_application_quit_defers_until_a_timer_can_release_the_import_worker(tmp
         app = CatalogApplication([])
         apply_theme(app)
         window = MainWindow()
+        window.views.setCurrentWidget(window.splitter)
         controller = CatalogController(window, open_catalog, importer=ImportCatalog(
             FileSystemAudioScanner(), reader, SqliteImportTargetFactory()))
         app.close_guard = controller.request_close
@@ -462,6 +470,7 @@ def test_import_finished_observer_can_start_another_import(qt_app, tmp_path, swi
     write_flac(first / "a.flac", [("TITLE", "Primera")])
     write_flac(second / "b.flac", [("TITLE", "Segunda")])
     window, controller = create_window(CatalogPreferences(tmp_path / "settings.json"))
+    window.views.setCurrentWidget(window.splitter)
     reports = []
 
     def finished(report):

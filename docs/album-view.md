@@ -1,6 +1,6 @@
 # Vista de álbum
 
-La pestaña **Álbumes** muestra las ediciones del catálogo en una lista con buscador.
+Trackfolio se abre con la pestaña **Álbumes** seleccionada. Esta vista muestra las ediciones del catálogo en una lista con buscador.
 Al seleccionar una, presenta su portada guardada en SQLite, artistas del álbum,
 año, géneros, carpeta, número de pistas y discos y duración disponible. Las pistas
 se ordenan por disco y número; el doble clic abre la canción en **Canciones**.

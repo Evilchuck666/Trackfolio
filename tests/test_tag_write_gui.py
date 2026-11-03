@@ -30,6 +30,7 @@ from trackfolio.interfaces.gui.window import MainWindow
 def open_window(app, setup_tags, entry):
     database, _, catalog, codec, files = setup_tags
     window = MainWindow()
+    window.views.setCurrentWidget(window.splitter)
     controller = CatalogController(
         window,
         open_catalog,
@@ -192,6 +193,7 @@ def test_catalogue_action_is_available_without_selecting_a_song(qt_app, setup_ta
 def test_catalogue_action_is_disabled_without_a_nonempty_catalogue(qt_app, setup_tags):
     database, _, catalog, codec, files = setup_tags
     window = MainWindow()
+    window.views.setCurrentWidget(window.splitter)
     controller = CatalogController(
         window, open_catalog, tag_writer=TagWriteService(catalog, codec, files)
     )

@@ -68,6 +68,7 @@ def catalog(tmp_path):
 def test_gui_reads_sqlite_with_no_music_then_clears_every_missing_field(qt_app, catalog):
     database, full, empty = catalog
     window = MainWindow()
+    window.views.setCurrentWidget(window.splitter)
     controller = CatalogController(window, open_catalog)
     completed = []
     controller.detail_loaded.connect(completed.append)
@@ -99,6 +100,7 @@ def test_gui_reads_sqlite_with_no_music_then_clears_every_missing_field(qt_app, 
 def test_refresh_preserves_selection_and_reloads_changed_values(qt_app, catalog):
     database, _, empty = catalog
     window = MainWindow()
+    window.views.setCurrentWidget(window.splitter)
     controller = CatalogController(window, open_catalog)
     completed = []
     controller.detail_loaded.connect(completed.append)
@@ -138,6 +140,7 @@ def test_bad_catalog_is_recoverable_then_a_valid_one_opens(qt_app, catalog, tmp_
         invalid.touch()
     before = invalid.read_bytes() if invalid.exists() else None
     window = MainWindow()
+    window.views.setCurrentWidget(window.splitter)
     controller = CatalogController(window, open_catalog)
     completed = []
     controller.detail_loaded.connect(completed.append)
@@ -204,6 +207,7 @@ class ControlledSession:
 def test_out_of_order_detail_does_not_replace_new_selection(qt_app, tmp_path):
     session = ControlledSession(tmp_path / "fake.db", delay_first=True)
     window = MainWindow()
+    window.views.setCurrentWidget(window.splitter)
     controller = CatalogController(window, lambda _: session)
     completed = []
     controller.detail_loaded.connect(completed.append)
@@ -238,6 +242,7 @@ def test_out_of_order_catalog_is_discarded_and_sessions_close(qt_app, tmp_path):
         return newer
 
     window = MainWindow()
+    window.views.setCurrentWidget(window.splitter)
     controller = CatalogController(window, opener)
     loaded = []
     controller.detail_loaded.connect(loaded.append)
@@ -269,6 +274,7 @@ def test_refresh_to_empty_discards_in_flight_detail(qt_app, tmp_path):
 
     session = SnapshotSession(tmp_path / "fake.db")
     window = MainWindow()
+    window.views.setCurrentWidget(window.splitter)
     controller = CatalogController(window, lambda _: session)
     completed = []
     controller.detail_loaded.connect(completed.append)
@@ -303,6 +309,7 @@ def test_refresh_retains_a_selection_changed_while_query_was_pending(qt_app, tmp
 
     session = SlowListing(tmp_path / "fake.db")
     window = MainWindow()
+    window.views.setCurrentWidget(window.splitter)
     controller = CatalogController(window, lambda _: session)
     completed = []
     controller.detail_loaded.connect(completed.append)
@@ -326,6 +333,7 @@ def test_empty_catalog_is_valid(qt_app, tmp_path):
     session = ControlledSession(tmp_path / "fake.db")
     session.entries.clear()
     window = MainWindow()
+    window.views.setCurrentWidget(window.splitter)
     controller = CatalogController(window, lambda _: session)
     loaded = []
     controller.catalog_loaded.connect(lambda: loaded.append(True))
@@ -350,6 +358,7 @@ def test_detail_query_failure_is_recoverable_on_refresh(qt_app, tmp_path):
 
     session = UnavailableSession(tmp_path / "fake.db")
     window = MainWindow()
+    window.views.setCurrentWidget(window.splitter)
     controller = CatalogController(window, lambda _: session)
     loaded = []
     controller.detail_loaded.connect(loaded.append)
@@ -376,6 +385,7 @@ def test_close_waits_for_worker_and_closes_unaccepted_session(qt_app, tmp_path):
         return session
 
     window = MainWindow()
+    window.views.setCurrentWidget(window.splitter)
     controller = CatalogController(window, opener)
     controller.open_database(session.database_path)
     wait_until(qt_app, started.is_set)
