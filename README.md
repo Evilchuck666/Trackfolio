@@ -177,6 +177,22 @@ A backup is created next to the file and `002_unique_artists` is applied, preser
 
 Open `data/database.tfo` in SQLiteBrowser and query `track_details`. The [database guide](docs/database.md) explains tables, missing fields, backups and artwork inspection. Current SQL for a new database is in [migrations/002_current.sql](migrations/002_current.sql); the [historical initial SQL](migrations/001_initial.sql) is retained. The local database and music are excluded from Git.
 
+## Standalone executables (no Python installation)
+
+Build a native onefile executable with all Python dependencies and Qt resources:
+
+```sh
+uv run --locked --extra gui --group build python scripts/build.py
+```
+
+The build verifies the executable outside the checkout before producing an
+archive and SHA256 checksum in `dist/`. GitHub Actions builds Linux x64, Windows
+x64 and macOS Intel/Apple Silicon artifacts. End users extract the appropriate
+archive and run `Trackfolio` or `Trackfolio.exe`; Python and uv are not needed.
+
+See [standalone builds](docs/standalone-build.md) for downloads, verification,
+native build requirements and system-library compatibility limits.
+
 ## Intended compatibility
 
 The GUI uses Fusion, a palette, packaged fonts and icons, and custom window controls. Scaling and rasterization may vary by screen. If a Wayland compositor rejects moving or resizing the window, its native frame is enabled to preserve those operations.

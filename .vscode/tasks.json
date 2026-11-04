@@ -2,6 +2,18 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "Trackfolio: build standalone executable",
+      "type": "process",
+      "command": "bash",
+      "args": ["${workspaceFolder}/setup.sh", "--run-uv", "run", "--locked", "--extra", "gui", "--group", "build", "python", "scripts/build.py"],
+      "windows": {
+        "command": "powershell",
+        "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/setup.ps1", "--run-uv", "run", "--locked", "--extra", "gui", "--group", "build", "python", "scripts/build.py"]
+      },
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
       "label": "Trackfolio: start GUI with sample",
       "type": "process",
       "command": "bash",

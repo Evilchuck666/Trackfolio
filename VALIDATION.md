@@ -4,6 +4,29 @@ This record preserves checks from each phase. Initial infrastructure was validat
 
 ## Local checks
 
+### Standalone packaging — November 4, 2026
+
+On Linux x86-64 (glibc 2.44), with CPython 3.13.15 and PyInstaller 6.22.3:
+
+- Built the actual onefile executable and `dist/Trackfolio-linux-x64.tar.gz`
+  with its SHA256 sidecar (approximately 86 MiB each for executable and archive).
+- Copied the binary outside the checkout into a path containing spaces and
+  Unicode, cleared Python environment variables and removed Python from `PATH`.
+  Both `offscreen` and native `xcb` verification passed: packaged resources,
+  catalog creation/migrations, import, editing, tags, artwork, NFO and album/artist
+  views. Native verification required access to the desktop outside the sandbox.
+- Full local suite: **766 passed, 6 skipped** (PowerShell, Windows and macOS-only
+  checks). Ruff, formatting, strict mypy and the GUI doctor passed.
+- Workflow YAML and VS Code task JSON parsed successfully. Four native build
+  targets and artifact uploads are configured; the updated GitHub Actions
+  workflow has **not** been executed here. Windows and macOS binaries remain
+  unverified until those jobs run.
+
+This local Linux artifact is not evidence of compatibility with an older glibc.
+See [standalone builds](docs/standalone-build.md) for commands and platform limits.
+
+### Original environment checks
+
 Machine: GNU/Linux x86-64, Omarchy, glibc 2.44, Wayland session with XWayland available. The environment uses uv 0.12.10 and uv-managed CPython 3.13.15. System Python is preserved.
 
 | Check | Result |

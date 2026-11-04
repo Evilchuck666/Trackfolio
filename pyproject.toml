@@ -18,6 +18,9 @@ gui = ["pyside6==6.11.2"]
 trackfolio = "trackfolio.launcher:main"
 
 [dependency-groups]
+build = [
+    "pyinstaller==6.22.3",
+]
 dev = [
     "mypy>=1.15,<2",
     "pytest>=8,<10",

@@ -16,7 +16,7 @@ jobs:
   environment:
     name: ${{ matrix.name }} / uv 0.13.4 / CPython 3.13.15
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 20
+    timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:
@@ -528,6 +528,31 @@ jobs:
                   cwd=clean,
                   check=True,
               )
+
+      - name: Build and verify a standalone onefile executable
+        run: uv run --locked --extra gui --group build python scripts/build.py
+
+      - name: Verify standalone X11 backend
+        if: runner.os == 'Linux'
+        run: xvfb-run --auto-servernum uv run --locked --extra gui --group build python scripts/build.py --verify-only dist/Trackfolio --platform xcb
+
+      - name: Verify standalone Windows backend
+        if: runner.os == 'Windows'
+        run: uv run --locked --extra gui --group build python scripts/build.py --verify-only dist/Trackfolio.exe --platform windows
+
+      - name: Verify standalone macOS backend
+        if: runner.os == 'macOS'
+        run: uv run --locked --extra gui --group build python scripts/build.py --verify-only dist/Trackfolio --platform cocoa
+
+      - name: Upload verified standalone archive and checksum
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: Trackfolio-${{ matrix.runner }}
+          if-no-files-found: error
+          path: |
+            dist/Trackfolio-*.tar.gz
+            dist/Trackfolio-*.zip
+            dist/Trackfolio-*.sha256
 
       - name: Verify checks do not change versioned files
         run: git diff --exit-code

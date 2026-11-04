@@ -7,6 +7,10 @@ from importlib.util import find_spec
 
 
 def main() -> int:
+    if "--smoke-test" in sys.argv[1:]:
+        from trackfolio.bundle_probe import main as smoke_test
+
+        return smoke_test(sys.argv[1:])
     if find_spec("PySide6") is None:
         if sys.stderr is not None:
             print(
