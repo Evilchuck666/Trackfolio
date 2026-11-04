@@ -4,6 +4,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import stat
 import subprocess
 import sys
 import tarfile
@@ -34,7 +35,12 @@ def test_archive_contains_executable_license_and_correct_checksum(builder, tmp_p
         with tarfile.open(archive) as bundle:
             assert set(bundle.getnames()) == {binary.name, "LICENSE"}
             assert bundle.extractfile(binary.name).read() == binary.read_bytes()
-            assert bundle.getmember(binary.name).mode & 0o111
+            mode = bundle.getmember(binary.name).mode
+            assert mode == stat.S_IMODE(binary.stat().st_mode)
+            # Windows chmod does not set POSIX executable bits. The archive
+            # preserves host permissions; real Linux builds run on Linux.
+            if os.name != "nt":
+                assert mode & 0o111
     else:
         with zipfile.ZipFile(archive) as bundle:
             assert set(bundle.namelist()) == {binary.name, "LICENSE"}
