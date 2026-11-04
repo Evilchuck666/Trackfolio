@@ -26,3 +26,4 @@ class CatalogSummary:
     album: str | None
     album_year: int | None
     relative_path: str
+    genres: tuple[str, ...] = ()

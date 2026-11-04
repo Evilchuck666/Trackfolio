@@ -483,6 +483,14 @@ class SqliteCatalogRepository:
             album=row["album_title"],
             album_year=row["album_year"],
             relative_path=row["relative_path"],
+            genres=tuple(
+                connection.execute(
+                    select(genres.c.name)
+                    .join(track_genres, track_genres.c.genre_id == genres.c.id)
+                    .where(track_genres.c.track_id == row["track_id"])
+                    .order_by(track_genres.c.position)
+                ).scalars()
+            ),
         )
 
     def list_summaries(self) -> tuple[CatalogSummary, ...]:
@@ -528,6 +536,13 @@ class SqliteCatalogRepository:
                 credits[file_id] = []
             if row["artist_name"] is not None:
                 credits[file_id].append(row["artist_name"])
+        genre_names: dict[int, list[str]] = {}
+        for genre_row in connection.execute(
+            select(track_genres.c.track_id, genres.c.name)
+            .join(genres, genres.c.id == track_genres.c.genre_id)
+            .order_by(track_genres.c.track_id, track_genres.c.position)
+        ).mappings():
+            genre_names.setdefault(genre_row["track_id"], []).append(genre_row["name"])
         return tuple(
             CatalogSummary(
                 file_id=summary.file_id,
@@ -537,6 +552,7 @@ class SqliteCatalogRepository:
                 album=summary.album,
                 album_year=summary.album_year,
                 relative_path=summary.relative_path,
+                genres=tuple(genre_names.get(summary.track_id, ())),
             )
             for file_id, summary in summaries.items()
         )

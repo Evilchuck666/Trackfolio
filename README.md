@@ -96,6 +96,22 @@ Browsing opens SQLite read-only; importing and saving edits use separate writers
 
 In VS Code, run **Trackfolio: start GUI with sample** or the debug configuration **Trackfolio: GUI with sample catalog**. See the [plan and its status](docs/gui-plan.md) and [verified results](VALIDATION.md).
 
+## Search and filter songs
+
+In **Songs**, search by song title, artist or album. Search is case-insensitive;
+multiple words must all appear somewhere in those fields. Combine the search
+with **All genres** and **All years**, or use **No genre** / **No year** to find
+missing metadata. The badge shows matching songs out of the catalog total.
+**Clear filters** restores the full list.
+
+Selection is retained among matching songs; hidden songs are not included in
+selection-based editing or writing. Changing filters protects unsaved drafts with
+**Save / Discard / Cancel**. Filters survive refreshes and reset when opening a
+different catalog. Saved changes immediately update matching results.
+
+**Write tags…** uses the selected songs. **Write tags for the entire catalog…**
+always includes the full catalog, even when filters hide some or all songs.
+
 ## Edit a song
 
 1. Select a song and click **Edit** (`Ctrl+E`, or `Cmd+E` on macOS).

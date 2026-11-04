@@ -80,14 +80,14 @@ QWidget#titleBar QToolButton, QWidget#TitleBar QToolButton {
 QWidget#titleBar QToolButton:hover, QWidget#TitleBar QToolButton:hover { background-color: #30364d; }
 QWidget#titleBar QToolButton#closeButton:hover,
 QWidget#TitleBar QToolButton#CloseButton:hover { background-color: #a84457; }
-QLineEdit, QTextEdit, QPlainTextEdit {
+QLineEdit, QTextEdit, QPlainTextEdit, QComboBox {
     background-color: #181c29;
     border: 1px solid #303750;
     border-radius: 6px;
     padding: 8px;
     color: #eef0fa;
 }
-QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus { border-color: #8e94ff; }
+QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QComboBox:focus { border-color: #8e94ff; }
 QLineEdit:read-only { background-color: #181c29; }
 QLineEdit#MetadataField { background-color: #1b2030; border-color: #303750; }
 QLineEdit#TrackTitle { background-color: #1b2030; font-size: 18px; font-weight: 600; }

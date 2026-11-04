@@ -32,6 +32,7 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
+    QComboBox,
     QFrame,
     QGridLayout,
     QHBoxLayout,
@@ -236,6 +237,8 @@ class MainWindow(QMainWindow):
         self._busy = False
         self._importing = False
         self.close_guard: Callable[[], bool] | None = None
+        self.song_filter_guard: Callable[[Callable[[], None]], bool] | None = None
+        self._song_filters: tuple[str, str | None, int | None] = ("", None, None)
         self.selection_guard: Callable[[int], bool] | None = None
         self.selection_group_guard: Callable[[tuple[int, ...]], bool] | None = None
         self._current_file_id: int | None = None
@@ -398,6 +401,32 @@ class MainWindow(QMainWindow):
         catalog_actions.addWidget(self.write_all_tags_button)
         catalog_actions.addStretch()
         layout.addLayout(catalog_actions)
+        filters = QVBoxLayout()
+        filters.setContentsMargins(16, 0, 16, 12)
+        filters.setSpacing(8)
+        self.song_search = QLineEdit(panel)
+        self.song_search.setPlaceholderText("Search songs, artists or albums…")
+        self.song_search.setAccessibleName("Search songs")
+        self.song_search.setClearButtonEnabled(True)
+        filters.addWidget(self.song_search)
+        choices = QHBoxLayout()
+        choices.setSpacing(8)
+        self.song_genre = QComboBox(panel)
+        self.song_genre.setAccessibleName("Filter songs by genre")
+        self.song_genre.addItem("All genres", None)
+        self.song_year = QComboBox(panel)
+        self.song_year.setAccessibleName("Filter songs by year")
+        self.song_year.addItem("All years", None)
+        self.clear_song_filters = QPushButton("Clear filters", panel)
+        choices.addWidget(self.song_genre, 1)
+        choices.addWidget(self.song_year, 1)
+        choices.addWidget(self.clear_song_filters)
+        filters.addLayout(choices)
+        layout.addLayout(filters)
+        self.song_search.textChanged.connect(self._request_song_filters)
+        self.song_genre.currentIndexChanged.connect(self._request_song_filters)
+        self.song_year.currentIndexChanged.connect(self._request_song_filters)
+        self.clear_song_filters.clicked.connect(self._clear_song_filters)
         self.model = CatalogTableModel(self)
         self.table = QTableView(panel)
         self.table.setObjectName("CatalogTable")
@@ -656,20 +685,21 @@ class MainWindow(QMainWindow):
         preferred = selected_file_id
         if preferred is None and path == self._catalog_path:
             preferred = self._current_file_id
+        if path != self._catalog_path:
+            self._song_filters = ("", None, None)
         self._catalog_path = path
         if path is None:
             self.album_view.set_albums(())
             self.artist_view.set_albums(())
         blocker = QSignalBlocker(self.table.selectionModel())
         self.model.set_summaries(rows)
+        visible = self._filter_song_rows()
         self.table.clearSelection()
         row = self.model.row_for_file(preferred)
-        if row is None and rows:
-            row = 0
+        if row is None or self.model.file_id_at(row) not in visible:
+            row = self.model.row_for_file(visible[0]) if visible else None
         self._current_file_id = self.model.file_id_at(row) if row is not None else None
-        selected = tuple(
-            file_id for file_id in (retained or ()) if self.model.row_for_file(file_id) is not None
-        )
+        selected = tuple(file_id for file_id in (retained or ()) if file_id in visible)
         if not selected and self._current_file_id is not None:
             selected = (self._current_file_id,)
         self._selected_file_ids = selected
@@ -677,19 +707,112 @@ class MainWindow(QMainWindow):
         self._restore_selection()
         del blocker
         self.set_detail(None)
-        self.count_label.setText(str(len(rows)))
-        self.empty_label.setVisible(not rows)
-        self.empty_label.setText(
-            "This catalog does not contain any songs yet."
-            if path is not None
-            else "Open a catalog or import a music folder."
-        )
         self.catalog_label.setText(path.name if path is not None else "No catalog")
         self.catalog_label.setToolTip(str(path) if path is not None else "")
         self.set_busy(self._busy)
         if self._current_file_id is not None:
             self.track_selected.emit(self._current_file_id)
         self.tracks_selected.emit(self._selected_file_ids)
+
+    def _restore_song_filter_controls(self) -> None:
+        query, genre, year = self._song_filters
+        blockers = [
+            QSignalBlocker(widget) for widget in (self.song_search, self.song_genre, self.song_year)
+        ]
+        self.song_search.setText(query)
+        self.song_genre.setCurrentIndex(self.song_genre.findData(genre))
+        self.song_year.setCurrentIndex(self.song_year.findData(year))
+        del blockers
+
+    def _clear_song_filters(self) -> None:
+        self._change_song_filters(("", None, None))
+
+    def _request_song_filters(self, *_args: object) -> None:
+        cursor = self.song_search.cursorPosition()
+        requested = (
+            self.song_search.text(),
+            self.song_genre.currentData(),
+            self.song_year.currentData(),
+        )
+        self._change_song_filters(requested)
+        if self._song_filters == requested:
+            self.song_search.setCursorPosition(cursor)
+
+    def _change_song_filters(self, requested: tuple[str, str | None, int | None]) -> None:
+        self._restore_song_filter_controls()
+        if requested == self._song_filters or self._importing or self._saving or self._writing_tags:
+            return
+        path = self._catalog_path
+
+        def apply() -> None:
+            if self._catalog_path == path:
+                self._song_filters = requested
+                self.refresh_song_filters()
+
+        if self.song_filter_guard is None or self.song_filter_guard(apply):
+            apply()
+
+    def _filter_song_rows(self) -> tuple[int, ...]:
+        rows = self.model.summaries()
+        query, genre, year = self._song_filters
+        genres = sorted({name for row in rows for name in row.genres}, key=str.casefold)
+        years = sorted({row.album_year for row in rows if row.album_year is not None}, reverse=True)
+        blockers = [QSignalBlocker(self.song_genre), QSignalBlocker(self.song_year)]
+        self.song_genre.clear()
+        self.song_genre.addItem("All genres", None)
+        self.song_genre.addItem("No genre", "")
+        for name in sorted(set(genres) | ({genre} if genre else set()), key=str.casefold):
+            self.song_genre.addItem(name, name)
+        self.song_year.clear()
+        self.song_year.addItem("All years", None)
+        self.song_year.addItem("No year", 0)
+        for value in sorted(set(years) | ({year} if year else set()), reverse=True):
+            self.song_year.addItem(str(value), value)
+        self._restore_song_filter_controls()
+        del blockers
+        terms = query.casefold().split()
+        visible = []
+        blocker = QSignalBlocker(self.table.selectionModel())
+        for index, row in enumerate(rows):
+            text = " ".join((row.title or "", *row.artists, row.album or "")).casefold()
+            matches = (
+                all(term in text for term in terms)
+                and (genre is None or (genre in row.genres if genre else not row.genres))
+                and (year is None or (row.album_year or 0) == year)
+            )
+            self.table.setRowHidden(index, not matches)
+            if matches:
+                visible.append(row.file_id)
+        del blocker
+        active = bool(query.strip()) or genre is not None or year is not None
+        self.count_label.setText(f"{len(visible)} / {len(rows)}" if active else str(len(rows)))
+        self.count_label.setToolTip("Matching songs / total songs" if active else "Total songs")
+        self.empty_label.setVisible(not visible)
+        self.empty_label.setText(
+            "No songs match your filters."
+            if rows
+            else "This catalog does not contain any songs yet."
+            if self._catalog_path
+            else "Open a catalog or import a music folder."
+        )
+        return tuple(visible)
+
+    def refresh_song_filters(self) -> None:
+        """Reapply filters after edits without selecting hidden songs."""
+        visible = self._filter_song_rows()
+        selected = tuple(file_id for file_id in self._selected_file_ids if file_id in visible)
+        if not selected:
+            selected = visible[:1]
+        changed = selected != self._selected_file_ids
+        self._selected_file_ids = selected
+        self._current_file_id = selected[0] if selected else None
+        self._restore_selection()
+        if changed:
+            self.set_detail(None)
+            if self._current_file_id is not None:
+                self.track_selected.emit(self._current_file_id)
+            self.tracks_selected.emit(selected)
+        self._update_actions()
 
     def _selection_changed(self, *_args: object) -> None:
         if self._importing or self._saving:
@@ -699,6 +822,7 @@ class MainWindow(QMainWindow):
             for index in sorted(
                 self.table.selectionModel().selectedRows(), key=lambda item: item.row()
             )
+            if not self.table.isRowHidden(index.row())
         )
         if ids == self._selected_file_ids:
             return
@@ -730,7 +854,7 @@ class MainWindow(QMainWindow):
         selection.clearSelection()
         for file_id in self._selected_file_ids:
             row = self.model.row_for_file(file_id)
-            if row is not None:
+            if row is not None and not self.table.isRowHidden(row):
                 selection.select(
                     self.model.index(row, 0),
                     QItemSelectionModel.SelectionFlag.Select
@@ -749,7 +873,7 @@ class MainWindow(QMainWindow):
         selection.clearSelection()
         for file_id in file_ids:
             row = self.model.row_for_file(file_id)
-            if row is not None:
+            if row is not None and not self.table.isRowHidden(row):
                 selection.select(
                     self.model.index(row, 0),
                     QItemSelectionModel.SelectionFlag.Select
@@ -978,6 +1102,8 @@ class MainWindow(QMainWindow):
             self._catalog_path is not None and not self._busy and navigating
         )
         self.table.setEnabled(navigating)
+        for control in (self.song_search, self.song_genre, self.song_year, self.clear_song_filters):
+            control.setEnabled(navigating and self._catalog_path is not None)
         self.views.tabBar().setEnabled(navigating)
         self.album_view.set_busy(self._busy or not navigating, blocked=not navigating)
         self.artist_view.setEnabled(not self._busy and navigating)

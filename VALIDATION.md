@@ -874,3 +874,29 @@ Local verification on Linux with CPython 3.13.15 and Qt 6.11.2:
 
 These are local results. No new remote CI run or native Windows/macOS visual
 review was performed for this translation. Changes have not been pushed.
+
+## Song search and filters (2026-11-04)
+
+Implemented on the active local `search` branch. The Songs tab combines
+case-insensitive title/artist/album search with genre and year filters, including
+missing metadata, a matching/total count and Clear filters. Song summaries now
+include genres through a second bulk query, without loading artwork, lyrics or
+raw tags. No schema migration is required.
+
+Filtering retains matching selections and excludes hidden songs from selected
+operations. Save/Discard/Cancel protects drafts; a failed save preserves both the
+draft and previous filters. Refresh retains filters, changing catalogs resets
+them, and successful edits reapply them. Whole-catalog tag writing remains
+independent of filtering.
+
+Local Linux validation:
+
+- Complete Qt `offscreen` suite: **756 passed, 6 skipped**. Skips require PowerShell
+  or native Windows/macOS file metadata support.
+- Ruff, formatting (121 Python files), strict mypy (66 source files) and
+  `git diff --check`: passed.
+- GUI `offscreen` diagnostics: **0 errors**, including all 18 resource hashes.
+- Inspected an offscreen render at 960 × 640; search, genre/year selectors and
+  Clear filters fit within the song panel.
+
+No remote CI or native Windows/macOS visual review was performed for this change.

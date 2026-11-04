@@ -248,6 +248,7 @@ class CatalogController(QObject):
         window.close_guard = self.request_close
         window.selection_guard = self._allow_selection
         window.selection_group_guard = self._allow_group_selection
+        window.song_filter_guard = self._allow_song_filter
         window.edit_requested.connect(self.start_edit)
         window.save_requested.connect(self.save_edit)
         window.cancel_edit_requested.connect(self.cancel_edit)
@@ -693,6 +694,9 @@ class CatalogController(QObject):
         if answer == QMessageBox.StandardButton.Save:
             self._save_edit(continuation)
         return False
+
+    def _allow_song_filter(self, continuation: Callable[[], None]) -> bool:
+        return not self.tagging and self._guard_edit(continuation)
 
     def _allow_selection(self, file_id: int) -> bool:
         return not self.tagging and self._guard_edit(lambda: self.window.select_file(file_id))
@@ -1345,6 +1349,7 @@ class CatalogController(QObject):
             self.window.set_status(message)
         else:
             self.window.set_status("No changes to save.")
+        self.window.refresh_song_filters()
         outcome = result
         if album_edit and not self._close_pending:
             self.load_albums()
