@@ -162,19 +162,19 @@ class PreviewTagWrites:
         on_progress: Callable[[TagWriteProgress], None] = _ignore_progress,
     ) -> TagWritePreview:
         if not request.file_ids or len(set(request.file_ids)) != len(request.file_ids):
-            raise TagWriteError("Selecciona canciones distintas para escribir etiquetas.")
+            raise TagWriteError("Select distinct songs to write tags.")
         if (
             not request.fields
             or len(set(request.fields)) != len(request.fields)
             or any(field not in EDIT_FIELDS for field in request.fields)
         ):
-            raise TagWriteError("Selecciona los campos que quieres escribir.")
+            raise TagWriteError("Select the fields you want to write.")
         identity = self.files.identity(request.database_path)
         items: list[TagWriteItem] = []
         physical: dict[tuple[int, int], int] = {}
         for index, file_id in enumerate(request.file_ids):
             if is_cancelled():
-                raise TagWriteCancelled("Vista previa cancelada.")
+                raise TagWriteCancelled("Preview cancelled.")
             path = Path("")
             snapshot = None
             fingerprint = None
@@ -189,17 +189,15 @@ class PreviewTagWrites:
                 key = fingerprint.device, fingerprint.inode
                 tags = self.codec.plan(path, snapshot, request)
                 if self.files.fingerprint(path, is_cancelled) != fingerprint:
-                    raise TagWriteConflict(
-                        "El archivo cambió mientras se preparaba la vista previa."
-                    )
+                    raise TagWriteConflict("The file changed while the preview was being prepared.")
                 if key in physical:
                     previous = physical[key]
                     items[previous] = replace(
                         items[previous],
                         state="conflict",
-                        message="Otro registro apunta al mismo archivo. Revisa sus rutas.",
+                        message="Another record points to the same file. Check its paths.",
                     )
-                    raise TagWriteConflict("Dos registros apuntan al mismo archivo físico.")
+                    raise TagWriteConflict("Two records point to the same physical file.")
                 physical[key] = len(items)
                 validate_edit_patch(
                     tags.before,
@@ -237,7 +235,7 @@ class PreviewTagWrites:
                 )
             items.append(item)
         if self.files.identity(request.database_path) != identity:
-            raise TagWriteConflict("El catálogo fue sustituido durante la vista previa.")
+            raise TagWriteConflict("The catalog was replaced during preview.")
         return TagWritePreview(uuid4().hex, request, identity, tuple(items))
 
 
@@ -284,7 +282,7 @@ class WriteTagWrites:
                     or item.snapshot.library_root.resolve() != folder.library_root
                     or item.path.parent != folder.path
                 ):
-                    raise TagWriteConflict("La biblioteca cambió durante la elección de portada.")
+                    raise TagWriteConflict("The library changed during cover selection.")
                 self.cover_sources.check(folder, item.tags.cover if item.tags else None, cancelled)
                 return
 
@@ -292,9 +290,9 @@ class WriteTagWrites:
         try:
             identity = self.files.identity(preview.request.database_path)
         except OSError as exc:
-            raise TagJournalError(f"El catálogo ya no está disponible: {exc}") from exc
+            raise TagJournalError(f"The catalog is no longer available: {exc}") from exc
         if identity != preview.catalog_identity:
-            raise TagJournalError("El catálogo fue sustituido durante la escritura.")
+            raise TagJournalError("The catalog was replaced during writing.")
 
     def execute(
         self,
@@ -306,15 +304,15 @@ class WriteTagWrites:
     ) -> TagWriteReport:
         eligible = {item.file_id for item in preview.items if item.state == "ready"}
         if preview.nfo_items and self.nfo_writer is None:
-            raise TagWriteError("La operación requiere un escritor NFO configurado.")
+            raise TagWriteError("The operation requires a configured NFO writer.")
         if (
             (not selected_ids and not preview.nfo_items)
             or len(set(selected_ids)) != len(selected_ids)
             or not set(selected_ids) <= eligible
         ):
-            raise TagWriteError("Selecciona archivos escribibles de la vista previa.")
+            raise TagWriteError("Select writable files from the preview.")
         if self.files.identity(preview.request.database_path) != preview.catalog_identity:
-            raise TagWriteConflict("El catálogo fue sustituido. Prepara otra vista previa.")
+            raise TagWriteConflict("The catalog was replaced. Prepare another preview.")
         if is_cancelled():
             return TagWriteReport(
                 preview.operation_id,
@@ -387,7 +385,7 @@ class WriteTagWrites:
                             item.file_id,
                             item.path,
                             "unchanged",
-                            "Portada coincidente; miniatura del catálogo actualizada.",
+                            "Cover matches; catalog thumbnail updated.",
                             catalog_updated=True,
                         )
                     )
@@ -407,7 +405,7 @@ class WriteTagWrites:
                     temporary_identity=(after.device, after.inode),
                 )
                 if is_cancelled():
-                    raise TagWriteCancelled("Cancelado antes de publicar el archivo.")
+                    raise TagWriteCancelled("Cancelled before publishing the file.")
                 self._check_catalog(preview)
                 self.catalog.check(preview.request.database_path, item.snapshot)
                 self.files.check(item, is_cancelled)
@@ -418,7 +416,7 @@ class WriteTagWrites:
                 published = True
                 journal.record(item, "written", after_hash=after.sha256)
                 if self.files.fingerprint(item.path, _never_cancel).sha256 != after.sha256:
-                    raise TagWriteConflict("El archivo cambió después de publicarse.")
+                    raise TagWriteConflict("The file changed after publication.")
                 self._check_catalog(preview)
                 date_written = any(diff.field == "album_year" for diff in item.tags.differences)
                 if item.tags.cover is not None:
@@ -460,7 +458,7 @@ class WriteTagWrites:
                 try:
                     journal.record(item, state, error=str(exc))
                 except Exception as record_error:
-                    fatal = f"No se pudo registrar el resultado: {record_error}"
+                    fatal = f"Could not record the result: {record_error}"
                 if isinstance(exc, TagJournalError):
                     fatal = str(exc)
                 if isinstance(exc, OSError) and exc.errno in (
@@ -474,7 +472,7 @@ class WriteTagWrites:
                     self.files.discard_temporary(temporary)
                 except OSError as exc:
                     # The journal retains its reserved path for assisted cleanup.
-                    fatal = fatal or f"No se pudo limpiar el temporal: {exc}"
+                    fatal = fatal or f"Could not clean up the temporary file: {exc}"
         nfo_results: tuple[AlbumNfoResult, ...] = ()
         if self.nfo_writer is not None:
             nfo_results, fatal = self.nfo_writer.execute(
@@ -487,7 +485,7 @@ class WriteTagWrites:
         try:
             journal.finish(report)
         except Exception as exc:
-            report = replace(report, fatal_error=f"No se pudo cerrar el informe: {exc}")
+            report = replace(report, fatal_error=f"Could not close the report: {exc}")
         if is_cancelled():
             report = replace(report, cancelled=True)
         if (
@@ -504,9 +502,7 @@ class WriteTagWrites:
                 try:
                     self.files.discard_backups(directory)
                 except Exception as exc:
-                    report = replace(
-                        report, fatal_error=f"No se pudieron eliminar los respaldos: {exc}"
-                    )
+                    report = replace(report, fatal_error=f"Could not remove backups: {exc}")
                     break
             remaining: list[TagWriteResult] = []
             for result in report.results:
@@ -527,7 +523,7 @@ class WriteTagWrites:
             try:
                 journal.finish(report)
             except Exception as exc:
-                report = replace(report, fatal_error=f"No se pudo cerrar el informe: {exc}")
+                report = replace(report, fatal_error=f"Could not close the report: {exc}")
         on_progress(TagWriteProgress("finished", len(preview.items), len(preview.items)))
         return report
 
@@ -551,7 +547,7 @@ class ReviewTagWrites:
         for item in preview.items:
             if is_cancelled():
                 results.append(
-                    TagWriteResult(item.file_id, item.path, "pending", "Revisión cancelada.")
+                    TagWriteResult(item.file_id, item.path, "pending", "Review cancelled.")
                 )
                 continue
             state = journal.state(item.file_id)
@@ -577,10 +573,10 @@ class ReviewTagWrites:
                             != preview.catalog_identity
                         ):
                             raise TagWriteConflict(
-                                "El catálogo fue sustituido; no se confirmará este registro."
+                                "The catalog was replaced; this record will not be confirmed."
                             )
                         if item.snapshot is None or item.tags is None:
-                            raise TagWriteError("La instantánea del registro está incompleta.")
+                            raise TagWriteError("The record snapshot is incomplete.")
                         observed = self.codec.observed(item.path)
                         date_written = any(
                             diff.field == "album_year" for diff in item.tags.differences
@@ -609,8 +605,8 @@ class ReviewTagWrites:
                                 item.file_id,
                                 item.path,
                                 "catalog_pending",
-                                "El archivo coincide con el resultado verificado. "
-                                "Se puede revisar su confirmación.",
+                                "The file matches the verified result. "
+                                "Its confirmation can be reviewed.",
                                 available_backup,
                             )
                         )
@@ -622,10 +618,10 @@ class ReviewTagWrites:
                             item.file_id,
                             item.path,
                             "pending",
-                            "Original intacto. No se ha reanudado la escritura. "
-                            "Prepara otra vista previa si deseas escribirlo."
+                            "Original intact. Writing has not resumed. "
+                            "Prepare another preview if you want to write it."
                             + (
-                                f" Temporal conservado para revisión manual: {temporary}"
+                                f" Temporary file retained for manual review: {temporary}"
                                 if temporary.exists()
                                 else ""
                             ),
@@ -634,7 +630,7 @@ class ReviewTagWrites:
                     )
                 else:
                     raise TagWriteConflict(
-                        "El archivo no coincide con ninguna versión registrada. Revisa su respaldo."
+                        "The file does not match any recorded version. Check its backup."
                     )
             except Exception as exc:
                 results.append(
@@ -656,9 +652,7 @@ class ReviewTagWrites:
         if reconcile and not report.cancelled:
             # Conflicts must remain discoverable instead of becoming silently closed.
             if any(item.state == "conflict" for item in results):
-                report = replace(
-                    report, fatal_error="Hay conflictos pendientes de revisión manual."
-                )
+                report = replace(report, fatal_error="There are conflicts requiring manual review.")
             journal.finish(report)
         return report
 
@@ -727,7 +721,7 @@ class TagWriteService:
                     or discovery.file_ids != file_ids
                     or (discovery.catalog_identity != self.files.identity(database))
                 ):
-                    raise TagWriteConflict("La selección cambió durante la elección de portada.")
+                    raise TagWriteConflict("The selection changed during cover selection.")
                 for snapshot in discovery.snapshots:
                     self.catalog.check(database, snapshot)
                     if any(
@@ -735,9 +729,7 @@ class TagWriteService:
                         and snapshot.library_root.resolve() != folder.library_root
                         for folder in discovery.folders
                     ):
-                        raise TagWriteConflict(
-                            "La biblioteca cambió durante la elección de portada."
-                        )
+                        raise TagWriteConflict("The library changed during cover selection.")
                 covers, skipped, cover_errors = resolve_covers(
                     discovery, cover_choices, self.cover_sources, is_cancelled
                 )

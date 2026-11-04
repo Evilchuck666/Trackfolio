@@ -12,20 +12,20 @@ fail() {
 
 if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
     cat <<'HELP'
-Trackfolio: preparación completa desde las fuentes.
-Uso: bash setup.sh [--core | --gui] [--platform offscreen|xcb|wayland]
+Trackfolio: complete setup from source.
+Usage: bash setup.sh [--core | --gui] [--platform offscreen|xcb|wayland]
                   [--skip-editor] [--non-interactive] [--yes] [--open-code]
-                  [--qt-timeout SEGUNDOS]
-Por defecto prepara la GUI, las herramientas de desarrollo y VS Code.
-Las instalaciones del sistema y de un editor nuevo requieren confirmación.
---yes autoriza esas instalaciones; --non-interactive no realiza preguntas.
-Para ejecutar uv sin repetir la preparación: bash setup.sh --run-uv COMANDO ...
+                  [--qt-timeout SECONDS]
+Sets up the GUI, development tools and VS Code by default.
+System installations and a new editor require confirmation.
+--yes authorizes those installations; --non-interactive does not prompt.
+To run uv without repeating setup: bash setup.sh --run-uv COMMAND ...
 HELP
     exit 0
 fi
 
 for file in pyproject.toml .python-version uv.lock scripts/setup.py; do
-    [[ -s "$file" ]] || fail "Falta $file. Descarga el repositorio completo."
+    [[ -s "$file" ]] || fail "$file is missing. Download the complete repository."
 done
 
 # Only the initial uv installer needs this small, dependency-free TOML reader.
@@ -41,7 +41,7 @@ REQUIREMENT="$(awk '
     }
 ' pyproject.toml)"
 range_pattern='^>=([0-9]+\.[0-9]+\.[0-9]+),<([0-9]+\.[0-9]+(\.[0-9]+)?)$'
-[[ "$REQUIREMENT" =~ $range_pattern ]] || fail "Rango de uv inválido en pyproject.toml."
+[[ "$REQUIREMENT" =~ $range_pattern ]] || fail "Invalid uv range in pyproject.toml."
 MINIMUM="${BASH_REMATCH[1]}"
 MAXIMUM="${BASH_REMATCH[2]}"
 awk -v minimum="$MINIMUM" -v maximum="$MAXIMUM" 'BEGIN {
@@ -51,10 +51,10 @@ awk -v minimum="$MINIMUM" -v maximum="$MAXIMUM" 'BEGIN {
         if (low[i] + 0 > high[i] + 0) exit 1
     }
     exit 1
-}' || fail "El mínimo de uv debe ser inferior al máximo exclusivo."
+}' || fail "The uv minimum must be below the exclusive maximum."
 PYTHON_VERSION="$(< .python-version)"
 PYTHON_VERSION="${PYTHON_VERSION//$'\r'/}"
-[[ "$PYTHON_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail ".python-version inválido."
+[[ "$PYTHON_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "Invalid .python-version."
 
 LOCAL_UV="$ROOT/.tools/uv"
 UV=""
@@ -73,8 +73,8 @@ fi
 
 if [[ "${1:-}" == "--run-uv" ]]; then
     shift
-    [[ -n "$UV" ]] || fail "No hay uv compatible. Ejecuta primero bash setup.sh."
-    [[ $# -gt 0 ]] || fail "Indica el comando de uv después de --run-uv."
+    [[ -n "$UV" ]] || fail "No compatible uv found. First run bash setup.sh."
+    [[ $# -gt 0 ]] || fail "Specify the uv command after --run-uv."
     exec "$UV" "$@"
 fi
 
@@ -91,15 +91,15 @@ ensure_downloader() {
     for name in apt-get pacman dnf; do
         if command -v "$name" >/dev/null 2>&1; then manager="$name"; break; fi
     done
-    [[ -n "$manager" ]] || fail "Instala curl o wget y vuelve a ejecutar el script."
+    [[ -n "$manager" ]] || fail "Install curl or wget and run the script again."
     if [[ $consent == 0 && $non_interactive == 0 && -t 0 ]]; then
-        printf 'Falta curl o wget. ¿Instalar curl con %s? [s/N] ' "$manager"
+        printf 'curl or wget is missing. Install curl with %s? [y/N] ' "$manager"
         read -r answer
         [[ "$answer" != "s" && "$answer" != "S" && "$answer" != "y" && "$answer" != "Y" ]] || consent=1
     fi
-    [[ $consent == 1 ]] || fail "Se necesita curl o wget para descargar uv; instalación no autorizada."
+    [[ $consent == 1 ]] || fail "curl or wget is required to download uv; installation was not authorized."
     if [[ $EUID != 0 ]]; then
-        command -v sudo >/dev/null 2>&1 || fail "Necesitas sudo o instalar curl manualmente."
+        command -v sudo >/dev/null 2>&1 || fail "You need sudo, or must install curl manually."
         prefix=(sudo)
     fi
     case "$manager" in
@@ -117,7 +117,7 @@ if [[ -z "$UV" ]]; then
     installer="$(mktemp "$LOCAL_UV/.installer.XXXXXX")"
     trap 'rm -f -- "$installer"' EXIT
     url="https://astral.sh/uv/$MINIMUM/install.sh"
-    printf 'Descargando uv %s para este proyecto, sin modificar el sistema ni el shell.\n' "$MINIMUM"
+    printf 'Downloading uv %s for this project, without modifying the system or shell.\n' "$MINIMUM"
     if command -v curl >/dev/null 2>&1; then
         curl --fail --location --silent --show-error --connect-timeout 15 --max-time 120 --retry 2 \
             "$url" --output "$installer"
@@ -125,11 +125,11 @@ if [[ -z "$UV" ]]; then
         wget --quiet --timeout=30 --tries=3 "$url" --output-document="$installer"
     fi
     UV_UNMANAGED_INSTALL="$LOCAL_UV" UV_NO_MODIFY_PATH=1 sh "$installer"
-    compatible "$LOCAL_UV/uv" || fail "La instalación de uv no cumple $REQUIREMENT."
+    compatible "$LOCAL_UV/uv" || fail "The uv installation does not satisfy $REQUIREMENT."
     UV="$LOCAL_UV/uv"
     rm -f -- "$installer"
     trap - EXIT
 fi
 
-printf 'Usando uv: %s\n' "$UV"
+printf 'Using uv: %s\n' "$UV"
 "$UV" run --no-project --managed-python --python "$PYTHON_VERSION" python -m scripts.setup --uv "$UV" "$@"

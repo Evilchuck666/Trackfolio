@@ -1,4 +1,4 @@
-name: Entorno multiplataforma
+name: Cross-platform environment
 
 on:
   push:
@@ -34,47 +34,47 @@ jobs:
       UV_NO_PROGRESS: "1"
 
     steps:
-      - name: Obtener el repositorio
+      - name: Check out the repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - name: Instalar uv 0.13.4
+      - name: Install uv 0.13.4
         uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           version: "0.13.4"
           enable-cache: true
           cache-dependency-glob: uv.lock
 
-      - name: Instalar Python administrado desde .python-version
+      - name: Install managed Python from .python-version
         run: uv python install --managed-python
 
-      - name: Preparar el núcleo con el lanzador Unix
+      - name: Set up the core with the Unix launcher
         if: runner.os != 'Windows'
         run: bash setup.sh --core --skip-editor --non-interactive
 
-      - name: Preparar el núcleo con Windows PowerShell
+      - name: Set up the core with Windows PowerShell
         if: runner.os == 'Windows'
         shell: powershell
         run: powershell -NoProfile -ExecutionPolicy Bypass -File .\setup.ps1 --core --skip-editor --non-interactive
 
-      - name: Verificar que el núcleo no instala Qt
+      - name: Verify that the core does not install Qt
         shell: uv run --locked python {0}
         run: |
           from importlib.util import find_spec
 
-          assert find_spec("PySide6") is None, "El entorno del núcleo contiene PySide6."
-          print("El núcleo funciona sin instalar PySide6.")
+          assert find_spec("PySide6") is None, "The core environment contains PySide6."
+          print("The core works without installing PySide6.")
 
-      - name: Diagnosticar el núcleo
+      - name: Diagnose the core
         run: uv run --locked python scripts/doctor.py --core
 
-      - name: Ejecutar las pruebas del núcleo sin Qt
+      - name: Run core tests without Qt
         run: uv run --locked pytest
 
-      # Son paquetes de ejecución de Qt y de Xvfb en el runner, sin SDK de Qt.
-      # Se instalan después de comprobar que el núcleo no necesita escritorio.
-      - name: Instalar bibliotecas gráficas del runner Linux
+      # These are Qt and Xvfb runtime packages on the runner, without the Qt SDK.
+      # Install them after checking that the core does not need a desktop.
+      - name: Install graphical libraries on the Linux runner
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
@@ -85,41 +85,41 @@ jobs:
             libxcb-randr0 libxcb-shape0 libxcb-sync1 libxcb-xfixes0 \
             libxcb-xkb1 libxcb-util1
 
-      - name: Preparar la GUI con el lanzador Unix sin pantalla
+      - name: Set up the headless GUI with the Unix launcher
         if: runner.os != 'Windows'
         run: bash setup.sh --gui --skip-editor --non-interactive --platform offscreen
 
-      - name: Preparar la GUI con Windows PowerShell sin pantalla
+      - name: Set up the headless GUI with Windows PowerShell
         if: runner.os == 'Windows'
         shell: powershell
         run: powershell -NoProfile -ExecutionPolicy Bypass -File .\setup.ps1 --gui --skip-editor --non-interactive --platform offscreen
 
-      - name: Diagnosticar la ventana del producto sin pantalla
+      - name: Diagnose the product window headlessly
         run: uv run --locked --extra gui python scripts/doctor.py --gui --platform offscreen
 
-      - name: Comprobar el backend X11 bajo Xvfb
+      - name: Check the X11 backend under Xvfb
         if: runner.os == 'Linux'
         run: xvfb-run --auto-servernum uv run --locked --extra gui python scripts/doctor.py --gui --platform xcb
 
-      - name: Comprobar el backend nativo de Windows o macOS
+      - name: Check the native Windows or macOS backend
         if: runner.os != 'Linux'
         run: uv run --locked --extra gui python scripts/doctor.py --gui
 
-      - name: Analizar código
+      - name: Lint code
         run: uv run --locked --extra gui ruff check .
 
-      - name: Comprobar formato
+      - name: Check formatting
         run: uv run --locked --extra gui ruff format --check .
 
-      - name: Comprobar tipos
+      - name: Check types
         run: uv run --locked --extra gui mypy
 
-      - name: Ejecutar pruebas del núcleo y de la GUI sin pantalla
+      - name: Run core and headless GUI tests
         env:
           QT_QPA_PLATFORM: offscreen
         run: uv run --locked --extra gui pytest
 
-      - name: Preparar una copia sin uv ni Python en PATH
+      - name: Set up a copy without uv or Python in PATH
         if: runner.os != 'macOS'
         shell: uv run --no-project --python 3.13.15 python {0}
         run: |
@@ -179,12 +179,12 @@ jobs:
               assert (root / ".venv").is_dir()
               assert (root / "uv.lock").read_bytes() == before
               assert hashlib.sha256(system_uv.read_bytes()).hexdigest() == uv_digest
-              print("Preparación inicial repetible, sin sustituir el uv del sistema.")
+              print("Repeatable initial setup without replacing system uv.")
 
-      - name: Construir wheel y distribución de fuentes
+      - name: Build wheel and source distribution
         run: uv build --clear
 
-      - name: Verificar wheel instalado sin checkout, primero núcleo y después GUI
+      - name: Verify installed wheel without a checkout, core first and then GUI
         shell: uv run --no-project --python 3.13.15 python {0}
         run: |
           import json
@@ -279,8 +279,8 @@ jobs:
               executable = environment / (
                   "Scripts/python.exe" if os.name == "nt" else "bin/python"
               )
-              # Instalar sólo las dependencias core fijadas y sus hashes del lock.
-              # El wheel se instala sin resolver dependencias adicionales.
+              # Install only pinned core dependencies and their hashes from the lockfile.
+              # Install the wheel without resolving additional dependencies.
               subprocess.run(
                   [
                       "uv", "pip", "install", "--require-hashes", "--no-deps",
@@ -451,7 +451,7 @@ jobs:
               assert connection.execute("SELECT id, name FROM artists").fetchall() == [(5, "Accept")]
               assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == (REVISION,)
           assert database.upgrade_database(legacy) is None
-          print("Wheel instalado: generación, importación, edición y migración correctas sin checkout ni Qt.")
+          print("Installed wheel: generation, import, editing and migration passed without a checkout or Qt.")
           """
               subprocess.run(
                   [
@@ -529,5 +529,5 @@ jobs:
                   check=True,
               )
 
-      - name: Verificar que las comprobaciones no cambian los archivos versionados
+      - name: Verify checks do not change versioned files
         run: git diff --exit-code

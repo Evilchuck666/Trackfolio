@@ -60,23 +60,23 @@ class AlbumView(QWidget):
         navigation = QFrame(split)
         navigation.setObjectName("CatalogPanel")
         left = QVBoxLayout(navigation)
-        heading = QLabel("ÁLBUMES", navigation)
+        heading = QLabel("ALBUMS", navigation)
         heading.setObjectName("SectionTitle")
         left.addWidget(heading)
         self.search = QLineEdit(navigation)
-        self.search.setPlaceholderText("Buscar álbum o artista…")
-        self.search.setAccessibleName("Buscar álbumes")
+        self.search.setPlaceholderText("Search albums or artists…")
+        self.search.setAccessibleName("Search albums")
         self.search.textChanged.connect(self._filter)
         left.addWidget(self.search)
         self.list = QListWidget(navigation)
-        self.list.setAccessibleName("Álbumes del catálogo")
+        self.list.setAccessibleName("Catalog albums")
         self.list.currentRowChanged.connect(self._selected)
         left.addWidget(self.list)
-        self.count = QLabel("Sin álbumes", navigation)
+        self.count = QLabel("No albums", navigation)
         self.count.setProperty("role", "secondary")
         left.addWidget(self.count)
         self.pages = QStackedWidget(split)
-        empty = QLabel("Abre un catálogo o importa música para ver tus álbumes.", self)
+        empty = QLabel("Open a catalog or import music to view your albums.", self)
         self.empty_label = empty
         empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
         empty.setWordWrap(True)
@@ -113,14 +113,14 @@ class AlbumView(QWidget):
         header.addLayout(info, 1)
         right.addLayout(header)
         actions = QHBoxLayout()
-        self.edit_button = QPushButton("Editar álbum", panel)
+        self.edit_button = QPushButton("Edit album", panel)
         self.edit_button.clicked.connect(self.edit_requested.emit)
-        self.write_button = QPushButton("Escribir etiquetas del álbum…", panel)
+        self.write_button = QPushButton("Write album tags…", panel)
         self.write_button.clicked.connect(self.write_requested.emit)
-        self.save_button = QPushButton("Guardar álbum", panel)
+        self.save_button = QPushButton("Save album", panel)
         self.save_button.setObjectName("PrimaryButton")
         self.save_button.clicked.connect(self.save_requested.emit)
-        self.cancel_button = QPushButton("Cancelar", panel)
+        self.cancel_button = QPushButton("Cancel", panel)
         self.cancel_button.clicked.connect(self.cancel_requested.emit)
         for button in (self.edit_button, self.write_button, self.save_button, self.cancel_button):
             actions.addWidget(button)
@@ -130,8 +130,7 @@ class AlbumView(QWidget):
         form = QGridLayout(self.editor)
         form.setContentsMargins(0, 0, 0, 0)
         note = QLabel(
-            "Marca los datos que quieras aplicar a todas las pistas. "
-            "Los artistas de cada canción se conservarán.",
+            "Select the fields to apply to all tracks. Individual song artists will be preserved.",
             self.editor,
         )
         note.setWordWrap(True)
@@ -140,21 +139,21 @@ class AlbumView(QWidget):
         self.fields = {"album": QLineEdit(self.editor), "album_year": QLineEdit(self.editor)}
         self.fields["album_year"].setValidator(QIntValidator(1, 9999, self.editor))
         self.labels = {
-            "album_artists": OrderedLabels("Artistas del álbum", self.editor),
-            "genres": OrderedLabels("Géneros", self.editor),
+            "album_artists": OrderedLabels("Album artists", self.editor),
+            "genres": OrderedLabels("Genres", self.editor),
         }
         self.apply_fields: dict[str, QCheckBox] = {}
         for row, (field, caption) in enumerate(
             (
-                ("album", "Álbum"),
-                ("album_year", "Año"),
-                ("album_artists", "Artistas del álbum"),
-                ("genres", "Géneros"),
+                ("album", "Album"),
+                ("album_year", "Year"),
+                ("album_artists", "Album artists"),
+                ("genres", "Genres"),
             ),
             1,
         ):
             check = QCheckBox(caption, self.editor)
-            check.setToolTip("Aplicar a todas las pistas. Un valor vacío elimina el campo.")
+            check.setToolTip("Apply to all tracks. An empty value clears the field.")
             control = self.fields[field] if field in self.fields else self.labels[field]
             control.setAccessibleName(caption)
             check.toggled.connect(control.setEnabled)
@@ -172,16 +171,14 @@ class AlbumView(QWidget):
         form.addWidget(self.error, 5, 0, 1, 2)
         right.addWidget(self.editor)
         self.table = QTableWidget(0, 5, panel)
-        self.table.setHorizontalHeaderLabels(
-            ("Disco", "Pista", "Canción", "Artista(s)", "Duración")
-        )
+        self.table.setHorizontalHeaderLabels(("Disc", "Track", "Song", "Artist(s)", "Duration"))
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.verticalHeader().hide()
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         self.table.setMinimumHeight(230)
-        self.table.setAccessibleName("Pistas del álbum")
+        self.table.setAccessibleName("Album tracks")
         self.table.verticalHeader().setDefaultSectionSize(40)
         self.table.cellDoubleClicked.connect(self._open_track)
         right.addWidget(self.table, 1)
@@ -203,10 +200,10 @@ class AlbumView(QWidget):
         self.current_album = None
         selected_row = 0
         for row, album in enumerate(albums):
-            artist = " · ".join(album.artists) or "Sin artistas de álbum"
+            artist = " · ".join(album.artists) or "No album artists"
             item = QListWidgetItem(
-                f"{album.title or 'Sin álbum'}\n{artist}\n"
-                f"{album.year or 'Sin año'} · {len(album.tracks)} pistas"
+                f"{album.title or 'Untitled album'}\n{artist}\n"
+                f"{album.year or 'No year'} · {len(album.tracks)} tracks"
             )
             item.setData(Qt.ItemDataRole.UserRole, album.key)
             item.setToolTip(str(album.library_root / album.directory))
@@ -215,7 +212,7 @@ class AlbumView(QWidget):
                 selected_row = row
         self.list.setCurrentRow(-1)
         del blocker
-        self.count.setText(f"{len(albums)} " + ("álbum" if len(albums) == 1 else "álbumes"))
+        self.count.setText(f"{len(albums)} " + ("album" if len(albums) == 1 else "albums"))
         self._filter(self.search.text(), select=False)
         visible = [row for row in range(self.list.count()) if not self.list.item(row).isHidden()]
         if visible:
@@ -229,9 +226,9 @@ class AlbumView(QWidget):
         self.album_selected.emit(None)
         self.pages.setCurrentIndex(0)
         self.empty_label.setText(
-            "No hay álbumes que coincidan con la búsqueda."
+            "No albums match your search."
             if self._albums
-            else "Abre un catálogo o importa música para ver tus álbumes."
+            else "Open a catalog or import music to view your albums."
         )
 
     def _filter(self, query: str, *, select: bool = True) -> None:
@@ -278,22 +275,22 @@ class AlbumView(QWidget):
 
     def show_album(self, album: Album) -> None:
         self.pages.setCurrentIndex(1)
-        self.title.setText(album.title or "Sin álbum")
-        self.artists.setText(" · ".join(album.artists) or "Sin artistas de álbum")
+        self.title.setText(album.title or "Untitled album")
+        self.artists.setText(" · ".join(album.artists) or "No album artists")
         duration = sum(track.duration_seconds or 0 for track in album.tracks)
         discs = len({track.disc_number or 1 for track in album.tracks})
         duration_label = (
             f"{int(duration // 60)} min"
             if all(track.duration_seconds is not None for track in album.tracks)
-            else "Duración incompleta"
+            else "Incomplete duration"
         )
-        discs_label = f"{discs} " + ("disco" if discs == 1 else "discos")
+        discs_label = f"{discs} " + ("disc" if discs == 1 else "discs")
         self.stats.setText(
-            f"{album.year or 'Sin año'} · {len(album.tracks)} pistas · "
+            f"{album.year or 'No year'} · {len(album.tracks)} tracks · "
             f"{discs_label} · {duration_label}"
         )
         self.path.setText(str(album.library_root / album.directory))
-        self.genres.setText(f"Géneros: {', '.join(album.genres)}" if album.genres else "")
+        self.genres.setText(f"Genres: {', '.join(album.genres)}" if album.genres else "")
         self.genres.setVisible(bool(album.genres))
         self.cover.set_cover(None)
         self.table.setRowCount(len(album.tracks))
@@ -325,7 +322,7 @@ class AlbumView(QWidget):
             else:
                 self.labels[field].set_names(() if mixed else values[0])
                 self.labels[field].name_edit.setPlaceholderText(
-                    "Valores distintos" if mixed else "Nombre completo"
+                    "Valores distintos" if mixed else "Full name"
                 )
                 self.labels[field].setEnabled(False)
         self.error.clear()

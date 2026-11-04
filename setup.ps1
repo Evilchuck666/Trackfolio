@@ -11,13 +11,13 @@ function Fail([string] $Message) {
 
 if ($SetupArguments.Count -gt 0 -and $SetupArguments[0] -in @("--help", "-h")) {
     Write-Output @"
-Trackfolio: preparación completa desde las fuentes.
-Uso: powershell -ExecutionPolicy Bypass -File setup.ps1 [--core | --gui]
+Trackfolio: complete setup from source.
+Usage: powershell -ExecutionPolicy Bypass -File setup.ps1 [--core | --gui]
      [--platform offscreen|xcb|wayland] [--skip-editor] [--non-interactive]
-     [--yes] [--open-code] [--qt-timeout SEGUNDOS]
-Por defecto prepara la GUI, las herramientas de desarrollo y VS Code.
-Las instalaciones del sistema y de un editor nuevo requieren confirmación.
-Para ejecutar uv sin repetir la preparación: setup.ps1 --run-uv COMANDO ...
+     [--yes] [--open-code] [--qt-timeout SECONDS]
+Sets up the GUI, development tools and VS Code by default.
+System installations and a new editor require confirmation.
+To run uv without repeating setup: setup.ps1 --run-uv COMMAND ...
 "@
     exit 0
 }
@@ -27,7 +27,7 @@ try {
     foreach ($File in @("pyproject.toml", ".python-version", "uv.lock", "scripts/setup.py")) {
         $Path = Join-Path $Root $File
         if (-not (Test-Path -LiteralPath $Path -PathType Leaf) -or (Get-Item -LiteralPath $Path -Force).Length -eq 0) {
-            Fail "Falta $File. Descarga el repositorio completo."
+            Fail "$File is missing. Download the complete repository."
         }
     }
     $Manifest = Get-Content -LiteralPath (Join-Path $Root "pyproject.toml") -Raw -Force
@@ -35,12 +35,12 @@ try {
     $RequirementMatch = [regex]::Match($Section.Groups['body'].Value, '(?m)^\s*required-version\s*=\s*["''](?<value>[^"'']+)["'']')
     $Requirement = $RequirementMatch.Groups['value'].Value -replace '\s', ''
     $Range = [regex]::Match($Requirement, '^>=(?<minimum>\d+\.\d+\.\d+),<(?<maximum>\d+\.\d+(?:\.\d+)?)$')
-    if (-not $Range.Success) { Fail "Rango de uv inválido en pyproject.toml." }
+    if (-not $Range.Success) { Fail "Invalid uv range in pyproject.toml." }
     $Minimum = $Range.Groups['minimum'].Value
     $Maximum = $Range.Groups['maximum'].Value
-    if ([version] $Minimum -ge [version] $Maximum) { Fail "El mínimo de uv debe ser inferior al máximo exclusivo." }
+    if ([version] $Minimum -ge [version] $Maximum) { Fail "The uv minimum must be below the exclusive maximum." }
     $PythonVersion = (Get-Content -LiteralPath (Join-Path $Root ".python-version") -Raw -Force).Trim()
-    if ($PythonVersion -notmatch '^\d+\.\d+\.\d+$') { Fail ".python-version inválido." }
+    if ($PythonVersion -notmatch '^\d+\.\d+\.\d+$') { Fail "Invalid .python-version." }
 
     $LocalUv = Join-Path $Root ".tools/uv"
     $LocalExecutable = Join-Path $LocalUv "uv.exe"
@@ -64,8 +64,8 @@ try {
     }
 
     if ($SetupArguments.Count -gt 0 -and $SetupArguments[0] -eq "--run-uv") {
-        if (-not $Uv) { Fail "No hay uv compatible. Ejecuta primero setup.ps1." }
-        if ($SetupArguments.Count -lt 2) { Fail "Indica el comando de uv después de --run-uv." }
+        if (-not $Uv) { Fail "No compatible uv found. First run setup.ps1." }
+        if ($SetupArguments.Count -lt 2) { Fail "Specify the uv command after --run-uv." }
         $Forward = $SetupArguments[1..($SetupArguments.Count - 1)]
         & $Uv @Forward
         exit $LASTEXITCODE
@@ -78,23 +78,23 @@ try {
         $PreviousNoModify = $env:UV_NO_MODIFY_PATH
         try {
             [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-            Write-Output "Descargando uv $Minimum para este proyecto, sin modificar el sistema ni el shell."
+            Write-Output "Downloading uv $Minimum for this project, without modifying the system or shell."
             Invoke-WebRequest -UseBasicParsing -Uri "https://astral.sh/uv/$Minimum/install.ps1" -OutFile $Installer -TimeoutSec 120
             $env:UV_UNMANAGED_INSTALL = $LocalUv
             $env:UV_NO_MODIFY_PATH = "1"
             # A child process contains the installer's exit and environment changes.
             $PowerShellExecutable = (Get-Process -Id $PID).Path
             & $PowerShellExecutable -NoProfile -ExecutionPolicy Bypass -File $Installer
-            if ($LASTEXITCODE -ne 0) { Fail "El instalador de uv falló ($LASTEXITCODE)." }
+            if ($LASTEXITCODE -ne 0) { Fail "The uv installer failed ($LASTEXITCODE)." }
         } finally {
             $env:UV_UNMANAGED_INSTALL = $PreviousUnmanaged
             $env:UV_NO_MODIFY_PATH = $PreviousNoModify
             if (Test-Path -LiteralPath $Installer) { Remove-Item -LiteralPath $Installer -Force }
         }
-        if (-not (Test-Compatible $LocalExecutable)) { Fail "La instalación de uv no cumple $Requirement." }
+        if (-not (Test-Compatible $LocalExecutable)) { Fail "The uv installation does not satisfy $Requirement." }
         $Uv = $LocalExecutable
     }
-    Write-Output "Usando uv: $Uv"
+    Write-Output "Using uv: $Uv"
     & $Uv run --no-project --managed-python --python $PythonVersion python -m scripts.setup --uv $Uv @SetupArguments
     exit $LASTEXITCODE
 } catch {

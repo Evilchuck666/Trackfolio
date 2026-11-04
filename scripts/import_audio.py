@@ -1,4 +1,4 @@
-"""Preparar la base de datos e importar un archivo, sin modificar la música."""
+"""Set up the database and import a file without modifying the music."""
 
 from __future__ import annotations
 
@@ -19,17 +19,17 @@ from trackfolio.infrastructure.metadata import MetadataReadError, read_metadata
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("audio", type=Path, help="Archivo FLAC o MP3 que se desea importar.")
+    parser.add_argument("audio", type=Path, help="FLAC or MP3 file to import.")
     parser.add_argument(
         "--database",
         type=Path,
         default=Path("data/database.tfo"),
-        help="Catálogo de destino (por defecto: %(default)s).",
+        help="Destination catalog (default: %(default)s).",
     )
     parser.add_argument(
         "--library-root",
         type=Path,
-        help="Raíz de la música; por defecto el directorio del archivo.",
+        help="Music root; defaults to the file's directory.",
     )
     args = parser.parse_args(argv)
     source = args.audio.expanduser().absolute()
@@ -38,7 +38,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         root = validate_library_root(args.library_root or source.parent)
         source, _ = prepare_audio_source(source, root)
-        # Leer antes de crear una BD: un archivo inválido no debe dejar una importación vacía.
+        # Read before creating a database: an invalid file must not leave an empty import.
         parsed = read_metadata(source)
         migrate_database(database)
         engine = create_engine(database)
@@ -46,15 +46,14 @@ def main(argv: list[str] | None = None) -> int:
         importer = ImportAudio(lambda _: parsed, repository)
         entry = importer.execute(source, root)
     except (OSError, ValueError, MetadataReadError, SQLAlchemyError) as exc:
-        print(f"No se pudo importar: {exc}")
+        print(f"Could not import: {exc}")
         return 1
     finally:
         if engine is not None:
             engine.dispose()
-    print(f"Base de datos: {database}")
+    print(f"Database: {database}")
     print(
-        f"Archivo importado: {entry.relative_path}; "
-        f"file_id={entry.file_id}, track_id={entry.track_id}"
+        f"Imported file: {entry.relative_path}; file_id={entry.file_id}, track_id={entry.track_id}"
     )
     print("Consulta en SQLiteBrowser: SELECT * FROM track_details;")
     return 0

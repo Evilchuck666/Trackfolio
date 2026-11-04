@@ -91,7 +91,7 @@ class TitleBar(QWidget):
         layout.addStretch()
         self.minimize_button = self._button("minimize", "Minimizar", window.showMinimized)
         self.maximize_button = self._button("maximize", "Maximizar", window.toggle_maximized)
-        self.close_button = self._button("close", "Cerrar", window.close)
+        self.close_button = self._button("close", "Close", window.close)
         self.close_button.setObjectName("CloseButton")
         for button in (self.minimize_button, self.maximize_button, self.close_button):
             layout.addWidget(button)
@@ -289,12 +289,12 @@ class MainWindow(QMainWindow):
         self.splitter.setStretchFactor(1, 1)
         self.splitter.setSizes([620, 620])
         self.views = QTabWidget(content)
-        self.views.setAccessibleName("Vistas de la biblioteca")
+        self.views.setAccessibleName("Library views")
         self.album_view = AlbumView(self.views)
         self.artist_view = ArtistView(self.views)
-        self.views.addTab(self.artist_view, "Artistas")
-        self.views.addTab(self.album_view, "Álbumes")
-        self.views.addTab(self.splitter, "Canciones")
+        self.views.addTab(self.artist_view, "Artists")
+        self.views.addTab(self.album_view, "Albums")
+        self.views.addTab(self.splitter, "Songs")
         self.views.setCurrentWidget(self.artist_view)
         self._view_index = self.views.currentIndex()
         self.album_view.draft_changed.connect(self._update_actions)
@@ -308,7 +308,7 @@ class MainWindow(QMainWindow):
         content_layout.addWidget(self.views, 1)
 
         footer = QHBoxLayout()
-        self.status_label = QLabel("Abre un catálogo o importa música para comenzar.", content)
+        self.status_label = QLabel("Open a catalog or import music to get started.", content)
         self.status_label.setObjectName("StatusLabel")
         self.status_label.setTextFormat(Qt.TextFormat.PlainText)
         self.status_label.setWordWrap(True)
@@ -335,30 +335,30 @@ class MainWindow(QMainWindow):
         toolbar = QHBoxLayout()
         heading = QVBoxLayout()
         heading.setSpacing(4)
-        title = QLabel("Tu biblioteca", self)
+        title = QLabel("Your library", self)
         title.setObjectName("PageTitle")
         heading.addWidget(title)
-        subtitle = QLabel("Canciones, álbumes y sus historias", self)
+        subtitle = QLabel("Songs, albums and their stories", self)
         subtitle.setObjectName("MutedLabel")
         heading.addWidget(subtitle)
         toolbar.addLayout(heading)
         toolbar.addStretch()
-        self.open_button = QPushButton(icon("open"), "Abrir catálogo…", self)
+        self.open_button = QPushButton(icon("open"), "Open catalog…", self)
         self.open_button.setObjectName("PrimaryButton")
         self.open_button.setShortcut("Ctrl+O")
-        self.open_button.setToolTip("Abrir catálogo SQLite (Ctrl+O)")
+        self.open_button.setToolTip("Open SQLite catalog (Ctrl+O)")
         self.open_button.clicked.connect(self.open_requested.emit)
-        self.import_action = QAction(icon("import"), "Importar música…", self)
+        self.import_action = QAction(icon("import"), "Import music…", self)
         self.import_action.setShortcut("Ctrl+I")
         self.import_action.triggered.connect(self.import_requested.emit)
         self.addAction(self.import_action)
-        self.import_button = QPushButton(icon("import"), "Importar música…", self)
-        self.import_button.setToolTip("Importar música y generar el catálogo (Ctrl+I)")
-        self.import_button.setAccessibleName("Importar música")
+        self.import_button = QPushButton(icon("import"), "Import music…", self)
+        self.import_button.setToolTip("Import music and create a catalog (Ctrl+I)")
+        self.import_button.setAccessibleName("Import music")
         self.import_button.clicked.connect(self.import_action.trigger)
-        self.refresh_button = QPushButton(icon("refresh"), "Actualizar", self)
+        self.refresh_button = QPushButton(icon("refresh"), "Refresh", self)
         self.refresh_button.setShortcut("Ctrl+R")
-        self.refresh_button.setToolTip("Actualizar catálogo (Ctrl+R)")
+        self.refresh_button.setToolTip("Refresh catalog (Ctrl+R)")
         self.refresh_button.clicked.connect(self.refresh_requested.emit)
         toolbar.addWidget(self.open_button)
         toolbar.addWidget(self.import_button)
@@ -375,7 +375,7 @@ class MainWindow(QMainWindow):
         header = QWidget(panel)
         header_layout = QHBoxLayout(header)
         header_layout.setContentsMargins(16, 14, 16, 14)
-        label = QLabel("CANCIONES", header)
+        label = QLabel("SONGS", header)
         label.setObjectName("SectionTitle")
         self.count_label = QLabel("0", header)
         self.count_label.setObjectName("CountBadge")
@@ -383,13 +383,11 @@ class MainWindow(QMainWindow):
         header_layout.addStretch()
         header_layout.addWidget(self.count_label)
         layout.addWidget(header)
-        self.write_all_tags_action = QAction("Escribir etiquetas de todo el catálogo…", self)
+        self.write_all_tags_action = QAction("Write tags for the entire catalog…", self)
         self.write_all_tags_action.triggered.connect(self.write_all_tags_requested.emit)
         self.addAction(self.write_all_tags_action)
         self.write_all_tags_button = QPushButton(self.write_all_tags_action.text(), panel)
-        self.write_all_tags_button.setToolTip(
-            "Escribir todas las etiquetas guardadas de todas las canciones del catálogo"
-        )
+        self.write_all_tags_button.setToolTip("Write all saved tags for every song in the catalog")
         self.write_all_tags_button.clicked.connect(self.write_all_tags_action.trigger)
         catalog_actions = QHBoxLayout()
         catalog_actions.setContentsMargins(16, 0, 16, 12)
@@ -415,10 +413,10 @@ class MainWindow(QMainWindow):
         self.table.horizontalHeader().setStretchLastSection(True)
         for column, width in enumerate((176, 112, 126, 56, 160)):
             self.table.setColumnWidth(column, width)
-        self.table.setAccessibleName("Canciones del catálogo")
+        self.table.setAccessibleName("Catalog songs")
         self.table.selectionModel().selectionChanged.connect(self._selection_changed)
         layout.addWidget(self.table, 1)
-        self.empty_label = QLabel("Abre un catálogo o importa una carpeta de música.", panel)
+        self.empty_label = QLabel("Open a catalog or import a music folder.", panel)
         self.empty_label.setObjectName("EmptyCatalog")
         self.empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.empty_label.setWordWrap(True)
@@ -496,28 +494,28 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(22, 12, 22, 22)
         layout.setSpacing(22)
         heading = QHBoxLayout()
-        title = QLabel("DETALLE DE LA CANCIÓN", panel)
+        title = QLabel("SONG DETAILS", panel)
         self.detail_heading = title
         title.setWordWrap(True)
         title.setObjectName("SectionTitle")
         heading.addWidget(title)
         heading.addStretch()
-        self.edit_action = QAction("Editar", self)
+        self.edit_action = QAction("Edit", self)
         self.edit_action.setShortcut(QKeySequence("Ctrl+E"))
         self.edit_action.triggered.connect(self.edit_requested.emit)
-        self.write_tags_action = QAction("Escribir etiquetas…", self)
+        self.write_tags_action = QAction("Write tags…", self)
         self.write_tags_action.triggered.connect(self.write_tags_requested.emit)
         self.addAction(self.write_tags_action)
-        self.save_action = QAction("Guardar", self)
+        self.save_action = QAction("Save", self)
         self.save_action.setShortcut(QKeySequence(QKeySequence.StandardKey.Save))
         self.save_action.triggered.connect(self.save_requested.emit)
-        self.cancel_edit_action = QAction("Cancelar", self)
+        self.cancel_edit_action = QAction("Cancel", self)
         self.cancel_edit_action.setShortcut(QKeySequence(Qt.Key.Key_Escape))
         self.cancel_edit_action.triggered.connect(self.cancel_edit_requested.emit)
-        self.edit_button = QPushButton("Editar", panel)
-        self.save_button = QPushButton("Guardar", panel)
+        self.edit_button = QPushButton("Edit", panel)
+        self.save_button = QPushButton("Save", panel)
         self.save_button.setObjectName("PrimaryButton")
-        self.cancel_edit_button = QPushButton("Cancelar", panel)
+        self.cancel_edit_button = QPushButton("Cancel", panel)
         for action, button in (
             (self.edit_action, self.edit_button),
             (self.save_action, self.save_button),
@@ -528,7 +526,7 @@ class MainWindow(QMainWindow):
             button.clicked.connect(action.trigger)
             heading.addWidget(button)
         controls_layout.addLayout(heading)
-        self.write_tags_button = QPushButton("Escribir etiquetas…", controls)
+        self.write_tags_button = QPushButton("Write tags…", controls)
         self.write_tags_button.clicked.connect(self.write_tags_action.trigger)
         tag_actions = QHBoxLayout()
         tag_actions.addWidget(self.write_tags_button)
@@ -546,35 +544,35 @@ class MainWindow(QMainWindow):
         identification.addWidget(self.cover)
         names = QVBoxLayout()
         names.setSpacing(14)
-        names.addWidget(self._field("title", "CANCIÓN", panel))
-        names.addWidget(self._field("artists", "ARTISTA(S)", panel))
+        names.addWidget(self._field("title", "SONG", panel))
+        names.addWidget(self._field("artists", "ARTIST(S)", panel))
         names.addStretch()
         identification.addLayout(names, 1)
         layout.addLayout(identification)
 
         album = QHBoxLayout()
         album.setSpacing(14)
-        album.addWidget(self._field("album", "ÁLBUM", panel), 3)
-        album.addWidget(self._field("album_year", "AÑO", panel), 1)
+        album.addWidget(self._field("album", "ALBUM", panel), 3)
+        album.addWidget(self._field("album_year", "YEAR", panel), 1)
         layout.addLayout(album)
         numbering = QGridLayout()
         numbering.setHorizontalSpacing(12)
         numbering.setVerticalSpacing(14)
-        numbering.addWidget(self._field("track_number", "PISTA", panel), 0, 0)
-        numbering.addWidget(self._field("track_total", "TOTAL DE PISTAS", panel), 0, 1)
-        numbering.addWidget(self._field("disc_number", "DISCO", panel), 0, 2)
-        numbering.addWidget(self._field("disc_total", "TOTAL DE DISCOS", panel), 0, 3)
+        numbering.addWidget(self._field("track_number", "TRACK", panel), 0, 0)
+        numbering.addWidget(self._field("track_total", "TOTAL TRACKS", panel), 0, 1)
+        numbering.addWidget(self._field("disc_number", "DISC", panel), 0, 2)
+        numbering.addWidget(self._field("disc_total", "TOTAL DISCS", panel), 0, 3)
         layout.addLayout(numbering)
-        layout.addWidget(self._field("genres", "GÉNERO(S)", panel))
+        layout.addWidget(self._field("genres", "GENRE(S)", panel))
         lyrics_layout = QVBoxLayout()
         lyrics_layout.setSpacing(8)
-        lyrics_label = QLabel("LÍRICAS", panel)
+        lyrics_label = QLabel("LYRICS", panel)
         lyrics_label.setObjectName("FieldLabel")
         lyrics_layout.addWidget(lyrics_label)
         self.lyrics = QPlainTextEdit(panel)
         self.lyrics.setObjectName("Lyrics")
         self.lyrics.setReadOnly(True)
-        self.lyrics.setAccessibleName("Líricas")
+        self.lyrics.setAccessibleName("Lyrics")
         self.lyrics.setMinimumHeight(140)
         self.lyrics.installEventFilter(self)
         self.lyrics.textChanged.connect(lambda: self._draft_changed("lyrics"))
@@ -636,7 +634,7 @@ class MainWindow(QMainWindow):
         self.setWindowFlag(Qt.WindowType.FramelessWindowHint, False)
         self.show()
         self._place_resize_handles()
-        self.set_status("Marco del sistema activado para mover y redimensionar la ventana.")
+        self.set_status("System frame enabled to move and resize the window.")
 
     def toggle_maximized(self) -> None:
         self.showNormal() if self.isMaximized() else self.showMaximized()
@@ -678,11 +676,11 @@ class MainWindow(QMainWindow):
         self.count_label.setText(str(len(rows)))
         self.empty_label.setVisible(not rows)
         self.empty_label.setText(
-            "Este catálogo todavía no contiene canciones."
+            "This catalog does not contain any songs yet."
             if path is not None
-            else "Abre un catálogo o importa una carpeta de música."
+            else "Open a catalog or import a music folder."
         )
-        self.catalog_label.setText(path.name if path is not None else "Sin catálogo")
+        self.catalog_label.setText(path.name if path is not None else "No catalog")
         self.catalog_label.setToolTip(str(path) if path is not None else "")
         self.set_busy(self._busy)
         if self._current_file_id is not None:
@@ -801,7 +799,7 @@ class MainWindow(QMainWindow):
         for field in self.fields.values():
             field.setPlaceholderText("")
         for labels in self.ordered_labels.values():
-            labels.name_edit.setPlaceholderText("Nombre completo")
+            labels.name_edit.setPlaceholderText("Full name")
         self._updating_edit = True
         self._edit_values = values
         self._editing = True
@@ -848,8 +846,8 @@ class MainWindow(QMainWindow):
             checkbox.setChecked(False)
             checkbox.setToolTip(
                 ("Valores distintos. " if key in mixed else "")
-                + "Reemplazar este campo en todas las canciones seleccionadas. "
-                "Un campo vacío elimina sus valores."
+                + "Replace this field in all selected songs. "
+                "An empty field clears its values."
             )
             del blocker
             self.fields[key].setPlaceholderText("Valores distintos" if key in mixed else "")
@@ -1039,10 +1037,8 @@ class MainWindow(QMainWindow):
         ):
             button.setEnabled(action.isEnabled())
         count = len(self._selected_file_ids)
-        self.detail_heading.setText(
-            f"{count} CANCIONES SELECCIONADAS" if count > 1 else "DETALLE DE LA CANCIÓN"
-        )
-        self.edit_button.setText(f"Editar {count} canciones" if count > 1 else "Editar")
+        self.detail_heading.setText(f"{count} SELECTED SONGS" if count > 1 else "SONG DETAILS")
+        self.edit_button.setText(f"Edit {count} songs" if count > 1 else "Edit")
         self.edit_button.setVisible(not self._editing)
         self.save_button.setVisible(self._editing)
         self.cancel_edit_button.setVisible(self._editing)
@@ -1065,17 +1061,17 @@ class MainWindow(QMainWindow):
         self.cover.setVisible(not self._batch_count)
         self.edit_status.setVisible(self._editing)
         self.edit_status.setText(
-            "Guardando cambios…"
+            "Saving changes…"
             if self._saving
-            else "Cambios en el catálogo · Cambios sin guardar"
+            else "Catalog changes · Unsaved changes"
             if self.edit_dirty()
-            else "Cambios en el catálogo"
+            else "Catalog changes"
         )
         if self._batch_count:
             self.edit_status.setText(
-                f"{self._batch_count} canciones · "
+                f"{self._batch_count} songs · "
                 + self.edit_status.text()
-                + "\nMarca los campos que se reemplazarán en todas las seleccionadas."
+                + "\nSelect the fields to replace in all selected songs."
             )
 
     def set_tag_write_enabled(self, enabled: bool) -> None:

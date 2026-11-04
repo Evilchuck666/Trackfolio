@@ -37,7 +37,7 @@ def run_online() -> None:
         return
     url = make_url(config.get_main_option("sqlalchemy.url") or "sqlite:///data/database.tfo")
     if url.get_backend_name() != "sqlite" or not url.database or url.database == ":memory:":
-        raise ValueError("Las migraciones necesitan una ruta de base de datos SQLite persistente.")
+        raise ValueError("Migrations require a persistent SQLite database path.")
     database, engine = _migration_engine(Path(url.database))
     try:
         with engine.begin() as active:

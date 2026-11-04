@@ -599,7 +599,7 @@ def test_duplicate_catalogue_positions_do_not_overwrite_one_xml_track(tmp_path):
             AlbumNfoSong(2, "Unselected", 1, 2, False),
         ),
     )
-    with pytest.raises(TagWriteConflict, match="Varias canciones"):
+    with pytest.raises(TagWriteConflict, match="Varias songs"):
         XmlAlbumNfoCodec().plan(source, values)
 
 

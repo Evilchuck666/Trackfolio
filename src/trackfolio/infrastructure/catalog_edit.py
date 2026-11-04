@@ -1,4 +1,4 @@
-"""Edición SQLite por archivo con comparación y conservación de relaciones."""
+"""Per-file SQLite editing with comparison and relationship preservation."""
 
 from __future__ import annotations
 
@@ -163,7 +163,7 @@ class _SqliteCatalogEditSession:
 
     def _check_open(self) -> None:
         if self._closed:
-            raise CatalogEditError("El acceso de edición al catálogo está cerrado.")
+            raise CatalogEditError("Catalog editing access is closed.")
 
     def get_editable(self, file_id: int) -> EditableTrack | None:
         self._check_open()
@@ -172,9 +172,7 @@ class _SqliteCatalogEditSession:
                 snapshot = _read_snapshot(connection, file_id)
                 return snapshot.editable if snapshot is not None else None
         except SQLAlchemyError as exc:
-            raise CatalogEditError(
-                str(_access_error(exc, "No se pudo preparar la edición."))
-            ) from exc
+            raise CatalogEditError(str(_access_error(exc, "Could not prepare editing."))) from exc
 
     def find_artists(self, query: str) -> tuple[ArtistChoice, ...]:
         self._check_open()
@@ -187,15 +185,13 @@ class _SqliteCatalogEditSession:
                     .order_by(artists.c.name)
                     .limit(100)
                 )
-                # 001 puede contener varias filas con el mismo nombre exacto.
+                # 001 may contain multiple rows with the same exact name.
                 choices: dict[str, ArtistChoice] = {}
                 for row in rows:
                     choices.setdefault(row.name, ArtistChoice(row.name, int(row.artist_id)))
                 return tuple(choices.values())
         except SQLAlchemyError as exc:
-            raise CatalogEditError(
-                str(_access_error(exc, "No se pudieron buscar artistas."))
-            ) from exc
+            raise CatalogEditError(str(_access_error(exc, "Could not search artists."))) from exc
 
     def find_genres(self, query: str) -> tuple[str, ...]:
         self._check_open()
@@ -210,9 +206,7 @@ class _SqliteCatalogEditSession:
                     ).scalars()
                 )
         except SQLAlchemyError as exc:
-            raise CatalogEditError(
-                str(_access_error(exc, "No se pudieron buscar géneros."))
-            ) from exc
+            raise CatalogEditError(str(_access_error(exc, "Could not search genres."))) from exc
 
     def _edited_album_id(
         self, connection: Connection, snapshot: _Snapshot, changes: dict[str, Any]
@@ -271,8 +265,8 @@ class _SqliteCatalogEditSession:
                 or target_fields != (directory, title, date, year, disc_total)
             ):
                 raise CatalogEditConflict(
-                    "El álbum de destino tiene créditos diferentes. "
-                    "Revisa la agrupación antes de guardar esta canción."
+                    "The destination album has different credits. "
+                    "Review the grouping before saving this song."
                 )
             return int(existing["id"])
         album_id = _insert_id(
@@ -361,7 +355,7 @@ class _SqliteCatalogEditSession:
     ) -> tuple[CatalogEditOutcome, ...]:
         self._check_open()
         if not self._writable:
-            raise CatalogEditError("La sesión de consulta no permite guardar cambios.")
+            raise CatalogEditError("The query session does not allow saving changes.")
         for original in originals:
             validate_edit_patch(original.values, patch)
         try:
@@ -373,14 +367,14 @@ class _SqliteCatalogEditSession:
                 for original in originals:
                     snapshot = _read_snapshot(connection, original.file_id)
                     if snapshot is None:
-                        raise CatalogRecordMissing("Una canción ya no existe en este catálogo.")
+                        raise CatalogRecordMissing("A song no longer exists in this catalog.")
                     if (
                         snapshot.editable.token != original.token
                         or snapshot.editable.track_id != original.track_id
                     ):
                         raise CatalogEditConflict(
-                            "Una canción o sus relaciones cambiaron desde que empezaste a editar. "
-                            "Recarga la selección para revisar los valores actuales."
+                            "A song or its relationships changed since you started editing. "
+                            "Reload the selection to review the current values."
                         )
                 for original in originals:
                     # Previous writes in this transaction may separate a shared track.
@@ -394,14 +388,14 @@ class _SqliteCatalogEditSession:
                     entry = self._repository.get_from_connection(connection, original.file_id)
                     summary = self._repository.summary_from_connection(connection, original.file_id)
                     if entry is None or summary is None:
-                        raise CatalogRecordMissing("Una canción ya no existe en este catálogo.")
+                        raise CatalogRecordMissing("A song no longer exists in this catalog.")
                     outcomes.append(CatalogEditOutcome(entry, summary, self.backup_path))
             return tuple(outcomes)
         except CatalogEditError as exc:
             exc.backup_path = self.backup_path
             raise
         except SQLAlchemyError as exc:
-            message = str(_access_error(exc, "No se pudieron guardar los cambios en el catálogo."))
+            message = str(_access_error(exc, "Could not save changes to the catalog."))
             error = CatalogEditError(message)
             error.backup_path = self.backup_path
             raise error from exc
@@ -413,17 +407,17 @@ class _SqliteCatalogEditSession:
 
 
 class SqliteCatalogEditSessionFactory:
-    """Acceso de consulta intacto; el escritor actualiza un catálogo anterior."""
+    """Read access remains intact; the writer upgrades an older catalog."""
 
     @staticmethod
     def _path(path: Path) -> Path:
         try:
             database = path.expanduser().resolve(strict=True)
             if not database.is_file():
-                raise CatalogEditError("Selecciona un archivo de catálogo existente.")
+                raise CatalogEditError("Select an existing catalog file.")
             return database
         except OSError as exc:
-            raise CatalogEditError("No se pudo acceder al archivo de catálogo.") from exc
+            raise CatalogEditError("Could not access the catalog file.") from exc
 
     def open_reader(self, database_path: Path) -> CatalogEditSession:
         database = self._path(database_path)
@@ -436,9 +430,7 @@ class SqliteCatalogEditSessionFactory:
             _validate_catalog(engine)
         except SQLAlchemyError as exc:
             engine.dispose()
-            raise CatalogEditError(
-                str(_access_error(exc, "No se pudo abrir el catálogo."))
-            ) from exc
+            raise CatalogEditError(str(_access_error(exc, "Could not open the catalog."))) from exc
         except ValueError as exc:
             engine.dispose()
             raise CatalogEditError(str(exc)) from exc
@@ -454,9 +446,7 @@ class SqliteCatalogEditSessionFactory:
             backup_path = migrate_engine(engine, database, require_catalog=True)
         except SQLAlchemyError as exc:
             engine.dispose()
-            raise CatalogEditError(
-                str(_access_error(exc, "No se pudo abrir el escritor."))
-            ) from exc
+            raise CatalogEditError(str(_access_error(exc, "Could not open the writer."))) from exc
         except (OSError, ValueError, TimeoutError, sqlite3.Error) as exc:
             engine.dispose()
             raise CatalogEditError(str(exc)) from exc

@@ -1,1 +1,1 @@
-"""Adaptadores de persistencia, archivos y metadatos musicales."""
+"""Adapters for persistence, files and music metadata."""

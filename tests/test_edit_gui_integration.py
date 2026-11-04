@@ -268,7 +268,7 @@ def test_batch_applying_unchanged_value_exits_editor_without_stale_save_status(
         wait_until(qt_app, lambda: results == [()] and not controller._jobs)
         assert window.edit_button.isVisible()
         assert not window.edit_dirty()
-        assert window.status_label.text() == "No hay cambios que guardar."
+        assert window.status_label.text() == "No changes to save."
         assert read_entry(database, first.file_id) == first
         assert read_entry(database, second.file_id) == second
     finally:
@@ -398,7 +398,7 @@ def test_real_unsaved_dialog_cancel_restores_selection_and_draft(qt_app, edit_ca
 
         QTimer.singleShot(0, cancel_dialog)
         window.table.selectRow(window.model.row_for_file(second.file_id))
-        assert seen == ["Hay cambios sin guardar en esta canción."]
+        assert seen == ["This song has unsaved changes."]
         assert window.current_file_id() == first.file_id
         assert window.fields["title"].text() == "Kept draft"
         assert window.edit_dirty()

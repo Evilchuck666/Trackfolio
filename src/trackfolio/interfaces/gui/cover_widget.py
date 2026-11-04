@@ -13,7 +13,7 @@ class CoverLabel(QLabel):
         self.setObjectName("Cover")
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setFixedSize(184, 184)
-        self.setAccessibleName("Portada del álbum")
+        self.setAccessibleName("Album cover")
         self._original = QPixmap()
 
     def set_cover(self, data: bytes | None) -> None:

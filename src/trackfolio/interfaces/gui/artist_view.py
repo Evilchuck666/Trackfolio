@@ -34,15 +34,15 @@ class ArtistView(QWidget):
         navigation = QFrame(split)
         navigation.setObjectName("CatalogPanel")
         left = QVBoxLayout(navigation)
-        heading = QLabel("ARTISTAS", navigation)
+        heading = QLabel("ARTISTS", navigation)
         heading.setObjectName("SectionTitle")
         left.addWidget(heading)
         self.search = QLineEdit(navigation)
-        self.search.setPlaceholderText("Buscar artista…")
-        self.search.setAccessibleName("Buscar artistas")
+        self.search.setPlaceholderText("Search artists…")
+        self.search.setAccessibleName("Search artists")
         left.addWidget(self.search)
         self.list = QListWidget(navigation)
-        self.list.setAccessibleName("Artistas del catálogo")
+        self.list.setAccessibleName("Catalog artists")
         left.addWidget(self.list)
         self.count = QLabel(navigation)
         self.count.setProperty("role", "secondary")
@@ -54,7 +54,7 @@ class ArtistView(QWidget):
         right.setSpacing(16)
         header = QHBoxLayout()
         self.cover = CoverLabel(panel)
-        self.cover.setAccessibleName("Imagen del artista")
+        self.cover.setAccessibleName("Artist image")
         header.addWidget(self.cover, 0, Qt.AlignmentFlag.AlignTop)
         info = QVBoxLayout()
         self.title = QLabel(panel)
@@ -70,9 +70,9 @@ class ArtistView(QWidget):
         header.addLayout(info, 1)
         right.addLayout(header)
         self.albums = QListWidget(panel)
-        self.albums.setAccessibleName("Álbumes del artista")
+        self.albums.setAccessibleName("Artist albums")
         right.addWidget(self.albums, 1)
-        self.open_button = QPushButton("Ver álbum", panel)
+        self.open_button = QPushButton("View album", panel)
         right.addWidget(self.open_button, 0, Qt.AlignmentFlag.AlignLeft)
         split.setSizes([300, 900])
         self.search.textChanged.connect(self._filter)
@@ -90,16 +90,16 @@ class ArtistView(QWidget):
         self.list.clear()
         selected = 0
         for row, (artist, editions) in enumerate(self._groups.items()):
-            item = QListWidgetItem(artist if artist is not None else "Sin artista de álbum")
+            item = QListWidgetItem(artist if artist is not None else "No album artist")
             item.setData(Qt.ItemDataRole.UserRole, artist)
-            item.setToolTip(f"{len(editions)} álbumes")
+            item.setToolTip(f"{len(editions)} albums")
             self.list.addItem(item)
             if previous is not None and artist == name:
                 selected = row
         self.list.setCurrentRow(selected)
         del blocker
         count = sum(name is not None for name in self._groups)
-        self.count.setText(f"{count} " + ("artista" if count == 1 else "artistas"))
+        self.count.setText(f"{count} " + ("artist" if count == 1 else "artists"))
         self._filter(self.search.text())
 
     def _filter(self, query: str) -> None:
@@ -121,11 +121,11 @@ class ArtistView(QWidget):
         item = self.list.currentItem()
         if item is None:
             self.artist_selected.emit(())
-            self.title.setText("Sin artistas")
+            self.title.setText("No artists")
             self.summary.setText(
-                "No hay artistas que coincidan con la búsqueda."
+                "No artists match your search."
                 if self._groups
-                else "Abre un catálogo o importa música para ver tus artistas."
+                else "Open a catalog or import music to view your artists."
             )
             self._actions()
             return
@@ -135,12 +135,12 @@ class ArtistView(QWidget):
         )
         self.title.setText(item.text())
         self.summary.setText(
-            f"{len(editions)} álbumes · {sum(len(a.tracks) for a in editions)} pistas"
+            f"{len(editions)} albums · {sum(len(a.tracks) for a in editions)} tracks"
         )
         for album in editions:
             row = QListWidgetItem(
-                f"{album.year or 'Sin año'} · {album.title or 'Sin álbum'}\n"
-                f"{len(album.tracks)} pistas · {album.directory}"
+                f"{album.year or 'No year'} · {album.title or 'Untitled album'}\n"
+                f"{len(album.tracks)} tracks · {album.directory}"
             )
             row.setData(Qt.ItemDataRole.UserRole, album.key)
             row.setToolTip(str(album.library_root / album.directory))

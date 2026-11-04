@@ -2,7 +2,7 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Trackfolio: GUI con catálogo de ejemplo",
+      "name": "Trackfolio: GUI with sample catalog",
       "type": "debugpy",
       "request": "launch",
       "module": "trackfolio.interfaces.gui",
@@ -10,10 +10,10 @@
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "justMyCode": true,
-      "preLaunchTask": "Trackfolio: preparar GUI"
+      "preLaunchTask": "Trackfolio: set up GUI"
     },
     {
-      "name": "Trackfolio: GUI sin argumento de catálogo",
+      "name": "Trackfolio: GUI without catalog argument",
       "type": "debugpy",
       "request": "launch",
       "module": "trackfolio.interfaces.gui",
@@ -21,7 +21,7 @@
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "justMyCode": true,
-      "preLaunchTask": "Trackfolio: preparar GUI"
+      "preLaunchTask": "Trackfolio: set up GUI"
     }
   ]
 }

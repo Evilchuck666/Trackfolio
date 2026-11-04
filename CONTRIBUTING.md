@@ -1,26 +1,26 @@
-# Contribuir a Trackfolio
+# Contributing to Trackfolio
 
-## Incorporación
+## Getting started
 
-Descarga o clona la rama `gui` y prepara el entorno desde la raíz. No hace falta instalar previamente uv ni Python:
+Download or clone the `gui` branch and set up the environment from the root. You do not need to install uv or Python beforehand:
 
 ```sh
 bash setup.sh
 ```
 
-En Windows usa `powershell -NoProfile -ExecutionPolicy Bypass -File .\setup.ps1`. Usa `--core` para desarrollar sin Qt y `--skip-editor` para no preparar VS Code. Las instalaciones del sistema requieren confirmación; `--non-interactive` no realiza preguntas. Consulta [las opciones del lanzador](docs/environment.md#preparación-en-un-solo-comando).
+On Windows, use `powershell -NoProfile -ExecutionPolicy Bypass -File .\setup.ps1`. Use `--core` to develop without Qt and `--skip-editor` to skip VS Code setup. System installations require confirmation; `--non-interactive` does not prompt. See [launcher options](docs/environment.md#single-command-setup).
 
-Abre `Trackfolio.code-workspace` en VS Code, o utiliza `bash setup.sh --open-code` (los mismos argumentos en PowerShell). Selecciona el intérprete local `.venv` si el editor no lo detecta.
+Open `Trackfolio.code-workspace` in VS Code, or use `bash setup.sh --open-code` (the same arguments apply in PowerShell). Select the local `.venv` interpreter if the editor does not detect it.
 
-El entorno usa CPython 3.13.15 administrado por uv y dependencias bloqueadas en `uv.lock`. Reutiliza cualquier uv compatible con `>=0.13.4,<0.14`; si falta, lo descarga en `.tools/uv` sin editar los perfiles del shell. No instales paquetes del proyecto en el Python global ni copies `.venv` o `.tools` desde otro equipo. Los comandos `uv run` no requieren activar el entorno; si uv no está en el `PATH` de tu terminal, antepón `bash setup.sh --run-uv` a sus argumentos o usa el lanzador PowerShell.
+The environment uses uv-managed CPython 3.13.15 and dependencies pinned in `uv.lock`. It reuses any uv compatible with `>=0.13.4,<0.14`; if missing, it downloads it into `.tools/uv` without editing shell profiles. Do not install project packages into global Python or copy `.venv` or `.tools` from another machine. `uv run` commands do not require environment activation; if uv is not in your terminal's `PATH`, prefix its arguments with `bash setup.sh --run-uv` or use the PowerShell launcher.
 
-## Cambios de código
+## Code changes
 
-Respeta [docs/architecture.md](docs/architecture.md): el dominio y los casos de uso no importan Qt, SQLAlchemy ni Mutagen. Los modelos ORM y widgets pertenecen a adaptadores. Toda interfaz utiliza los mismos casos de uso.
+Follow [docs/architecture.md](docs/architecture.md): the domain and use cases must not import Qt, SQLAlchemy or Mutagen. ORM models and widgets belong in adapters. Every interface uses the same use cases.
 
-Usa `pathlib` para las rutas. Evita rutas absolutas de un desarrollador, comandos dependientes de Bash, `shell=True` y accesos a música o bases de datos reales en las pruebas. Los scripts compartidos deben funcionar en Windows, macOS y GNU/Linux.
+Use `pathlib` for paths. Avoid developer-specific absolute paths, Bash-dependent commands, `shell=True`, and access to real music or databases in tests. Shared scripts must work on Windows, macOS and GNU/Linux.
 
-Antes de proponer un cambio ejecuta las comprobaciones pertinentes:
+Before proposing a change, run the relevant checks:
 
 ```sh
 uv run --locked ruff check .
@@ -29,41 +29,41 @@ uv run --locked mypy
 uv run --locked pytest
 ```
 
-Si cambias dependencias o diagnósticos, repite también `doctor.py --core` y, cuando corresponda, `doctor.py --gui` con el extra `gui`. Registra el SO, la arquitectura y el backend gráfico de las pruebas; separa `offscreen` de X11, Wayland y escritorios nativos. No declares una plataforma validada basándote solo en otra.
+If you change dependencies or diagnostics, also rerun `doctor.py --core` and, when applicable, `doctor.py --gui` with the `gui` extra. Record the OS, architecture and graphical backend tested; distinguish `offscreen` from X11, Wayland and native desktops. Do not claim one platform is validated based only on another.
 
-## Actualizar dependencias
+## Updating dependencies
 
-Los requisitos directos se declaran en `pyproject.toml`; las versiones resueltas están en `uv.lock`. Los comandos habituales usan `--locked`, para que un lock desactualizado falle sin modificarlo. No uses `--frozen` para ocultar una discrepancia.
+Direct requirements are declared in `pyproject.toml`; resolved versions are in `uv.lock`. Normal commands use `--locked`, so an outdated lockfile fails without being changed. Do not use `--frozen` to hide a mismatch.
 
-Para añadir una dependencia del núcleo, de la GUI o de desarrollo:
+To add a core, GUI or development dependency:
 
 ```sh
-uv add paquete
-uv add --optional gui paquete
-uv add --group dev paquete
+uv add package
+uv add --optional gui package
+uv add --group dev package
 ```
 
-Estos comandos son ejemplos alternativos; sustituye `paquete` y ejecuta el que corresponda. Para actualizar una dependencia ya existente de forma deliberada:
+These commands are alternatives; replace `package` and run the appropriate one. To deliberately update an existing dependency:
 
 ```sh
-uv lock --upgrade-package nombre-del-paquete
+uv lock --upgrade-package package-name
 uv sync --locked --extra gui --group dev
 uv run --locked --extra gui python scripts/doctor.py --gui
 ```
 
-Revisa el diff del manifiesto y del lock, ejecuta las comprobaciones y sube ambos archivos cuando cambien. Las actualizaciones de parche de uv dentro de `>=0.13.4,<0.14` no requieren editar el requisito; verifica la preparación y las pruebas con la versión elegida. Ampliar ese rango o actualizar CPython, el backend de construcción o PySide6 requiere revisar la configuración, los scripts y la documentación pertinentes, y verificar nuevamente la matriz. `uv_build==0.12.10` es el backend de construcción, no una exigencia sobre el ejecutable uv instalado. No amplíes `requires-python` sin validar el nuevo intérprete.
+Review the manifest and lockfile diff, run the checks, and include both files when they change. Patch updates of uv within `>=0.13.4,<0.14` do not require changing the requirement; verify setup and tests with the chosen version. Widening that range or updating CPython, the build backend or PySide6 requires reviewing the relevant configuration, scripts and documentation and verifying the matrix again. `uv_build==0.12.10` is the build backend, not a requirement on the installed uv executable. Do not widen `requires-python` without validating the new interpreter.
 
-## Git y datos locales
+## Git and local data
 
-Configura tu identidad al clonar si no la tienes configurada:
+Configure your identity when cloning if it is not already configured:
 
 ```sh
-git config --local user.name "Tu nombre"
-git config --local user.email "tu-correo@example.com"
+git config --local user.name "Your name"
+git config --local user.email "your-email@example.com"
 git config --local core.autocrlf false
 git config --local pull.ff only
 ```
 
-`.gitattributes` define los finales de línea del repositorio y `.editorconfig` mantiene el formato básico. `.gitignore` excluye entornos, cachés, música, bases de datos y secretos. No fuerces su inclusión. Los futuros datos de prueba deberán ser pequeños, artificiales o redistribuibles, y añadirse explícitamente.
+`.gitattributes` defines repository line endings and `.editorconfig` maintains basic formatting. `.gitignore` excludes environments, caches, music, databases and secrets. Do not force their inclusion. Future test data must be small, artificial or redistributable, and added explicitly.
 
-Incluye en la descripción del cambio el comportamiento que modifica y las comprobaciones ejecutadas. Esta fase prepara el entorno: las nuevas funcionalidades musicales y las interfaces se desarrollarán en cambios posteriores.
+Include the changed behavior and checks performed in the change description. This phase prepares the environment: new music features and interfaces will be developed in subsequent changes.

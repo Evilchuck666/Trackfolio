@@ -68,15 +68,15 @@ def _sync_directory(path: Path) -> None:
 def _writable(path: Path, *, directory: bool = False) -> None:
     mode = path.stat().st_mode
     if not mode & 0o222 or not os.access(path, os.W_OK | (os.X_OK if directory else 0)):
-        raise TagWriteError(f"No hay permiso de escritura: {path}")
+        raise TagWriteError(f"No write permission: {path}")
 
 
 def _plain_directory(path: Path) -> None:
     if path.is_symlink() or path.is_junction():
-        raise TagWriteError(f"No se utilizan enlaces como directorio de respaldo: {path}")
+        raise TagWriteError(f"Links are not used as backup directories: {path}")
     path.mkdir(mode=0o700, exist_ok=True)
     if not path.is_dir():
-        raise TagWriteError(f"El directorio no es válido: {path}")
+        raise TagWriteError(f"Invalid directory: {path}")
     _sync_directory(path.parent)
 
 
@@ -98,12 +98,12 @@ def _copy_windows_metadata(source: Path, target: Path) -> None:
     ]
     security.GetFileSecurityW(str(source), info, None, 0, ctypes.byref(required))
     if not required.value:
-        raise TagWriteError("No se pudo leer la seguridad del archivo de Windows.")
+        raise TagWriteError("Could not read Windows file security.")
     descriptor = ctypes.create_string_buffer(required.value)
     if not security.GetFileSecurityW(
         str(source), info, descriptor, required.value, ctypes.byref(required)
     ):
-        raise TagWriteError("No se pudo leer la ACL del archivo.")
+        raise TagWriteError("Could not read the file ACL.")
     security.GetSecurityDescriptorControl.argtypes = [
         ctypes.c_void_p,
         ctypes.c_void_p,
@@ -113,14 +113,14 @@ def _copy_windows_metadata(source: Path, target: Path) -> None:
     if not security.GetSecurityDescriptorControl(
         descriptor, ctypes.byref(control), ctypes.byref(revision)
     ):
-        raise TagWriteError("No se pudo leer la herencia de permisos del archivo.")
+        raise TagWriteError("Could not read file permission inheritance.")
     # Keep a protected DACL protected, and inherited permissions inheritable.
     info |= 0x80000000 if control.value & 0x1000 else 0x20000000
     # SetNamedSecurityInfo would merge parent ACEs into an unprotected DACL.
     # This lower-level API applies the original descriptor without that merge.
     security.SetFileSecurityW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, ctypes.c_void_p]
     if not security.SetFileSecurityW(str(target), info, descriptor):
-        raise TagWriteError("No se pudieron conservar propietario, grupo y ACL del archivo.")
+        raise TagWriteError("Could not preserve file owner, group and ACL.")
 
     security.ConvertSecurityDescriptorToStringSecurityDescriptorW.argtypes = [
         ctypes.c_void_p,
@@ -139,12 +139,12 @@ def _copy_windows_metadata(source: Path, target: Path) -> None:
         if not length.value or not security.GetFileSecurityW(
             str(path), 7, buffer, length.value, ctypes.byref(length)
         ):
-            raise TagWriteError("No se pudieron verificar los permisos de Windows.")
+            raise TagWriteError("Could not verify Windows permissions.")
         value = wintypes.LPWSTR()
         if not security.ConvertSecurityDescriptorToStringSecurityDescriptorW(
             buffer, 1, 7, ctypes.byref(value), None
         ):
-            raise TagWriteError("No se pudo comparar la seguridad de Windows.")
+            raise TagWriteError("Could not compare Windows security.")
         try:
             return value.value or ""
         finally:
@@ -163,7 +163,7 @@ def _copy_windows_metadata(source: Path, target: Path) -> None:
 
     if permissions(original_security) != permissions(copied_security):
         raise TagWriteError(
-            "La copia no conserva propietario, grupo y DACL del original. "
+            "The copy does not preserve the original owner, group and DACL. "
             f"Original: {original_security}; copia: {copied_security}"
         )
 
@@ -184,13 +184,13 @@ def _copy_windows_metadata(source: Path, target: Path) -> None:
     if handle == ctypes.c_void_p(-1).value:
         if cast(Any, ctypes).get_last_error() in (1, 38, 50, 87):
             return
-        raise TagWriteError("No se pudieron inspeccionar los streams de Windows.")
+        raise TagWriteError("Could not inspect Windows streams.")
     try:
         while True:
             name = str(data.name)
             if name != "::$DATA":
                 if not name.startswith(":") or any(char in name for char in ("/", "\\")):
-                    raise TagWriteError("Nombre de stream no válido.")
+                    raise TagWriteError("Invalid stream name.")
                 with (
                     open(str(source) + name, "rb") as incoming,
                     open(str(target) + name, "wb") as outgoing,
@@ -206,10 +206,10 @@ def _copy_windows_metadata(source: Path, target: Path) -> None:
                         hashlib.file_digest(incoming, "sha256").digest()
                         != hashlib.file_digest(copied, "sha256").digest()
                     ):
-                        raise TagWriteError("No se pudo verificar un stream de Windows.")
+                        raise TagWriteError("Could not verify a Windows stream.")
             if not kernel.FindNextStreamW(handle, ctypes.byref(data)):
                 if cast(Any, ctypes).get_last_error() != 38:
-                    raise TagWriteError("No se pudieron enumerar todos los streams del archivo.")
+                    raise TagWriteError("Could not enumerate all file streams.")
                 break
     finally:
         kernel.FindClose(handle)
@@ -222,7 +222,7 @@ def _copy_macos_metadata(source: Path, target: Path) -> None:
     system = ctypes.CDLL("/usr/lib/libSystem.B.dylib", use_errno=True)
     system.copyfile.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_void_p, ctypes.c_uint32]
     if system.copyfile(os.fsencode(source), os.fsencode(target), None, 7):
-        raise OSError(ctypes.get_errno(), "No se pudieron conservar los metadatos de macOS.")
+        raise OSError(ctypes.get_errno(), "Could not preserve macOS metadata.")
     system.listxattr.argtypes = [ctypes.c_char_p, ctypes.c_void_p, ctypes.c_size_t, ctypes.c_int]
     system.listxattr.restype = ctypes.c_ssize_t
     system.getxattr.argtypes = [
@@ -239,7 +239,7 @@ def _copy_macos_metadata(source: Path, target: Path) -> None:
         filename = os.fsencode(path)
         length = system.listxattr(filename, None, 0, 1)
         if length < 0:
-            raise OSError(ctypes.get_errno(), "No se pudieron leer los atributos de macOS.")
+            raise OSError(ctypes.get_errno(), "Could not read macOS attributes.")
         names = ctypes.create_string_buffer(length)
         if system.listxattr(filename, names, length, 1) != length:
             raise TagWriteError("Los atributos cambiaron mientras se verificaban.")
@@ -249,17 +249,17 @@ def _copy_macos_metadata(source: Path, target: Path) -> None:
                 continue
             size = system.getxattr(filename, name, None, 0, 0, 1)
             if size < 0:
-                raise OSError(ctypes.get_errno(), "No se pudo leer un atributo de macOS.")
+                raise OSError(ctypes.get_errno(), "Could not read a macOS attribute.")
             # Resource forks can be large: compare bounded chunks via their file stream.
             if name == b"com.apple.ResourceFork":
                 with (path / "..namedfork" / "rsrc").open("rb") as fork:
                     values[name] = hashlib.file_digest(fork, "sha256").digest()
                 continue
             if size > 16 * 1024 * 1024:
-                raise TagWriteError("Atributo de macOS demasiado grande para verificarlo.")
+                raise TagWriteError("macOS attribute too large to verify.")
             buffer = ctypes.create_string_buffer(size)
             if system.getxattr(filename, name, buffer, size, 0, 1) != size:
-                raise TagWriteError("Un atributo de macOS cambió mientras se verificaba.")
+                raise TagWriteError("A macOS attribute changed during verification.")
             values[name] = buffer.raw
         return values
 
@@ -276,12 +276,12 @@ def _copy_macos_metadata(source: Path, target: Path) -> None:
                 # Darwin also returns ENOENT when an existing file has no ACL.
                 path.stat()
                 return b""
-            raise OSError(ctypes.get_errno(), "No se pudo verificar la ACL de macOS.")
+            raise OSError(ctypes.get_errno(), "Could not verify the macOS ACL.")
         text = None
         try:
             text = system.acl_to_text(acl, None)
             if not text:
-                raise OSError(ctypes.get_errno(), "No se pudo comparar la ACL de macOS.")
+                raise OSError(ctypes.get_errno(), "Could not compare the macOS ACL.")
             return ctypes.string_at(text)
         finally:
             if text:
@@ -289,7 +289,7 @@ def _copy_macos_metadata(source: Path, target: Path) -> None:
             system.acl_free(acl)
 
     if attributes(source) != attributes(target) or permissions(source) != permissions(target):
-        raise TagWriteError("La copia no conserva atributos y ACL de macOS.")
+        raise TagWriteError("The copy does not preserve macOS attributes and ACL.")
 
 
 def _copy_metadata(source: Path, target: Path) -> None:
@@ -304,16 +304,16 @@ def _copy_metadata(source: Path, target: Path) -> None:
             for key in os.listxattr(source):
                 value = os.getxattr(source, key)
                 if os.getxattr(target, key) != value:
-                    raise TagWriteError(f"No se pudo conservar el atributo {key}.")
+                    raise TagWriteError(f"Could not preserve attribute {key}.")
     elif os.name == "nt":
         # Compression/encryption require additional native operations, not a plain copy.
         if getattr(original, "st_file_attributes", 0) & (0x800 | 0x4000):
             raise TagWriteError(
-                "No se reemplazan archivos NTFS comprimidos o cifrados en esta entrega."
+                "Compressed or encrypted NTFS files are not replaced in this release."
             )
         _copy_windows_metadata(source, target)
     if stat.S_IMODE(source.stat().st_mode) != stat.S_IMODE(target.stat().st_mode):
-        raise TagWriteError("No se pudieron conservar los permisos del archivo.")
+        raise TagWriteError("Could not preserve file permissions.")
 
 
 def _copy(
@@ -328,13 +328,13 @@ def _copy(
             created(owned)
         while chunk := incoming.read(1024 * 1024):
             if cancelled():
-                raise TagWriteCancelled("Copia cancelada; original conservado.")
+                raise TagWriteCancelled("Copy cancelled; original preserved.")
             outgoing.write(chunk)
         outgoing.flush()
         os.fsync(outgoing.fileno())
     current = target.stat(follow_symlinks=False)
     if (current.st_dev, current.st_ino) != (owned.st_dev, owned.st_ino):
-        raise TagWriteConflict("La copia fue sustituida antes de verificarla.")
+        raise TagWriteConflict("The copy was replaced before verification.")
     _copy_metadata(source, target)
     # Persist metadata too, after copystat/chown/xattrs have finished.
     with target.open("r+b") as completed:
@@ -547,7 +547,7 @@ class FileTagJournal:
         owned: tuple[int, int] | None = None
         try:
             if self.path.is_symlink() or self.path.parent.is_symlink():
-                raise TagJournalError("El registro de operación fue sustituido por un enlace.")
+                raise TagJournalError("The operation log was replaced by a link.")
             with tempfile.NamedTemporaryFile(
                 mode="w",
                 encoding="utf-8",
@@ -566,7 +566,7 @@ class FileTagJournal:
             temporary = None
             _sync_directory(self.path.parent)
         except (OSError, TypeError, ValueError) as exc:
-            raise TagJournalError(f"No se pudo persistir el registro de escritura: {exc}") from exc
+            raise TagJournalError(f"Could not persist the write log: {exc}") from exc
         finally:
             if temporary is not None:
                 try:
@@ -608,7 +608,7 @@ class FileTagAccess:
     def identity(self, path: Path) -> tuple[int, int]:
         info = path.stat()
         if not stat.S_ISREG(info.st_mode):
-            raise TagWriteError("El catálogo no es un archivo regular.")
+            raise TagWriteError("The catalog is not a regular file.")
         return info.st_dev, info.st_ino
 
     def resolve(self, snapshot: TagCatalogSnapshot) -> Path:
@@ -621,7 +621,7 @@ class FileTagAccess:
         path, _ = prepare_audio_source(path, root)
         info = path.stat()
         if info.st_nlink != 1:
-            raise TagWriteError("El archivo tiene enlaces duros; no se reemplazará.")
+            raise TagWriteError("The file has hard links; it will not be replaced.")
         _writable(path)
         _writable(path.parent, directory=True)
         return path
@@ -629,18 +629,18 @@ class FileTagAccess:
     def folder_members(self, root: Path, folder: Path) -> tuple[str, ...]:
         root = validate_library_root(root)
         if folder.resolve(strict=True) != folder or not folder.is_relative_to(root):
-            raise TagWriteConflict("La carpeta NFO cambió o está fuera de la biblioteca.")
+            raise TagWriteConflict("The NFO folder changed or is outside the library.")
         candidate = folder
         while candidate != root:
             if candidate.is_symlink() or candidate.is_junction():
-                raise TagWriteConflict("La carpeta NFO contiene enlaces o puntos de unión.")
+                raise TagWriteConflict("The NFO folder contains links or junctions.")
             candidate = candidate.parent
         members = []
         for path in folder.iterdir():
             if path.suffix.casefold() not in AUDIO_SUFFIXES:
                 continue
             if path.is_symlink() or path.is_junction():
-                raise TagWriteConflict("La carpeta del NFO contiene audio enlazado.")
+                raise TagWriteConflict("The NFO folder contains linked audio.")
             if path.is_file():
                 members.append(path.name)
         return tuple(sorted(members))
@@ -665,21 +665,23 @@ class FileTagAccess:
         for path, total, largest in volumes.values():
             if shutil.disk_usage(path).free < total + largest + 1024 * 1024:
                 raise OSError(
-                    errno.ENOSPC, "Espacio insuficiente para respaldos y temporal.", str(path)
+                    errno.ENOSPC,
+                    "Insufficient space for backups and the temporary file.",
+                    str(path),
                 )
 
     def fingerprint(self, path: Path, cancelled: Callable[[], bool]) -> FileFingerprint:
         before = path.stat(follow_symlinks=False)
         if not stat.S_ISREG(before.st_mode):
-            raise TagWriteConflict("El archivo ya no es un archivo regular.")
+            raise TagWriteConflict("The file is no longer a regular file.")
         digest = hashlib.sha256()
         with path.open("rb") as stream:
             opened = os.fstat(stream.fileno())
             if (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino):
-                raise TagWriteConflict("El archivo fue sustituido al abrirlo.")
+                raise TagWriteConflict("The file was replaced while opening it.")
             while chunk := stream.read(1024 * 1024):
                 if cancelled():
-                    raise TagWriteCancelled("Lectura cancelada.")
+                    raise TagWriteCancelled("Read cancelled.")
                 digest.update(chunk)
         after = path.stat(follow_symlinks=False)
         if (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns) != (
@@ -688,22 +690,20 @@ class FileTagAccess:
             after.st_size,
             after.st_mtime_ns,
         ):
-            raise TagWriteConflict("El archivo cambió durante su lectura.")
+            raise TagWriteConflict("The file changed while being read.")
         return FileFingerprint(
             before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns, digest.hexdigest()
         )
 
     def check(self, item: TagWriteItem, cancelled: Callable[[], bool]) -> None:
         if item.snapshot is None or self.resolve(item.snapshot) != item.path:
-            raise TagWriteConflict("La ruta musical cambió.")
+            raise TagWriteConflict("The music path changed.")
         if self.fingerprint(item.path, cancelled) != item.fingerprint:
-            raise TagWriteConflict(
-                "El archivo cambió después de la vista previa. Vuelve a revisarlo."
-            )
+            raise TagWriteConflict("The file changed after the preview. Review it again.")
 
     def journal(self, preview: TagWritePreview) -> FileTagJournal:
         if not re.fullmatch(r"[0-9a-f]{32}", preview.operation_id):
-            raise TagJournalError("Identificador de operación no válido.")
+            raise TagJournalError("Invalid operation identifier.")
         self.journal_root.mkdir(mode=0o700, parents=True, exist_ok=True)
         _plain_directory(self.journal_root)
         operation = self.journal_root / preview.operation_id
@@ -711,7 +711,7 @@ class FileTagAccess:
             operation.mkdir(mode=0o700)
         except FileExistsError as exc:
             raise TagJournalError(
-                "Esta vista previa ya se utilizó. Prepara otra antes de reintentar."
+                "This preview has already been used. Prepare another before retrying."
             ) from exc
         _sync_directory(self.journal_root)
         journal = FileTagJournal(
@@ -734,14 +734,14 @@ class FileTagAccess:
         info = directory.stat(follow_symlinks=False)
         identity = info.st_dev, info.st_ino
         if self._backup_directories.setdefault(directory, identity) != identity:
-            raise TagWriteConflict("El directorio de respaldos fue sustituido.")
+            raise TagWriteConflict("The backup directory was replaced.")
         _plain_directory(path.parent)
         _copy(item.path, path, cancelled)
         if (
             item.fingerprint is None
             or self.fingerprint(path, cancelled).sha256 != item.fingerprint.sha256
         ):
-            raise TagWriteConflict("El respaldo no coincide con el original confirmado.")
+            raise TagWriteConflict("The backup does not match the confirmed original.")
         _sync_directory(path.parent)
 
     def discard_backups(self, directory: Path) -> None:
@@ -757,7 +757,7 @@ class FileTagAccess:
             or directory.parent.resolve() != directory.parent
             or self._backup_directories.get(directory) != (info.st_dev, info.st_ino)
         ):
-            raise TagWriteConflict("El directorio de respaldos cambió; no se ha eliminado.")
+            raise TagWriteConflict("The backup directory changed; it has not been removed.")
         shutil.rmtree(directory)
         self._backup_directories.pop(directory, None)
         _sync_directory(directory.parent)
@@ -771,7 +771,7 @@ class FileTagAccess:
     def publish(self, item: WriteTarget, temporary: Path) -> None:
         info = temporary.stat(follow_symlinks=False)
         if self._temporaries.get(temporary) != (info.st_dev, info.st_ino):
-            raise TagWriteConflict("El temporal verificado fue sustituido.")
+            raise TagWriteConflict("The verified temporary file was replaced.")
         modified = info.st_mtime_ns
         _copy_metadata(item.path, temporary)
         os.utime(temporary, ns=(temporary.stat().st_atime_ns, modified))
@@ -781,9 +781,7 @@ class FileTagAccess:
         try:
             _sync_directory(item.path.parent)
         except OSError as exc:
-            raise TagPublishedError(
-                f"Archivo reemplazado; no se pudo sincronizar su directorio: {exc}"
-            ) from exc
+            raise TagPublishedError(f"File replaced; could not sync its directory: {exc}") from exc
 
     def discard_temporary(self, path: Path) -> None:
         owned = self._temporaries.pop(path, None)
@@ -794,7 +792,9 @@ class FileTagAccess:
         except FileNotFoundError:
             return
         if (current.st_dev, current.st_ino) != owned:
-            raise OSError("El temporal fue sustituido; no se ha eliminado el archivo ajeno.")
+            raise OSError(
+                "The temporary file was replaced; the unrelated file has not been removed."
+            )
         path.unlink()
 
     def discard_recovery_temporary(self, path: Path, state: TagRecoveryState) -> None:
@@ -808,7 +808,7 @@ class FileTagAccess:
             or (info.st_dev, info.st_ino) != state.temporary_identity
             or self.fingerprint(path, lambda: False).sha256 != state.after_hash
         ):
-            raise TagWriteConflict("El temporal cambió; se conserva para su revisión manual.")
+            raise TagWriteConflict("The temporary file changed; it is retained for manual review.")
         path.unlink()
         _sync_directory(path.parent)
 
@@ -820,7 +820,7 @@ class FileTagAccess:
             or path.parent.is_symlink()
             or not path.is_file()
         ):
-            raise TagJournalError("La ruta del registro no pertenece a Trackfolio.")
+            raise TagJournalError("The log path does not belong to Trackfolio.")
         data = json.loads(path.read_text(encoding="utf-8"))
         if (
             not isinstance(data, dict)
@@ -830,33 +830,31 @@ class FileTagAccess:
             or not isinstance(data.get("files"), dict)
             or not isinstance(data.get("closed"), bool)
         ):
-            raise TagJournalError("El formato del registro no es válido.")
+            raise TagJournalError("Invalid log format.")
         if data["schema"] >= 2 and not isinstance(data.get("nfos"), dict):
-            raise TagJournalError("El registro NFO no es válido.")
+            raise TagJournalError("Invalid NFO log.")
         if data["schema"] == 1 and data["preview"].get("nfo_items"):
-            raise TagJournalError("Un registro antiguo no puede contener trabajos NFO.")
+            raise TagJournalError("An older log cannot contain NFO jobs.")
         if not re.fullmatch(r"[0-9a-f]{32}", path.parent.name):
-            raise TagJournalError("Identificador de registro no válido.")
+            raise TagJournalError("Invalid log identifier.")
         preview = _load_preview(data["preview"])
         if data["schema"] < 3 and (preview.cover_folders or preview.request.covers):
-            raise TagJournalError("Un registro antiguo no puede contener planes de portada.")
+            raise TagJournalError("An older log cannot contain cover plans.")
         for item in preview.items:
             if item.snapshot is not None:
                 root = item.snapshot.library_root.resolve()
                 candidate = root / item.snapshot.relative_path
                 resolved = candidate.resolve()
                 if not resolved.is_relative_to(root) or item.path != resolved:
-                    raise TagJournalError("La ruta del registro no coincide con su biblioteca.")
+                    raise TagJournalError("The log path does not match its library.")
         selected = {item.file_id: item for item in preview.items}
         for folder in preview.cover_folders:
             if folder.path.resolve() != folder.path or not folder.path.is_relative_to(
                 folder.library_root.resolve()
             ):
-                raise TagJournalError(
-                    "La carpeta de portadas del registro está fuera de su biblioteca."
-                )
+                raise TagJournalError("The log's cover folder is outside its library.")
             if any(candidate.path.parent != folder.path for candidate in folder.candidates):
-                raise TagJournalError("Una portada del registro está fuera de su carpeta.")
+                raise TagJournalError("A logged cover is outside its folder.")
         for item in preview.items:
             if item.tags is not None and item.tags.cover is not None:
                 cover = item.tags.cover
@@ -868,7 +866,7 @@ class FileTagAccess:
                         or not cover.path.is_relative_to(cover.library_root.resolve())
                     )
                 ):
-                    raise TagJournalError("La portada del registro no coincide con su canción.")
+                    raise TagJournalError("The logged cover does not match its song.")
         for nfo in preview.nfo_items:
             root = nfo.library_root.resolve()
             if (
@@ -879,7 +877,7 @@ class FileTagAccess:
                 or not nfo.file_ids
                 or str(nfo.path) not in data.get("nfos", {})
             ):
-                raise TagJournalError("La ruta NFO del registro no pertenece a su biblioteca.")
+                raise TagJournalError("The logged NFO path does not belong to its library.")
             for file_id in nfo.file_ids:
                 audio = selected.get(file_id)
                 if (
@@ -890,7 +888,7 @@ class FileTagAccess:
                         or audio.path.parent != nfo.path.parent
                     )
                 ):
-                    raise TagJournalError("El NFO no coincide con sus canciones destinatarias.")
+                    raise TagJournalError("The NFO does not match its target songs.")
         return FileTagJournal(path, data)
 
     def pending(self) -> tuple[PendingTagOperation, ...]:
@@ -898,11 +896,11 @@ class FileTagAccess:
         for path in sorted(self.journal_root.glob("*/journal.json")):
             try:
                 if path.is_symlink() or path.parent.is_symlink() or not path.is_file():
-                    raise TagJournalError("El registro no es un archivo regular sin enlaces.")
+                    raise TagJournalError("The log is not a regular file without links.")
                 # Completed operations remain historical even if their music is later moved.
                 data = json.loads(path.read_text(encoding="utf-8"))
                 if not isinstance(data, dict):
-                    raise TagJournalError("El formato del registro no es válido.")
+                    raise TagJournalError("Invalid log format.")
                 if data.get("closed") is True:
                     continue
                 journal = self.load_journal(path)
@@ -912,9 +910,9 @@ class FileTagAccess:
                         PendingTagOperation(
                             path,
                             preview.request.database_path,
-                            "Operación incompleta. Revisa sus archivos y respaldos.",
+                            "Incomplete operation. Review its files and backups.",
                         )
                     )
             except (OSError, ValueError, TypeError, KeyError, TagWriteError) as exc:
-                operations.append(PendingTagOperation(path, None, f"Registro no revisable: {exc}"))
+                operations.append(PendingTagOperation(path, None, f"Log cannot be reviewed: {exc}"))
         return tuple(operations)

@@ -7,48 +7,48 @@
 [![License](https://img.shields.io/badge/license-GPLv3-green)](LICENSE)
 [![Build and tests](https://github.com/Evilchuck666/Trackfolio/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/Evilchuck666/Trackfolio/actions/workflows/release.yml)
 
-Trackfolio es una aplicación multiplataforma para consultar y editar un catálogo de bibliotecas FLAC y MP3. Usa Python, Qt 6 mediante PySide6 y SQLite mediante SQLAlchemy. El dominio y los casos de uso son independientes de la GUI, para poder añadir interfaces CLI/TUI o un servidor con frontend web.
+Trackfolio is a cross-platform application for browsing and editing a catalog of FLAC and MP3 libraries. It uses Python, Qt 6 through PySide6, and SQLite through SQLAlchemy. The domain and use cases are independent of the GUI, allowing future CLI/TUI interfaces or a server with a web frontend.
 
-La GUI importa carpetas FLAC/MP3 y permite editar canción, artistas, álbum, año, numeración, géneros y líricas en SQLite. Los campos ausentes quedan vacíos. El importador conserva las carátulas incrustadas o procedentes de `album.jpg`. Las ediciones se guardan en el catálogo y pueden escribirse en los archivos mediante una acción explícita con vista previa y respaldo.
+The GUI imports FLAC/MP3 folders and lets you edit songs, artists, albums, years, numbering, genres and lyrics in SQLite. Missing fields remain empty. The importer preserves embedded artwork or artwork from `album.jpg`. Edits are saved in the catalog and can be written to files through an explicit action with preview and backup.
 
-## Preparar un PC
+## Set up a PC
 
-Descarga el repositorio, entra en su raíz y ejecuta un único comando. **No necesitas instalar previamente uv ni Python.** Se necesita Internet durante la primera preparación y un sistema compatible. Esta versión está en la rama `gui`: elige esa rama al descargar el ZIP de GitHub o clónala si ya tienes Git:
+Download the repository, enter its root directory and run a single command. **You do not need to install uv or Python beforehand.** Initial setup requires Internet access and a compatible system. This version is on the `gui` branch: select that branch when downloading the GitHub ZIP, or clone it if you already have Git:
 
 ```sh
 git clone --branch gui https://github.com/Evilchuck666/Trackfolio.git
 cd Trackfolio
 ```
 
-**Linux y macOS:**
+**Linux and macOS:**
 
 ```sh
 bash setup.sh
 ```
 
-**Windows, desde PowerShell:**
+**Windows, from PowerShell:**
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\setup.ps1
 ```
 
-El repositorio es privado: necesitas una cuenta con acceso para descargarlo. Para clonar mediante Git, configura tu gestor de credenciales; si usas GitHub CLI, ejecuta `gh auth login` y `gh auth setup-git`. No guardes credenciales en el proyecto.
+The repository is private: you need an account with access to download it. To clone with Git, configure your credential manager; if you use GitHub CLI, run `gh auth login` and `gh auth setup-git`. Do not store credentials in the project.
 
-La preparación reutiliza un uv compatible (`>=0.13.4,<0.14`, como 0.13.4). Si falta, descarga la versión mínima en `.tools/uv`, **sin sustituir el uv del sistema ni modificar los perfiles del shell**. Obtiene CPython 3.13.15 administrado por uv, crea `.venv`, instala la GUI y las herramientas de desarrollo desde `uv.lock`, y comprueba el entorno.
+Setup reuses a compatible uv (`>=0.13.4,<0.14`, such as 0.13.4). If none is available, it downloads the minimum version into `.tools/uv`, **without replacing system uv or modifying shell profiles**. It obtains uv-managed CPython 3.13.15, creates `.venv`, installs the GUI and development tools from `uv.lock`, and checks the environment.
 
-Si faltan bibliotecas gráficas o Git, propone su instalación y pide permiso. Si no hay VS Code, ofrece descargarlo en `.tools/vscode`; instala las extensiones recomendadas cuando el editor está disponible. No toca música ni catálogos y puedes repetirla. Un requisito obligatorio que falle devuelve un código distinto de cero. Consulta [las opciones y los límites por plataforma](docs/environment.md#preparación-en-un-solo-comando).
+If graphical libraries or Git are missing, setup proposes installing them and requests permission. If VS Code is missing, it offers to download it into `.tools/vscode`; recommended extensions are installed when the editor is available. Setup does not touch music or catalogs and can be repeated. A failed mandatory requirement returns a nonzero exit code. See [options and platform limits](docs/environment.md#single-command-setup).
 
-Para preparar sólo Python y Qt, sin descargar el editor ni instalar extensiones:
+To set up only Python and Qt, without downloading the editor or installing extensions:
 
 ```sh
 bash setup.sh --skip-editor
 ```
 
-Para trabajar únicamente en el núcleo, añade `--core`. En Windows se usan los mismos argumentos después de `-File .\setup.ps1`. No hace falta activar `.venv`.
+For core-only development, add `--core`. On Windows, use the same arguments after `-File .\setup.ps1`. You do not need to activate `.venv`.
 
-## Comprobar el entorno
+## Check the environment
 
-Desde la raíz del proyecto:
+From the project root:
 
 ```sh
 bash setup.sh --run-uv run --locked --extra gui python scripts/doctor.py --gui
@@ -58,184 +58,123 @@ bash setup.sh --run-uv run --locked --extra gui mypy
 bash setup.sh --run-uv run --locked --extra gui pytest
 ```
 
-`--run-uv` ejecuta un comando con el uv compatible sin repetir la preparación. En Windows sustituye `bash setup.sh` por `powershell -NoProfile -ExecutionPolicy Bypass -File .\setup.ps1`. Si ya tienes uv en `PATH`, los comandos directos `uv run ...` siguen funcionando.
+`--run-uv` runs a command with compatible uv without repeating setup. On Windows, replace `bash setup.sh` with `powershell -NoProfile -ExecutionPolicy Bypass -File .\setup.ps1`. If uv is already in `PATH`, direct `uv run ...` commands still work.
 
-La comprobación GUI abre la ventana del producto con una base temporal y verifica sus campos y portada. En Linux puedes elegir X11 con `--platform xcb` o Wayland con `--platform wayland`. Para una máquina sin escritorio usa `--platform offscreen`; esa comprobación no valida un escritorio real. La tarea de VS Code **Trackfolio: ejecutar pruebas GUI sin pantalla** ejecuta la suite con ese backend.
+The GUI check opens the product window with a temporary database and verifies its fields and artwork. On Linux, choose X11 with `--platform xcb` or Wayland with `--platform wayland`. On a machine without a desktop, use `--platform offscreen`; that check does not validate an actual desktop. The VS Code task **Trackfolio: run headless GUI tests** runs the suite with that backend.
 
-Para comprobar únicamente el núcleo:
+To check only the core:
 
 ```sh
 bash setup.sh --core --skip-editor
 ```
 
-`uv.lock` bloquea las versiones de dependencias y `--locked` exige que corresponda con `pyproject.toml`. Cada PC debe recrear su propia `.venv` y `.tools`; no copies esas carpetas entre equipos. Comparte las fuentes mediante Git; conserva las bases de datos, la música y la configuración local fuera del repositorio.
+`uv.lock` pins dependency versions, and `--locked` requires it to match `pyproject.toml`. Each PC must recreate its own `.venv` and `.tools`; do not copy these folders between machines. Share source through Git; keep databases, music and local configuration outside the repository.
 
-## Abrir en VS Code
+## Open in VS Code
 
 ```sh
 bash setup.sh --open-code
 ```
 
-Esto también funciona cuando el editor se descargó en `.tools/vscode`. Si tienes `code` en `PATH`, puedes abrir directamente `code Trackfolio.code-workspace`. Si el editor utiliza otro intérprete, ejecuta **Python: Select Interpreter** y selecciona el de `.venv`. Las tareas del workspace usan los lanzadores para encontrar uv; las terminales integradas incluyen la copia local en su `PATH`.
+This also works when the editor was downloaded into `.tools/vscode`. If `code` is in `PATH`, you can run `code Trackfolio.code-workspace` directly. If the editor uses a different interpreter, run **Python: Select Interpreter** and choose the one in `.venv`. Workspace tasks use the launchers to find uv; integrated terminals include the local copy in their `PATH`.
 
-## Iniciar la GUI
+## Start the GUI
 
-Desde la raíz, después de preparar el entorno:
+From the root, after setting up the environment:
 
 ```sh
 bash setup.sh --run-uv run --locked --extra gui trackfolio
 ```
 
-Para abrir una base concreta añade `--database "ruta/al/catalogo.tfo"`. La base de ejemplo es local y está excluida de Git: la preparación deja la aplicación lista. En un clon nuevo puedes usar **Importar música…** para generar tu catálogo o **Abrir catálogo…** para consultar uno existente.
+To open a specific database, add `--database "path/to/catalog.tfo"`. The sample database is local and excluded from Git: setup prepares the application. In a new clone, use **Import music…** to create your catalog or **Open catalog…** to browse an existing one.
 
-Sin `--database`, se restaura el último catálogo abierto cuando sigue disponible. Para empezar sin restaurarlo, usa `--no-restore`. Puedes abrir otra base con **Abrir catálogo…** y recargar sus registros con **Actualizar**. Selecciona una canción para consultar su detalle; los textos permiten copiar datos y las líricas se muestran como texto plano.
+Without `--database`, the last opened catalog is restored if it is still available. To start without restoring it, use `--no-restore`. Open another database with **Open catalog…** and reload its records with **Refresh**. Select a song to view its details; text can be copied and lyrics are displayed as plain text.
 
-Los catálogos nuevos se proponen como `database.tfo` en la carpeta de datos del usuario:
-en Linux, normalmente `~/.local/share/Trackfolio/database.tfo` (se respeta `XDG_DATA_HOME`);
-en macOS y Windows se utiliza su ubicación equivalente mediante `platformdirs`.
-El último catálogo abierto no cambia este destino. Para desarrollar, añade
-`--dev-root "/ruta/al/proyecto"`: el destino será `<proyecto>/data/database.tfo`.
-Los lanzadores y tareas de GUI de VS Code incluyen este argumento; el arranque vacío
-también utiliza `--no-restore`. «Elegir carpeta…» empieza en la carpeta personal del usuario.
+New catalogs default to `database.tfo` in the user's data folder: on Linux, usually `~/.local/share/Trackfolio/database.tfo` (respecting `XDG_DATA_HOME`); macOS and Windows use the equivalent location through `platformdirs`. The last opened catalog does not change this destination. For development, add `--dev-root "/path/to/project"`: the destination becomes `<project>/data/database.tfo`. VS Code GUI launchers and tasks include this argument; the empty launch also uses `--no-restore`. **Choose folder…** starts in the user's home folder.
 
-La consulta abre SQLite en modo de sólo lectura; importar y guardar una edición utilizan escritores separados. Consultar y editar no requieren acceder al FLAC/MP3 original: también las imágenes están guardadas en el catálogo. Las fuentes, iconos y estilos se incluyen en el paquete y se cargan sin descargas durante el uso.
+Browsing opens SQLite read-only; importing and saving edits use separate writers. Browsing and editing do not require access to the original FLAC/MP3: artwork is also stored in the catalog. Fonts, icons and styles are packaged and loaded without downloads during use.
 
-En VS Code, ejecuta la tarea **Trackfolio: iniciar GUI con la muestra** o la configuración de depuración **Trackfolio: GUI con catálogo de ejemplo**. Consulta el [plan y su estado](docs/gui-plan.md) y los [resultados comprobados](VALIDATION.md).
+In VS Code, run **Trackfolio: start GUI with sample** or the debug configuration **Trackfolio: GUI with sample catalog**. See the [plan and its status](docs/gui-plan.md) and [verified results](VALIDATION.md).
 
-## Editar una canción
+## Edit a song
 
-1. Selecciona una canción y pulsa **Editar** (`Ctrl+E`, o `Cmd+E` en macOS).
-2. Modifica sus campos. En artistas y géneros, añade, quita u ordena nombres completos;
-   las sugerencias permiten elegir valores existentes.
-3. Pulsa **Guardar** (`Ctrl+S` / `Cmd+S`) para confirmar o **Cancelar** (`Escape`) para
-   recuperar los valores del catálogo.
+1. Select a song and click **Edit** (`Ctrl+E`, or `Cmd+E` on macOS).
+2. Change its fields. For artists and genres, add, remove or reorder full names; suggestions let you choose existing values.
+3. Click **Save** (`Ctrl+S` / `Cmd+S`) to confirm, or **Cancel** (`Escape`) to restore catalog values.
 
-Cambiar **Abbath → Accept** en una canción reutiliza el artista Accept sin cambiar otras
-canciones. Cambiar su álbum o año tampoco modifica las demás pistas del álbum. Los valores
-inválidos se indican junto al campo; un conflicto con otra escritura conserva el borrador
-para revisarlo. Navegar o cerrar con cambios pendientes ofrece guardar, descartar o cancelar.
+Changing **Abbath → Accept** on one song reuses the artist Accept without changing other songs. Changing its album or year does not modify the album's other tracks either. Invalid values are shown next to their fields; a conflict with another write preserves the draft for review. Navigating or closing with pending edits offers save, discard or cancel.
 
-Las correcciones se guardan sólo en SQLite. **Reimportar la música sustituye los valores
-del catálogo por las etiquetas de los archivos**, incluidas las correcciones manuales.
-Consulta el [plan de edición implementado](docs/edit-plan.md).
+Corrections are saved only in SQLite. **Reimporting music replaces catalog values with file tags**, including manual corrections. See the [implemented editing plan](docs/edit-plan.md).
 
-Para editar en grupo, selecciona varias canciones con **Ctrl/Cmd + clic**, **Mayús + clic**
-o **Ctrl/Cmd + A** y pulsa **Editar N canciones**. Puedes cambiar **Álbum, Artista(s), Año
-y Género(s)**; los campos individuales quedan deshabilitados. Marca **Aplicar** en los
-campos que quieras reemplazar en todas las seleccionadas. Los valores distintos se
-indican en el editor y los campos sin marcar se conservan; aplicar un campo vacío lo
-borra en todo el grupo. Artistas y géneros sustituyen la lista completa por la elegida.
-El guardado es una única transacción: si una canción cambió externamente o falla la
-escritura, no se guarda ninguna y el borrador se conserva para revisarlo.
+For batch editing, select multiple songs using **Ctrl/Cmd + click**, **Shift + click** or **Ctrl/Cmd + A**, then click **Edit N songs**. You can change **Album, Artist(s), Year and Genre(s)**; individual fields are disabled. Check **Apply** for fields to replace in every selected song. Mixed values are indicated in the editor and unchecked fields are preserved; applying an empty field clears it throughout the group. Artists and genres replace the entire list with the chosen one. Saving uses a single transaction: if a song changed externally or writing fails, none are saved and the draft remains available for review.
 
-## Consultar y editar álbumes
+## Browse and edit albums
 
-La pestaña **Álbumes** permite buscar por nombre o artista y ver la portada, los datos
-comunes y las pistas ordenadas por disco y número. **Editar álbum** aplica los campos
-marcados a todas sus pistas en una transacción, conservando los artistas de cada
-canción. **Guardar álbum** modifica SQLite; **Escribir etiquetas del álbum…** publica
-los cambios en la música y actualiza sus NFO opcionales.
+The **Albums** tab supports searching by name or artist and shows artwork, shared data and tracks sorted by disc and number. **Edit album** applies checked fields to all its tracks in one transaction, preserving individual song artists. **Save album** modifies SQLite; **Write album tags…** publishes changes to the music and updates optional NFO files.
 
-Las ediciones se separan por biblioteca, carpeta y metadatos. Los subdirectorios de
-disco reconocidos se agrupan cuando coinciden con su numeración. Consulta las
-[reglas de agrupación y edición](docs/album-view.md).
+Editions are separated by library, folder and metadata. Recognized disc subdirectories are grouped when their numbers match the metadata. See the [grouping and editing rules](docs/album-view.md).
 
-La pestaña **Artistas** agrupa sus álbumes y permite abrir cada edición en la vista
-de álbum. Incluye búsqueda por nombre y funciona con la música desconectada.
-Consulta las [reglas de agrupación por artista](docs/artist-view.md).
+The **Artists** tab groups each artist's albums and opens editions in the album view. It includes name search and works with disconnected music. See the [artist grouping rules](docs/artist-view.md).
 
-## Escribir etiquetas en la música
+## Write tags to music
 
-1. Guarda las correcciones en el catálogo y selecciona una o varias canciones.
-2. Pulsa **Escribir etiquetas…**. El diálogo muestra inmediatamente el listado completo.
-3. Pulsa **Escribir etiquetas** para sobrescribir todas las etiquetas modificadas con
-   los valores guardados de cada canción e incrustar la portada local. Los archivos sin
-   diferencias de texto ni portada se omiten.
+1. Save corrections in the catalog and select one or more songs.
+2. Click **Write tags…**. The dialog immediately shows the full list.
+3. Click **Write tags** to overwrite all modified tags with each song's saved values and embed local artwork. Files without text or artwork differences are skipped.
 
-Para escribir todas las etiquetas guardadas de todas las canciones, pulsa
-**Escribir etiquetas de todo el catálogo…**, sobre el listado de canciones.
-Incluye las canciones no seleccionadas y vuelve a consultar el catálogo completo.
-Revisa el listado y pulsa **Escribir etiquetas** en el diálogo para iniciar el lote.
+To write all saved tags for every song, click **Write tags for the entire catalog…** above the song list. This includes unselected songs and queries the complete catalog again. Review the list and click **Write tags** in the dialog to start the batch.
 
-El diálogo contiene el listado, la salida del progreso y los botones **Cerrar** y
-**Escribir etiquetas**. Un valor guardado vacío elimina la etiqueta correspondiente.
-La selección múltiple conserva los valores particulares de cada canción. Se conserva
-el audio, las imágenes de otros tipos y las etiquetas ajenas a los campos modificados.
+The dialog contains the list, progress output and **Close** and **Write tags** buttons. An empty saved value removes the corresponding tag. Multiple selection preserves each song's individual values. Audio, other picture types and tags unrelated to modified fields are preserved.
 
-Se buscan `.jpg`, `.jpeg` y `.png` junto a cada canción. Una imagen se usa automáticamente;
-si hay varias, se pregunta una vez por carpeta con vista previa y opción de conservar
-la portada actual. La elegida sustituye la portada frontal, incluso sin cambios de texto.
-Sin imágenes se conserva la portada existente o su ausencia. Cancelar el selector cancela
-el intento antes de publicar. Consulta las [reglas de portadas](docs/tag-writing.md#incrustación-de-portadas).
+`.jpg`, `.jpeg` and `.png` files are searched for next to each song. A single image is used automatically; multiple images prompt once per folder, with a preview and an option to keep the current cover. The chosen image replaces the front cover, even without text changes. With no images, the existing cover or its absence is preserved. Cancelling the selector cancels the attempt before publication. See the [artwork rules](docs/tag-writing.md#embedding-artwork).
 
-Si existe `album.nfo` en la misma carpeta del audio, también se actualizan sus datos
-de álbum y los títulos de las canciones destinatarias que ya figuran en su lista
-XML, una vez por carpeta y conservando la información ajena. Se comprueba
-incluso si el audio ya está actualizado; su ausencia no lo crea ni produce un error.
-Las incidencias NFO se incluyen en el informe y conservan los respaldos del lote.
-Consulta las [reglas y límites de actualización NFO](docs/tag-writing.md#actualización-opcional-de-albumnfo).
+If `album.nfo` exists in the audio folder, its album data and the titles of target songs already present in its XML list are updated once per folder, preserving unrelated information. It is checked even if the audio is already up to date; absence does not create it or cause an error. NFO issues appear in the report and preserve batch backups. See [NFO update rules and limits](docs/tag-writing.md#optional-albumnfo-updates).
 
-Se admiten comentarios FLAC e ID3v2.4; ID3v2.3 se conserva cuando sus valores son
-representables sin unir listas. Los archivos incompatibles se indican como incidencias.
-Consulta la [matriz y los límites](docs/tag-writing.md).
+FLAC comments and ID3v2.4 are supported; ID3v2.3 is preserved when values can be represented without joining lists. Incompatible files are reported as issues. See the [matrix and limits](docs/tag-writing.md).
 
-Cada original se respalda en `.trackfolio-backups/<operación>/<id>-<nombre>.tfo-bak`,
-junto a su carpeta de música. Tras escribir y confirmar todo el lote correctamente,
-se elimina el directorio `.trackfolio-backups` completo en cada carpeta afectada,
-incluidos los UUID anteriores que contenga. Si hay errores o cancelación, se conservan
-las copias para recuperación. No se importan como canciones.
-**Cerrar** durante la escritura solicita la cancelación y espera un punto seguro;
-los archivos ya escritos se mantienen.
+Each original is backed up to `.trackfolio-backups/<operation>/<id>-<name>.tfo-bak` beside its music folder. After the entire batch is successfully written and confirmed, the complete `.trackfolio-backups` directory is removed from every affected folder, including any older UUID directories it contains. Errors or cancellation retain copies for recovery. They are not imported as songs. **Close** during writing requests cancellation and waits for a safe point; files already written remain in place.
 
-Si hay errores, un pop-up ofrece **Guardar informe…**, con sus causas y rutas de respaldo.
-El lote y SQLite no son una transacción única. La [guía de recuperación](docs/tag-writing.md#recuperación)
-explica los registros, los temporales y la restauración manual de un respaldo.
+On errors, a popup offers **Save report…** with causes and backup paths. The batch and SQLite are not a single transaction. The [recovery guide](docs/tag-writing.md#recovery) explains logs, temporary files and manual backup restoration.
 
-## Importar música
+## Import music
 
-1. Pulsa **Importar música…** (`Ctrl+I`).
-2. Elige una carpeta: se incluirán sus subcarpetas y los archivos `.flac`/`.mp3`.
-3. Crea un catálogo nuevo `.tfo` o usa el catálogo abierto para añadir y actualizar canciones.
-4. Pulsa **Importar**. La ventana muestra progreso, contadores e incidencias, y abre el resultado.
+1. Click **Import music…** (`Ctrl+I`).
+2. Choose a folder: subfolders and `.flac`/`.mp3` files are included.
+3. Create a new `.tfo` catalog or use the open catalog to add and update songs.
+4. Click **Import**. The window shows progress, counts and issues, then opens the result.
 
-Puedes cancelar o cerrar la aplicación durante la importación. Se conservan los archivos ya guardados y se espera a que termine la operación actual antes de cerrar. Reimportar la misma raíz y ruta actualiza los metadatos sin duplicar registros; otra raíz o un renombrado se consideran ubicaciones nuevas. Los archivos desaparecidos no se borran del catálogo. Los enlaces simbólicos y puntos de unión no se recorren.
+You can cancel or close the application during import. Already saved files are retained, and closing waits for the current operation to finish. Reimporting the same root and path updates metadata without duplicate records; a different root or renamed file is a new location. Missing files are not deleted from the catalog. Symbolic links and junctions are not traversed.
 
-Consulta el [plan de importación y sus criterios](docs/import-plan.md). Para revisar un archivo individual mediante el script existente:
-
-Desde la raíz del proyecto, importa un archivo sin modificarlo:
+See the [import plan and criteria](docs/import-plan.md). To inspect an individual file using the existing script, import it from the project root without modifying it:
 
 ```sh
-bash setup.sh --run-uv run --locked --extra gui python scripts/import_audio.py "ruta/a/cancion.flac" --database data/database.tfo
+bash setup.sh --run-uv run --locked --extra gui python scripts/import_audio.py "path/to/song.flac" --database data/database.tfo
 ```
 
-Los artistas se comparten por nombre exacto en todo el catálogo. Para consolidar las
-filas repetidas de un catálogo anterior sin importar música:
+Artists are shared by exact name throughout the catalog. To consolidate duplicate rows in an older catalog without importing music:
 
 ```sh
 bash setup.sh --run-uv run --locked python -m trackfolio.infrastructure.database --upgrade data/database.tfo
 ```
 
-Se crea un respaldo junto al archivo y se aplica `002_unique_artists`, conservando las
-relaciones de canciones y álbumes. Importar o guardar una edición sobre un catálogo
-anterior también realiza esa actualización; consultar o preparar un borrador mantiene
-sus datos intactos.
+A backup is created next to the file and `002_unique_artists` is applied, preserving song and album relationships. Importing or saving an edit in an older catalog also performs this upgrade; browsing or preparing a draft leaves its data intact.
 
-Abre `data/database.tfo` en SQLiteBrowser y consulta la vista `track_details`. La [guía de la base de datos](docs/database.md) explica las tablas, los campos ausentes, los respaldos y la revisión de carátulas. El SQL vigente para una base nueva está en [migrations/002_current.sql](migrations/002_current.sql); el [SQL inicial histórico](migrations/001_initial.sql) se conserva. La base local y la música están excluidas de Git.
+Open `data/database.tfo` in SQLiteBrowser and query `track_details`. The [database guide](docs/database.md) explains tables, missing fields, backups and artwork inspection. Current SQL for a new database is in [migrations/002_current.sql](migrations/002_current.sql); the [historical initial SQL](migrations/001_initial.sql) is retained. The local database and music are excluded from Git.
 
-## Compatibilidad prevista
+## Intended compatibility
 
-La GUI usa Fusion, una paleta, fuentes e iconos empaquetados y controles de ventana propios. El escalado y el rasterizado pueden variar según la pantalla. Si un compositor Wayland rechaza mover o redimensionar la ventana, se habilita su marco nativo para conservar esas operaciones.
+The GUI uses Fusion, a palette, packaged fonts and icons, and custom window controls. Scaling and rasterization may vary by screen. If a Wayland compositor rejects moving or resizing the window, its native frame is enabled to preserve those operations.
 
-| Plataforma GUI | Base inicial |
+| GUI platform | Initial baseline |
 | --- | --- |
-| Windows | Windows 10 1809+ o Windows 11, x86-64 |
-| macOS | macOS 13+, Intel x86-64 o Apple Silicon ARM64 |
-| GNU/Linux | x86-64, glibc 2.34+, escritorio X11 o Wayland y bibliotecas gráficas requeridas |
+| Windows | Windows 10 1809+ or Windows 11, x86-64 |
+| macOS | macOS 13+, Intel x86-64 or Apple Silicon ARM64 |
+| GNU/Linux | x86-64, glibc 2.34+, X11 or Wayland desktop and required graphical libraries |
 
-La disponibilidad de un wheel compatible no demuestra que la GUI funcione en cada escritorio. Las comprobaciones ejecutadas y las pendientes se registran en [VALIDATION.md](VALIDATION.md). Alpine/musl, Windows ARM64 y Linux ARM64 quedan fuera de esta primera matriz.
+A compatible wheel does not prove that the GUI works on every desktop. Completed and pending checks are recorded in [VALIDATION.md](VALIDATION.md). Alpine/musl, Windows ARM64 and Linux ARM64 are outside this initial matrix.
 
-Consulta [el entorno portable](docs/environment.md), [la arquitectura](docs/architecture.md), [la guía de contribución](CONTRIBUTING.md) y [el plan original](PLAN.md).
+See the [portable environment](docs/environment.md), [architecture](docs/architecture.md), [contribution guide](CONTRIBUTING.md) and [original plan](PLAN.md).
 
-## Licencia
+## License
 
-Este proyecto se distribuye bajo la licencia GPLv3. Consulta el archivo [LICENSE](LICENSE).
+This project is distributed under GPLv3. See [LICENSE](LICENSE).

@@ -23,14 +23,14 @@ def _validate_artist_index(connection: Connection) -> None:
     }
     expected = indexes.get("uq_artists_name")
     if expected is None or expected["unique"] != 1 or expected["partial"] != 0:
-        raise UnknownDatabaseError("El catálogo no garantiza nombres únicos de artista.")
+        raise UnknownDatabaseError("The catalog does not guarantee unique artist names.")
     keys = [
         row
         for row in connection.exec_driver_sql("PRAGMA index_xinfo('uq_artists_name')").mappings()
         if row["key"] == 1
     ]
     if len(keys) != 1 or keys[0]["name"] != "name" or keys[0]["coll"] != "BINARY":
-        raise UnknownDatabaseError("El índice de nombres de artista no es compatible.")
+        raise UnknownDatabaseError("The artist name index is incompatible.")
 
 
 def validate_catalog_connection(connection: Connection, *, require_current: bool = False) -> str:
@@ -41,32 +41,32 @@ def validate_catalog_connection(connection: Connection, *, require_current: bool
         or set(inspector.get_table_names()) != set(metadata.tables) | {"alembic_version"}
         or set(inspector.get_view_names()) != {"track_details"}
     ):
-        raise UnknownDatabaseError("El archivo no contiene un catálogo Trackfolio compatible.")
+        raise UnknownDatabaseError("The file does not contain a compatible Trackfolio catalog.")
     revisions: tuple[object, ...] = tuple(
         connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalars()
     )
     if revisions not in ((LEGACY_REVISION,), (REVISION,)):
-        raise UnknownDatabaseError("La revisión del catálogo Trackfolio no es compatible.")
+        raise UnknownDatabaseError("The Trackfolio catalog revision is incompatible.")
     revision = str(revisions[0])
     if require_current and revision != REVISION:
-        raise UnknownDatabaseError("El catálogo necesita actualizarse antes de escribir.")
+        raise UnknownDatabaseError("The catalog must be upgraded before writing.")
     for table in metadata.sorted_tables:
         actual_columns = {column["name"]: column for column in inspector.get_columns(table.name)}
         if set(actual_columns) != {column.name for column in table.columns}:
-            raise UnknownDatabaseError("El esquema del catálogo Trackfolio no es compatible.")
+            raise UnknownDatabaseError("The Trackfolio catalog schema is incompatible.")
         primary_key = inspector.get_pk_constraint(table.name)["constrained_columns"]
         if primary_key != [column.name for column in table.primary_key.columns]:
-            raise UnknownDatabaseError("El esquema del catálogo Trackfolio no es compatible.")
+            raise UnknownDatabaseError("The Trackfolio catalog schema is incompatible.")
         for column in table.columns:
             actual = actual_columns[column.name]
             if (
                 str(actual["type"]) != str(column.type.compile(dialect=connection.dialect))
                 or actual["nullable"] != column.nullable
             ):
-                raise UnknownDatabaseError("El esquema del catálogo Trackfolio no es compatible.")
+                raise UnknownDatabaseError("The Trackfolio catalog schema is incompatible.")
     view_sql = inspector.get_view_definition("track_details") or ""
     if " ".join(view_sql.split()) != " ".join(TRACK_DETAILS_SQL.split()):
-        raise UnknownDatabaseError("La vista del catálogo Trackfolio no es compatible.")
+        raise UnknownDatabaseError("The Trackfolio catalog view is incompatible.")
     if revision == REVISION:
         _validate_artist_index(connection)
     return revision

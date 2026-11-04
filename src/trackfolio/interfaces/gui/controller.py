@@ -135,7 +135,7 @@ class _ImportTask(QRunnable):
                 progress.updated,
                 progress.failed,
                 (),
-                "La importación terminó inesperadamente. Comprueba el catálogo antes de repetirla.",
+                "Import ended unexpectedly. Check the catalog before trying again.",
             )
         finally:
             self.signals.completed.emit(self.identifier)
@@ -352,7 +352,7 @@ class CatalogController(QObject):
             self._batch_snapshots = originals
             self._edit_path = self._session.database_path
             view.begin_edit(originals)
-            self.window.set_status("Editando datos del álbum · Cambios en el catálogo")
+            self.window.set_status("Editing album data · Catalog changes")
             self.edit_started.emit(originals[0].file_id)
 
     @Slot()
@@ -380,7 +380,7 @@ class CatalogController(QObject):
                 originals = tuple(reader.get_editable(file_id) for file_id in album.file_ids)
                 if any(item is None for item in originals):
                     raise CatalogRecordMissing(
-                        "Una pista del álbum ya no existe. Actualiza el catálogo."
+                        "An album track no longer exists. Refresh the catalog."
                     )
                 return cast(tuple[EditableTrack, ...], originals)
             finally:
@@ -410,7 +410,7 @@ class CatalogController(QObject):
             tuple(summaries.get(track.summary.file_id, track.summary) for track in album.tracks),
         )
         if self._tag_dialog is not None:
-            self._tag_dialog.setWindowTitle("Escribir etiquetas del álbum")
+            self._tag_dialog.setWindowTitle("Write album tags")
 
     @Slot(int)
     def open_album_track(self, file_id: int) -> None:
@@ -474,7 +474,7 @@ class CatalogController(QObject):
         self._tag_cancel = Event()
         self.window.set_writing_tags(True)
         self.window.set_error("")
-        self.window.set_status("Cargando todas las canciones del catálogo…")
+        self.window.set_status("Loading all songs in the catalog…")
         self._submit(
             ListTrackSummaries(self._session).execute,
             "tag_list",
@@ -611,13 +611,13 @@ class CatalogController(QObject):
                 self._close_when_idle()
             elif job.task.error:
                 self.window.set_error(job.task.error)
-                self.window.set_status("No se pudieron cargar las canciones del catálogo.")
+                self.window.set_status("Could not load the catalog songs.")
             else:
                 songs = cast(tuple[CatalogSummary, ...], job.task.result)
                 if songs and job.session is not None:
                     self._open_tag_dialog(job.session.database_path, songs, all_catalog=True)
                 else:
-                    self.window.set_status("El catálogo no contiene canciones.")
+                    self.window.set_status("The catalog contains no songs.")
             return
         if job.task.error:
             if self._tag_dialog is not None:
@@ -652,13 +652,13 @@ class CatalogController(QObject):
 
     def _confirm_unsaved(self) -> QMessageBox.StandardButton:
         dialog = QMessageBox(self.window)
-        dialog.setWindowTitle("Cambios sin guardar")
+        dialog.setWindowTitle("Unsaved changes")
         dialog.setText(
-            "Hay cambios sin guardar en estas canciones."
+            "These songs have unsaved changes."
             if self._batch_snapshots
-            else "Hay cambios sin guardar en esta canción."
+            else "This song has unsaved changes."
         )
-        dialog.setInformativeText("Puedes guardarlos, descartarlos o seguir editando.")
+        dialog.setInformativeText("You can save, discard or continue editing.")
         dialog.setStandardButtons(
             QMessageBox.StandardButton.Save
             | QMessageBox.StandardButton.Discard
@@ -666,9 +666,9 @@ class CatalogController(QObject):
         )
         dialog.setDefaultButton(QMessageBox.StandardButton.Save)
         for button, label in (
-            (QMessageBox.StandardButton.Save, "Guardar"),
-            (QMessageBox.StandardButton.Discard, "Descartar"),
-            (QMessageBox.StandardButton.Cancel, "Cancelar"),
+            (QMessageBox.StandardButton.Save, "Save"),
+            (QMessageBox.StandardButton.Discard, "Discard"),
+            (QMessageBox.StandardButton.Cancel, "Cancel"),
         ):
             widget = dialog.button(button)
             if widget is not None:
@@ -725,7 +725,7 @@ class CatalogController(QObject):
             or self._displayed_entry is None
         ):
             return
-        # A refresh/detail requested before Editar cannot replace the new draft.
+        # A refresh/detail requested before Edit cannot replace the new draft.
         self._list_token += 1
         self._detail_token += 1
         self._edit_token += 1
@@ -733,7 +733,7 @@ class CatalogController(QObject):
         path = self._session.database_path
         factory = self._edit_factory
         self.window.set_error("")
-        self.window.set_status("Preparando edición…")
+        self.window.set_status("Preparing editor…")
 
         def load() -> EditableTrack | tuple[EditableTrack, ...] | None:
             session = factory.open_reader(path)
@@ -744,9 +744,7 @@ class CatalogController(QObject):
                 for selected_id in file_ids:
                     item = GetEditableTrack(session).execute(selected_id)
                     if item is None:
-                        raise CatalogRecordMissing(
-                            "Una canción ya no existe. Actualiza el catálogo."
-                        )
+                        raise CatalogRecordMissing("A song no longer exists. Refresh the catalog.")
                     originals.append(item)
                 return tuple(originals)
             finally:
@@ -812,7 +810,7 @@ class CatalogController(QObject):
         self._genre_token += 1
         self.window.set_edit_state(not self._album_edit, saving=True)
         self.window.set_error("")
-        self.window.set_status("Guardando cambios…")
+        self.window.set_status("Saving changes…")
         self._begin_save_when_idle()
 
     def _begin_save_when_idle(self) -> None:
@@ -927,7 +925,7 @@ class CatalogController(QObject):
             self._session = None
         self.window.set_importing(True)
         self.window.set_error("")
-        self.window.set_status("Preparando importación…")
+        self.window.set_status("Preparing import…")
         if self._progress_dialog is not None:
             self._progress_dialog.close()
             self._progress_dialog.deleteLater()
@@ -967,7 +965,7 @@ class CatalogController(QObject):
         self._cancellation.set()
         if self._progress_dialog is not None:
             self._progress_dialog.set_cancelling()
-        self.window.set_status("Cancelando importación…")
+        self.window.set_status("Cancelling import…")
 
     @Slot(int, object)
     def _import_progress(self, identifier: int, progress: ImportProgress) -> None:
@@ -1006,13 +1004,13 @@ class CatalogController(QObject):
                 destination,
                 selected_id=selected,
                 error_prefix=(
-                    "La música se guardó, pero no se pudo abrir el catálogo resultante. "
+                    "The music was saved, but the resulting catalog could not be opened. "
                     if report.saved
                     else ""
                 ),
             )
         else:
-            self.window.set_status("No se guardaron canciones. Puedes volver a importar música.")
+            self.window.set_status("No songs were saved. You can import music again.")
             self.window.set_error(report.fatal_error or "")
         self._update_busy()
         # Observers can synchronously start another operation or close the window.
@@ -1075,11 +1073,11 @@ class CatalogController(QObject):
             return
         if not self._guard_edit(self.choose_catalog):
             return
-        dialog = QFileDialog(self.window, "Abrir catálogo de Trackfolio")
+        dialog = QFileDialog(self.window, "Open Trackfolio catalog")
         dialog.setOption(QFileDialog.Option.DontUseNativeDialog, True)
         dialog.setFileMode(QFileDialog.FileMode.ExistingFile)
         dialog.setNameFilters(
-            ["Catálogos de Trackfolio (*.tfo *.sqlite3 *.sqlite *.db)", "Todos los archivos (*)"]
+            ["Trackfolio catalogs (*.tfo *.sqlite3 *.sqlite *.db)", "All files (*)"]
         )
         if self._session is not None:
             dialog.setDirectory(str(self._session.database_path.parent))
@@ -1111,7 +1109,7 @@ class CatalogController(QObject):
         self.window.set_error("")
         self.window.set_catalog(None, ())
         self.window.set_detail(None)
-        self.window.set_status("Abriendo catálogo…")
+        self.window.set_status("Opening catalog…")
 
         def load() -> _Opened:
             session = self._opener(path)
@@ -1134,7 +1132,7 @@ class CatalogController(QObject):
         self._list_token += 1
         session = self._session
         self.window.set_error("")
-        self.window.set_status("Actualizando catálogo…")
+        self.window.set_status("Refreshing catalog…")
         self._submit(ListTrackSummaries(session).execute, "list", self._list_token, session)
 
     @Slot(object)
@@ -1160,7 +1158,7 @@ class CatalogController(QObject):
         token = self._detail_token
         self.window.set_detail(None)
         self.window.set_error("")
-        self.window.set_status("Cargando metadatos…")
+        self.window.set_status("Loading metadata…")
 
         def load() -> CatalogEntry | None:
             # A superseded queued task can finish without opening another connection.
@@ -1217,9 +1215,9 @@ class CatalogController(QObject):
                 (self._open_error_prefix if job.kind == "open" else "") + job.task.error
             )
             self.window.set_status(
-                "No se pudo cargar el catálogo."
+                "Could not load the catalog."
                 if job.kind == "open"
-                else "No se pudieron obtener los datos."
+                else "Could not retrieve the data."
             )
         elif job.kind == "open" and isinstance(result, _Opened):
             self._session = result.session
@@ -1232,7 +1230,7 @@ class CatalogController(QObject):
                 try:
                     self._remember(result.session.database_path)
                 except OSError as exc:
-                    self.window.set_error(f"No se pudo guardar la preferencia del catálogo: {exc}")
+                    self.window.set_error(f"Could not save the catalog preference: {exc}")
             if self.window.views.currentWidget() in (
                 self.window.album_view,
                 self.window.artist_view,
@@ -1266,7 +1264,7 @@ class CatalogController(QObject):
             self.window.set_status(
                 self._status()
                 if entry is not None
-                else "El registro ya no está disponible. Actualiza el catálogo."
+                else "The record is no longer available. Refresh the catalog."
             )
             self.detail_loaded.emit(job.selected_id)
         elif job.kind == "edit" and isinstance(result, tuple) and self._session is not None:
@@ -1275,7 +1273,7 @@ class CatalogController(QObject):
             self._edit_snapshot = originals[0]
             self._edit_path = self._session.database_path
             self.window.begin_batch_edit(tuple(item.values for item in originals))
-            self.window.set_status(f"Editando {len(originals)} canciones · Cambios en el catálogo")
+            self.window.set_status(f"Editing {len(originals)} songs · Catalog changes")
             self.edit_started.emit(originals[0].file_id)
             self.find_suggestions("artists", "")
             self.find_suggestions("genres", "")
@@ -1283,12 +1281,12 @@ class CatalogController(QObject):
             self._edit_snapshot = result
             self._edit_path = self._session.database_path
             self.window.begin_edit(result.values)
-            self.window.set_status("Editando canción · Cambios en el catálogo")
+            self.window.set_status("Editing song · Catalog changes")
             self.edit_started.emit(result.file_id)
             self.find_suggestions("artists", "")
             self.find_suggestions("genres", "")
         elif job.kind == "edit":
-            self.window.set_error("La canción ya no está disponible. Actualiza el catálogo.")
+            self.window.set_error("The song is no longer available. Refresh the catalog.")
         elif job.kind in ("artists", "genres"):
             if job.kind == "artists":
                 choices = tuple(choice.name for choice in cast(tuple[ArtistChoice, ...], result))
@@ -1316,9 +1314,9 @@ class CatalogController(QObject):
                 self.window.set_field_errors({item.field: item.message for item in error.errors})
             message = job.task.error
             if isinstance(error, CatalogEditError) and error.backup_path is not None:
-                message += f" Respaldo anterior: {error.backup_path}"
+                message += f" Previous backup: {error.backup_path}"
             self.window.set_error(message)
-            self.window.set_status("No se guardaron los cambios. El borrador se conserva.")
+            self.window.set_status("Changes were not saved. The draft is preserved.")
             self.edit_finished.emit(None)
             return
         result = job.task.result
@@ -1338,15 +1336,15 @@ class CatalogController(QObject):
             self.window.set_detail(first.entry)
             self.window.set_error(next((item.warning for item in outcomes if item.warning), ""))
             message = (
-                f"Cambios guardados en {len(outcomes)} canciones."
+                f"Changes saved to {len(outcomes)} songs."
                 if len(outcomes) > 1
-                else "Cambios guardados en el catálogo."
+                else "Changes saved to the catalog."
             )
             if first.backup_path is not None:
-                message += f" Respaldo anterior: {first.backup_path}"
+                message += f" Previous backup: {first.backup_path}"
             self.window.set_status(message)
         else:
-            self.window.set_status("No hay cambios que guardar.")
+            self.window.set_status("No changes to save.")
         outcome = result
         if album_edit and not self._close_pending:
             self.load_albums()
@@ -1377,8 +1375,8 @@ class CatalogController(QObject):
 
     def _status(self) -> str:
         if self._session is None:
-            return "Abre un catálogo para consultar tu música."
-        noun = "canción" if self._count == 1 else "canciones"
+            return "Open a catalog to browse your music."
+        noun = "song" if self._count == 1 else "songs"
         return f"{self._count} {noun} · {self._session.database_path}"
 
     def _update_busy(self) -> None:

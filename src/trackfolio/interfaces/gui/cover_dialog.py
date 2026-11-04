@@ -26,7 +26,7 @@ from trackfolio.infrastructure.cover_files import FileCoverAccess
 class CoverChoiceDialog(QDialog):
     def __init__(self, discovery: CoverDiscovery, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Elegir portadas")
+        self.setWindowTitle("Choose covers")
         self.setModal(True)
         self.resize(780, 560)
         self.setMinimumSize(660, 460)
@@ -36,13 +36,13 @@ class CoverChoiceDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 16)
         layout.setSpacing(16)
-        title = QLabel("Elige la portada", self)
+        title = QLabel("Choose a cover", self)
         title.setProperty("role", "primary")
         font = title.font()
         font.setPointSize(16)
         title.setFont(font)
         layout.addWidget(title)
-        heading = QLabel("Selecciona una imagen por carpeta o conserva la portada actual.")
+        heading = QLabel("Select an image per folder or keep the current cover.")
         heading.setProperty("role", "secondary")
         heading.setWordWrap(True)
         layout.addWidget(heading)
@@ -75,19 +75,19 @@ class CoverChoiceDialog(QDialog):
             body.setSpacing(18)
             images = QVBoxLayout()
             images.setSpacing(8)
-            label = QLabel(f"IMÁGENES DISPONIBLES · {len(folder.candidates)}", card)
+            label = QLabel(f"AVAILABLE IMAGES · {len(folder.candidates)}", card)
             label.setObjectName("SectionTitle")
             images.addWidget(label)
             candidates = QListWidget(card)
-            candidates.setAccessibleName(f"Portada de {folder.path}")
+            candidates.setAccessibleName(f"Cover for {folder.path}")
             candidates.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
             candidates.setMinimumHeight(260)
-            preserve = QListWidgetItem("Conservar portada actual\nSin cambiar la imagen incrustada")
+            preserve = QListWidgetItem("Keep current cover\nLeave the embedded image unchanged")
             preserve.setSizeHint(QSize(0, 56))
             candidates.addItem(preserve)
             for candidate in folder.candidates:
                 detail = (
-                    "No disponible"
+                    "Unavailable"
                     if candidate.error
                     else f"{candidate.width} × {candidate.height} px"
                 )
@@ -102,7 +102,7 @@ class CoverChoiceDialog(QDialog):
             label = QLabel("VISTA PREVIA", card)
             label.setObjectName("SectionTitle")
             display.addWidget(label)
-            preview = QLabel("Selecciona una imagen\npara ver la portada", card)
+            preview = QLabel("Select an image\nto preview the cover", card)
             preview.setObjectName("Cover")
             preview.setFixedSize(260, 260)
             preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -127,7 +127,7 @@ class CoverChoiceDialog(QDialog):
         self.buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self
         )
-        self.buttons.button(QDialogButtonBox.StandardButton.Ok).setText("Usar selección")
+        self.buttons.button(QDialogButtonBox.StandardButton.Ok).setText("Use selection")
         self.buttons.button(QDialogButtonBox.StandardButton.Ok).setObjectName("PrimaryButton")
         self.buttons.accepted.connect(self.accept)
         self.buttons.rejected.connect(self.reject)
@@ -141,7 +141,7 @@ class CoverChoiceDialog(QDialog):
         self._captions[index].clear()
         valid = selected == 0
         if selected == 0:
-            preview.setText("Se conservará\nla portada actual")
+            preview.setText("The current cover\nwill be preserved")
         elif selected > 0:
             candidate = folder.candidates[selected - 1]
             self._captions[index].setText(candidate.path.name)
@@ -170,11 +170,9 @@ class CoverChoiceDialog(QDialog):
                 if valid:
                     preview.setPixmap(QPixmap.fromImage(picture))
                 else:
-                    preview.setText(
-                        "No se puede decodificar esta imagen. Elige otra o conserva la portada."
-                    )
+                    preview.setText("Cannot decode this image. Choose another or keep the cover.")
         else:
-            preview.setText("Selecciona una imagen\npara ver la portada")
+            preview.setText("Select an image\nto preview the cover")
         self._valid[index] = valid
         self.buttons.button(QDialogButtonBox.StandardButton.Ok).setEnabled(
             all(self._valid.values())

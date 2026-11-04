@@ -16,12 +16,12 @@ MAX_NFO_BYTES = 16 * 1024 * 1024
 
 
 def _reject_declaration(*args: object) -> None:
-    raise TagWriteError("El NFO contiene DTD o entidades no admitidas.")
+    raise TagWriteError("The NFO contains unsupported DTDs or entities.")
 
 
 def _parse(data: bytes) -> minidom.Document:
     if not data or len(data) > MAX_NFO_BYTES:
-        raise TagWriteError("El NFO está vacío o supera el límite de 16 MiB.")
+        raise TagWriteError("The NFO is empty or exceeds the 16 MiB limit.")
     try:
         # Expat detects declarations even in UTF-16/32, before expanding entities.
         parser = expat.ParserCreate()
@@ -30,10 +30,12 @@ def _parse(data: bytes) -> minidom.Document:
         parser.Parse(data, True)
         document = minidom.parseString(data)
     except (expat.ExpatError, ValueError, LookupError) as exc:
-        raise TagWriteError(f"El NFO no es XML compatible: {exc}") from exc
+        raise TagWriteError(f"The NFO is not compatible XML: {exc}") from exc
     root = document.documentElement
     if root is None or root.tagName != "album" or root.namespaceURI:
-        raise TagWriteError("El NFO debe ser un documento XML con raíz <album> sin namespace.")
+        raise TagWriteError(
+            "The NFO must be an XML document with an <album> root without a namespace."
+        )
     return document
 
 
@@ -47,7 +49,7 @@ def _elements(parent: minidom.Element, name: str) -> list[minidom.Element]:
 
 def _text(element: minidom.Element) -> str:
     if any(child.nodeType == Node.ELEMENT_NODE for child in element.childNodes):
-        raise TagWriteError(f"El elemento NFO {element.tagName} tiene estructura no compatible.")
+        raise TagWriteError(f"NFO element {element.tagName} has an unsupported structure.")
     return "".join(
         child.data
         for child in element.childNodes
@@ -156,7 +158,7 @@ def _artists(root: minidom.Element, artists: tuple[str, ...]) -> bool:
     for credit in credits:
         nodes = _elements(credit, "artist")
         if len(nodes) != 1:
-            raise TagWriteError("Crédito NFO sin un único nombre de artista.")
+            raise TagWriteError("NFO credit does not have a single artist name.")
         names.append(_text(nodes[0]))
     direct = _elements(root, "artist")
     changed = False
@@ -183,7 +185,7 @@ def _artists(root: minidom.Element, artists: tuple[str, ...]) -> bool:
             ordered.append(credit)
         if any(_rich_credit(credit) for _, credit in available):
             raise TagWriteConflict(
-                "Cambiar los artistas reasignaría o eliminaría créditos NFO enriquecidos."
+                "Changing artists would reassign or remove enriched NFO credits."
             )
         for credit in credits:
             root.removeChild(credit)
@@ -202,11 +204,11 @@ def _number(parent: minidom.Element, name: str) -> int | None:
         return None
     if len(nodes) != 1:
         raise TagWriteConflict(
-            f"El NFO tiene varios elementos {name}; no se puede asociar la pista."
+            f"The NFO has multiple elements named {name}; the track cannot be matched."
         )
     value = _text(nodes[0]).strip()
     if not re.fullmatch(r"[0-9]{1,9}", value) or int(value) <= 0:
-        raise TagWriteConflict(f"El NFO tiene un {name} no válido para asociar la pista.")
+        raise TagWriteConflict(f"The NFO field {name} is invalid for matching the track.")
     return int(value)
 
 
@@ -228,9 +230,7 @@ def _song_titles(root: minidom.Element, songs: tuple[AlbumNfoSong, ...]) -> bool
         if not song.update_title:
             continue
         if song.track_number is None or song.track_number <= 0:
-            raise TagWriteConflict(
-                "La canción no tiene número de pista para asociar su título NFO."
-            )
+            raise TagWriteConflict("The song has no track number to match its NFO title.")
         candidates = [
             (disc, node)
             for number, disc, node in positions
@@ -238,8 +238,8 @@ def _song_titles(root: minidom.Element, songs: tuple[AlbumNfoSong, ...]) -> bool
         ]
         if len(candidates) != 1:
             raise TagWriteConflict(
-                f"No hay una única pista NFO para la posición {song.track_number} "
-                f"y disco {song.disc_number or 'sin indicar'}."
+                f"No unique NFO track for position {song.track_number} "
+                f"and disc {song.disc_number or 'unspecified'}."
             )
         disc, node = candidates[0]
         sources = [
@@ -248,14 +248,14 @@ def _song_titles(root: minidom.Element, songs: tuple[AlbumNfoSong, ...]) -> bool
             if source.track_number == song.track_number and _same_disc(disc, source.disc_number)
         ]
         if len(sources) != 1:
-            raise TagWriteConflict("Varias canciones corresponden a la misma posición NFO.")
+            raise TagWriteConflict("Multiple songs match the same NFO position.")
         changed = _set_values(node, "title", (song.title,) if song.title else ()) or changed
     return changed
 
 
 def _apply(document: minidom.Document, values: AlbumNfoValues) -> bool:
     if values.year is not None and not 1 <= values.year <= 9999:
-        raise TagWriteError("El año NFO debe estar entre 1 y 9999.")
+        raise TagWriteError("The NFO year must be between 1 and 9999.")
     root = document.documentElement
     assert root is not None
     changed = _set_values(root, "title", (values.title,) if values.title else ())
@@ -314,7 +314,7 @@ def _serialize(document: minidom.Document, original: bytes) -> bytes:
             result = codecs.BOM_UTF8 + result
         return result
     except (LookupError, UnicodeError, ValueError) as exc:
-        raise TagWriteError(f"No se puede conservar la codificación NFO: {exc}") from exc
+        raise TagWriteError(f"Cannot preserve NFO encoding: {exc}") from exc
 
 
 def _semantic(node: minidom.Node) -> object:
@@ -354,14 +354,14 @@ class XmlAlbumNfoCodec:
             verified = _parse(output)
             try:
                 if _semantic(verified) != expected or _apply(verified, values):
-                    raise TagWriteError("No se pudo verificar la conservación del XML NFO.")
+                    raise TagWriteError("Could not verify NFO XML preservation.")
             finally:
                 verified.unlink()
             temporary.write_bytes(output)
             reopened = _parse(self._read(temporary))
             try:
                 if _semantic(reopened) != expected:
-                    raise TagWriteError("El NFO temporal no coincide con el documento verificado.")
+                    raise TagWriteError("The temporary NFO does not match the verified document.")
             finally:
                 reopened.unlink()
         finally:

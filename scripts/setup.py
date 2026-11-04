@@ -66,9 +66,9 @@ def run(command: list[str], *, env: dict[str, str] | None = None) -> None:
     try:
         result = subprocess.run(command, cwd=PROJECT_ROOT, env=env, check=False)
     except OSError as exc:
-        raise SetupError(f"No se pudo ejecutar {command[0]}: {exc}") from exc
+        raise SetupError(f"Could not run {command[0]}: {exc}") from exc
     if result.returncode:
-        raise SetupError(f"El comando falló ({result.returncode}): {command_text(command)}")
+        raise SetupError(f"Command failed ({result.returncode}): {command_text(command)}")
 
 
 def confirm(message: str, args: argparse.Namespace) -> bool:
@@ -78,7 +78,7 @@ def confirm(message: str, args: argparse.Namespace) -> bool:
     if args.non_interactive or not sys.stdin.isatty():
         return False
     try:
-        return input(f"{message} [s/N] ").strip().lower() in ("s", "si", "sí", "y", "yes")
+        return input(f"{message} [y/N] ").strip().lower() in ("s", "si", "sí", "y", "yes")
     except EOFError:
         return False
 
@@ -101,19 +101,19 @@ def linux_family() -> str | None:
 
 def package_commands(packages: list[str]) -> list[list[str]]:
     if sys.platform != "linux":
-        raise SetupError("La instalación de paquetes del sistema solo se admite en Linux.")
+        raise SetupError("System package installation is only supported on Linux.")
     family = linux_family()
     manager = {"debian": "apt-get", "arch": "pacman", "fedora": "dnf"}.get(family or "")
     if manager is None or shutil.which(manager) is None:
         raise SetupError(
-            "No hay un gestor admitido: apt-get, pacman o dnf. Instala los paquetes manualmente."
+            "No supported package manager found: apt-get, pacman or dnf. Install packages manually."
         )
     prefix: list[str] = []
     if os.geteuid() != 0:
         sudo = shutil.which("sudo")
         if sudo is None:
             raise SetupError(
-                "Necesitas sudo o instalar los paquetes manualmente como administrador."
+                "You need sudo, or must install packages manually as an administrator."
             )
         prefix = [sudo]
     if manager == "apt-get":
@@ -133,7 +133,7 @@ def graphical_platform(requested: str | None) -> str | None:
         return "wayland"
     if os.environ.get("DISPLAY"):
         return "xcb"
-    print("Sin sesión gráfica: se usará offscreen; no acredita un escritorio real.")
+    print("No graphical session: using offscreen; this does not validate an actual desktop.")
     return "offscreen"
 
 
@@ -163,17 +163,17 @@ def prepare_graphics(qt_platform: str | None, args: argparse.Namespace) -> None:
     if not missing:
         return
     names = ", ".join(item[0] for item in missing)
-    print(f"Faltan bibliotecas gráficas: {names}")
+    print(f"Missing graphical libraries: {names}")
     index = {"debian": 1, "arch": 2, "fedora": 3}.get(linux_family() or "")
     if index is None:
-        raise SetupError(f"Instala estas bibliotecas manualmente y repite la preparación: {names}.")
+        raise SetupError(f"Install these libraries manually and run setup again: {names}.")
     packages = sorted({item[index] for item in missing})
     commands = package_commands(packages)
     for command in commands:
-        print(f"Instalación propuesta: {command_text(command)}")
-    if not confirm("¿Instalar las bibliotecas gráficas del sistema?", args):
+        print(f"Proposed installation: {command_text(command)}")
+    if not confirm("Install the system graphical libraries?", args):
         raise SetupError(
-            "No se autorizaron las bibliotecas necesarias. No se ha modificado el sistema."
+            "The required libraries were not authorized. The system has not been modified."
         )
     for command in commands:
         run(command)
@@ -194,7 +194,7 @@ def prepare_git(args: argparse.Namespace) -> None:
         try:
             commands = package_commands(["git"])
         except SetupError as exc:
-            print(f"AVISO: Git no está instalado. {exc}")
+            print(f"WARNING: Git is not installed. {exc}")
             return
     elif system == "Darwin" and shutil.which("brew"):
         commands = [["brew", "install", "git"]]
@@ -215,20 +215,17 @@ def prepare_git(args: argparse.Namespace) -> None:
     else:
         print(
             "AVISO: instala Git desde https://git-scm.com/install/ "
-            "para controlar versiones; la app no lo necesita."
+            "for version control; the app does not need it."
         )
         return
     for command in commands:
-        print(f"Instalación propuesta: {command_text(command)}")
-    if confirm("¿Instalar Git para desarrollar?", args):
+        print(f"Proposed installation: {command_text(command)}")
+    if confirm("Install Git for development?", args):
         for command in commands:
             run(command)
-        print(
-            "Git instalado. En Windows puede ser necesario abrir "
-            "una terminal nueva para verlo en PATH."
-        )
+        print("Git installed. On Windows you may need to open a new terminal to find it in PATH.")
     else:
-        print("AVISO: Git no instalado; puedes usar la app o instalarlo más adelante.")
+        print("WARNING: Git not installed; you can use the app or install it later.")
 
 
 def editor_cli(root: Path) -> Path:
@@ -271,7 +268,7 @@ def editor_download() -> tuple[str, str]:
         ("Darwin", "arm64"): "darwin-arm64",
     }.get((system, machine))
     if target is None:
-        raise SetupError(f"No hay descarga de VS Code configurada para {system} {machine}.")
+        raise SetupError(f"No VS Code download configured for {system} {machine}.")
     return f"https://update.code.visualstudio.com/latest/{target}/stable", (
         ".tar.gz" if system == "Linux" else ".zip"
     )
@@ -281,7 +278,7 @@ def download(url: str, target: Path) -> None:
     print(f"Descargando: {url}", flush=True)
     with urlopen(url, timeout=120) as response, target.open("wb") as output:
         if not response.geturl().startswith("https://"):
-            raise SetupError("La descarga se redirigió fuera de HTTPS.")
+            raise SetupError("The download was redirected outside HTTPS.")
         shutil.copyfileobj(response, output)
 
 
@@ -296,7 +293,7 @@ def extract_zip(archive: Path, destination: Path) -> None:
                 or "\\" in member.filename
                 or stat.S_ISLNK(member.external_attr >> 16)
             ):
-                raise SetupError("El archivo del editor contiene una ruta o enlace no seguro.")
+                raise SetupError("The editor archive contains an unsafe path or link.")
         source.extractall(destination)
 
 
@@ -304,18 +301,15 @@ def install_editor(args: argparse.Namespace) -> Path | None:
     installed = find_editor()
     if installed is not None:
         return installed
-    if not confirm("¿Descargar VS Code oficial en .tools/vscode para este proyecto?", args):
-        print(
-            "AVISO: VS Code no preparado; "
-            "la aplicación y las herramientas Python sí pueden utilizarse."
-        )
+    if not confirm("Download official VS Code into .tools/vscode for this project?", args):
+        print("WARNING: VS Code not set up; the application and Python tools are still available.")
         return None
     tools = PROJECT_ROOT / ".tools"
     destination = tools / "vscode"
     if destination.exists():
         raise SetupError(
-            f"{destination} existe pero no contiene un editor reconocible. "
-            "Revísalo; no se sobrescribe."
+            f"{destination} exists but contains no recognizable editor. "
+            "Check it; it will not be overwritten."
         )
     tools.mkdir(exist_ok=True)
     url, suffix = editor_download()
@@ -337,7 +331,7 @@ def install_editor(args: argparse.Namespace) -> Path | None:
             extract_zip(archive, unpacked)
             extracted = unpacked
         if not editor_cli(extracted).is_file():
-            raise SetupError("La descarga no contiene el ejecutable esperado de VS Code.")
+            raise SetupError("The download does not contain the expected VS Code executable.")
         extracted.rename(destination)
     return editor_cli(destination)
 
@@ -348,7 +342,7 @@ def code_command(editor: Path, arguments: list[str]) -> tuple[list[str], dict[st
         executable = editor.parent.parent / "Code.exe"
         entry_point = editor.parent.parent / "resources/app/out/cli.js"
         if not executable.is_file() or not entry_point.is_file():
-            raise SetupError("No se encuentra el ejecutable o la CLI de VS Code junto a code.cmd.")
+            raise SetupError("Cannot find the VS Code executable or CLI next to code.cmd.")
         environment = dict(os.environ, ELECTRON_RUN_AS_NODE="1")
         return [str(executable), str(entry_point), *arguments], environment
     return [str(editor), *arguments], None
@@ -365,50 +359,52 @@ def prepare_editor(args: argparse.Namespace) -> Path | None:
             (PROJECT_ROOT / ".vscode/extensions.json").read_text(encoding="utf-8")
         )["recommendations"]
     except (OSError, ValueError, KeyError) as exc:
-        raise SetupError(f"No se pueden leer las extensiones recomendadas: {exc}") from exc
+        raise SetupError(f"Cannot read recommended extensions: {exc}") from exc
     if not isinstance(recommendations, list) or not all(
         isinstance(item, str) for item in recommendations
     ):
-        raise SetupError("La lista de extensiones recomendadas no es válida.")
+        raise SetupError("The recommended extensions list is invalid.")
     for extension in recommendations:
         command, environment = code_command(editor, ["--install-extension", extension])
         try:
             run(command, env=environment)
         except SetupError as exc:
-            print(f"AVISO: no se pudo instalar {extension}: {exc}")
-            print("Puedes reintentarlo o usar VS Code oficial si tu editor utiliza otro catálogo.")
+            print(f"WARNING: Could not install {extension}: {exc}")
+            print("Try again, or use official VS Code if your editor uses a different marketplace.")
     return editor
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group()
-    mode.add_argument("--core", action="store_true", help="Preparar sin Qt.")
-    mode.add_argument("--gui", action="store_true", help="Preparar con Qt (por defecto).")
+    mode.add_argument("--core", action="store_true", help="Set up without Qt.")
+    mode.add_argument("--gui", action="store_true", help="Set up with Qt (default).")
     parser.add_argument("--uv", required=True, help=argparse.SUPPRESS)
     parser.add_argument("--platform", choices=("offscreen", "xcb", "wayland"))
     parser.add_argument("--qt-timeout", type=bootstrap.positive_timeout, default=15.0)
     parser.add_argument(
-        "--skip-editor", action="store_true", help="No descargar el editor ni instalar extensiones."
+        "--skip-editor",
+        action="store_true",
+        help="Do not download the editor or install extensions.",
     )
     parser.add_argument(
         "--non-interactive",
         action="store_true",
-        help="No realizar preguntas; rechaza las propuestas que requieren permiso salvo con --yes.",
+        help="Do not prompt; reject proposals requiring permission unless --yes is supplied.",
     )
     parser.add_argument(
-        "--yes", action="store_true", help="Autorizar explícitamente las instalaciones propuestas."
+        "--yes", action="store_true", help="Explicitly authorize proposed installations."
     )
     parser.add_argument(
         "--open-code",
         action="store_true",
-        help="Abrir el workspace después de preparar el entorno.",
+        help="Open the workspace after setting up the environment.",
     )
     args = parser.parse_args(argv)
     if args.core and args.platform:
-        parser.error("--platform necesita la GUI.")
+        parser.error("--platform requires the GUI.")
     if args.skip_editor and args.open_code:
-        parser.error("--skip-editor no se puede combinar con --open-code.")
+        parser.error("--skip-editor cannot be combined with --open-code.")
     return args
 
 
@@ -433,20 +429,22 @@ def main(argv: list[str] | None = None) -> int:
             if platform.system() == "Windows"
             else "bash setup.sh"
         )
-        print("\nEntorno listo. No necesitas activar .venv ni modificar el PATH del sistema.")
+        print("\nEnvironment ready. No need to activate .venv or modify the system PATH.")
         if editor:
             print(f"VS Code disponible: {launcher} --open-code")
         else:
             print("Si tienes VS Code: code Trackfolio.code-workspace")
         if not args.core:
-            print(f"Abrir la aplicación: {launcher} --run-uv run --locked --extra gui trackfolio")
             print(
-                "Para ver canciones, abre un catálogo existente o importa música; "
-                "la preparación no toca esos datos."
+                f"Launch the application: {launcher} --run-uv run --locked --extra gui trackfolio"
+            )
+            print(
+                "To view songs, open an existing catalog or import music; "
+                "setup does not touch that data."
             )
         if args.open_code:
             if editor is None:
-                raise SetupError("No hay editor disponible para --open-code.")
+                raise SetupError("No editor available for --open-code.")
             command, environment = code_command(
                 editor, [str(PROJECT_ROOT / "Trackfolio.code-workspace")]
             )

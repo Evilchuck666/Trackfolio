@@ -1,4 +1,4 @@
-"""Importación y consulta del catálogo mediante contratos, sin GUI ni ORM."""
+"""Catalog import and queries through contracts, without a GUI or ORM."""
 
 from pathlib import Path
 from typing import Protocol
@@ -11,41 +11,41 @@ AUDIO_SUFFIXES = (".flac", ".mp3")
 
 
 class CatalogAccessError(Exception):
-    """Un catálogo no está accesible; el mensaje puede presentarse en cualquier interfaz."""
+    """A catalog is inaccessible; the message can be shown in any interface."""
 
 
 class MetadataReadError(Exception):
-    """El archivo de audio no se puede leer; el mensaje es apto para la interfaz."""
+    """The audio file cannot be read; the message is suitable for the interface."""
 
 
 class UnsupportedAudioError(MetadataReadError):
-    """El contenido detectado no es uno de los formatos FLAC/MP3 admitidos."""
+    """The detected content is not a supported FLAC/MP3 format."""
 
 
 def validate_library_root(root: Path) -> Path:
-    """Normaliza una raíz existente antes de leer audio o preparar el destino."""
+    """Normalize an existing root before reading audio or preparing the destination."""
     root = root.expanduser().resolve(strict=True)
     if not root.is_dir():
-        raise ValueError("La raíz de la biblioteca debe ser un directorio.")
+        raise ValueError("The library root must be a directory.")
     return root
 
 
 def prepare_audio_source(source: Path, root: Path) -> tuple[Path, str]:
-    """Valida de nuevo un candidato, también si el árbol cambió tras explorarlo."""
+    """Revalidate a candidate, including when the tree changed after scanning."""
     original = source.expanduser().absolute()
     resolved = original.resolve(strict=True)
     try:
         relative_path = resolved.relative_to(root).as_posix()
     except ValueError as exc:
-        raise ValueError("El archivo debe estar dentro de la raíz de la biblioteca.") from exc
+        raise ValueError("The file must be inside the library root.") from exc
     if not resolved.is_file():
-        raise ValueError("El archivo de audio debe ser un archivo regular.")
+        raise ValueError("The audio file must be a regular file.")
     # Exclude links/junctions below the selected root, including a directory replaced
     # after scanning. An explicitly selected root can itself be a normalized alias.
     candidate = original
     while candidate.resolve(strict=True) != root:
         if candidate.is_symlink() or candidate.is_junction():
-            raise ValueError("No se importan enlaces simbólicos ni puntos de unión.")
+            raise ValueError("Symbolic links and junctions are not imported.")
         parent = candidate.parent
         if parent == candidate:
             break
@@ -74,7 +74,7 @@ class CatalogRepository(TrackLookup, SummaryListing, Protocol):
 
 
 class CatalogSession(TrackLookup, SummaryListing, Protocol):
-    """Catálogo abierto para lectura; la interfaz no conoce su motor de BD."""
+    """Catalog opened for reading; the interface does not know its database engine."""
 
     database_path: Path
 

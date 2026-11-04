@@ -1,4 +1,4 @@
-"""Coordinación cancelable de una biblioteca musical, sin Qt ni persistencia concreta."""
+"""Cancellable music library coordination without Qt or concrete persistence."""
 
 from __future__ import annotations
 
@@ -100,11 +100,11 @@ class ImportReport:
 
 
 class AudioScanError(Exception):
-    """La raíz musical no se puede explorar; un subdirectorio fallido es una incidencia."""
+    """The music root cannot be scanned; a failed subdirectory is an issue."""
 
 
 class ImportTargetError(Exception):
-    """Fallo presentable del destino; puede incluir una limpieza fallida al abrirlo."""
+    """Presentable destination failure; may include failed cleanup when opening."""
 
     def __init__(self, message: str, cleanup_issue: ImportIssue | None = None) -> None:
         super().__init__(message)
@@ -155,7 +155,7 @@ class ImportCatalog:
         is_cancelled: Callable[[], bool] = lambda: False,
         on_progress: Callable[[ImportProgress], None] = lambda _: None,
     ) -> ImportReport:
-        """Importa en transacciones individuales y devuelve siempre el avance confirmado."""
+        """Import in individual transactions and always return confirmed progress."""
         database_path = request.database_path
         discovered = created = updated = failed = 0
         total: int | None = None

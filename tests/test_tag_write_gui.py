@@ -56,8 +56,8 @@ def open_dialog(app, window, controller):
     assert not window.table.isEnabled()
     assert dialog.table.rowCount() == len(window.selected_file_ids())
     assert {button.text() for button in dialog.findChildren(QPushButton)} == {
-        "Cerrar",
-        "Escribir etiquetas",
+        "Close",
+        "Write tags",
     }
     return dialog
 
@@ -108,7 +108,7 @@ def test_gui_lists_songs_immediately_and_writes_all_saved_fields(qt_app, setup_t
             assert metadata.genres == ("Rock",) and metadata.lyrics is None
             assert reports[0].results[index].backup_path is None
             assert not (source.parent / ".trackfolio-backups").exists()
-        assert "Escribiendo y verificando" in dialog.output.toPlainText()
+        assert "Writing and verifying" in dialog.output.toPlainText()
         assert dialog.table.rowCount() == 2 and dialog._error_popup is None
         assert not dialog.write_button.isEnabled()
         assert dialog.close_button.isEnabled()
@@ -262,7 +262,7 @@ def test_unchanged_songs_do_not_write_or_offer_a_report(qt_app, setup_tags, tmp_
         QTest.mouseClick(dialog.write_button, Qt.MouseButton.LeftButton)
         wait_until(qt_app, lambda: bool(reports) and not controller._tag_running)
         assert reports[0].results[0].state == "unchanged"
-        assert dialog.table.item(0, 3).text() == "Sin cambios"
+        assert dialog.table.item(0, 3).text() == "Unchanged"
         assert source.read_bytes() == original and not files.journal_root.exists()
         assert dialog._error_popup is None
         assert not dialog.write_button.isEnabled()
@@ -294,7 +294,7 @@ def test_gui_updates_only_nfo_and_completes(qt_app, setup_tags, tmp_path):
 
         assert ElementTree.parse(nfo).findtext("track/title") == "Original"
         assert ElementTree.parse(nfo).findtext("track/duration") == "5:35"
-        assert "NFO actualizado" in dialog.output.toPlainText()
+        assert "NFO updated" in dialog.output.toPlainText()
         assert "0 archivos escritos. 1 NFO actualizados." in dialog.summary.text()
         assert dialog._error_popup is None and not dialog.write_button.isEnabled()
     finally:
@@ -328,7 +328,7 @@ def test_gui_nfo_error_exports_report_and_retry_updates_only_nfo(
         assert dialog._report.results[0].state == "confirmed"
         assert dialog._report.nfo_results[0].state == "failed"
         assert dialog.write_button.isEnabled()
-        assert "NFO fallido" in dialog.output.toPlainText()
+        assert "NFO failed" in dialog.output.toPlainText()
         destination = tmp_path / "nfo-errors.json"
 
         def choose_report():
@@ -337,7 +337,7 @@ def test_gui_nfo_error_exports_report_and_retry_updates_only_nfo(
             picker.accept()
 
         popup = dialog._error_popup
-        save = next(button for button in popup.buttons() if button.text() == "Guardar informe…")
+        save = next(button for button in popup.buttons() if button.text() == "Save report…")
         QTimer.singleShot(0, choose_report)
         QTest.mouseClick(save, Qt.MouseButton.LeftButton)
         stored = json.loads(destination.read_text(encoding="utf-8"))
@@ -381,7 +381,7 @@ def test_errors_offer_export_in_popup_and_keep_successful_songs(qt_app, setup_ta
             picker.accept()
 
         popup = dialog._error_popup
-        save = next(button for button in popup.buttons() if button.text() == "Guardar informe…")
+        save = next(button for button in popup.buttons() if button.text() == "Save report…")
         QTimer.singleShot(0, choose_report)
         QTest.mouseClick(save, Qt.MouseButton.LeftButton)
         stored = json.loads(destination.read_text(encoding="utf-8"))
@@ -421,7 +421,7 @@ def test_preparation_error_offers_a_report_without_touching_audio(
         wait_until(qt_app, lambda: dialog._error_popup is not None and not controller._tag_running)
         assert "Catalogue unavailable" in dialog.output.toPlainText()
         assert source.read_bytes() == original and not files.journal_root.exists()
-        assert any(button.text() == "Guardar informe…" for button in dialog._error_popup.buttons())
+        assert any(button.text() == "Save report…" for button in dialog._error_popup.buttons())
         assert dialog.write_button.isEnabled()
     finally:
         teardown(window, controller)

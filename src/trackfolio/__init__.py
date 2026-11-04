@@ -1,1 +1,1 @@
-"""Trackfolio: paquete base; las interfaces se incorporarán por separado."""
+"""Trackfolio: base package; interfaces are added separately."""

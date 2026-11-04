@@ -27,10 +27,10 @@ def _load_font_family() -> str:
             QByteArray(resources.joinpath("fonts", name).read_bytes())
         )
         if identifier < 0:
-            raise RuntimeError(f"No se pudo cargar la fuente empaquetada {name}.")
+            raise RuntimeError(f"Could not load packaged font {name}.")
         families.update(QFontDatabase.applicationFontFamilies(identifier))
     if "Inter" not in families:
-        raise RuntimeError("La fuente empaquetada no contiene la familia Inter.")
+        raise RuntimeError("The packaged font does not contain the Inter family.")
     _font_family = "Inter"
     return _font_family
 
@@ -39,7 +39,7 @@ def apply_theme(app: QApplication) -> None:
     """Apply Fusion, the packaged fonts, palette and stylesheet consistently."""
     available_styles = QStyleFactory.keys()
     if "Fusion" not in available_styles:
-        raise RuntimeError("El estilo Fusion no está disponible.")
+        raise RuntimeError("The Fusion style is unavailable.")
     app.setStyle("Fusion")
     font = QFont(_load_font_family())
     font.setPixelSize(13)
@@ -83,7 +83,7 @@ def icon(name: str) -> QIcon:
     data = files("trackfolio.resources").joinpath("icons", f"{name}.svg").read_bytes()
     renderer = QSvgRenderer(QByteArray(data))
     if not renderer.isValid():
-        raise RuntimeError(f"El icono empaquetado {name} no es un SVG válido.")
+        raise RuntimeError(f"Packaged icon {name} is not a valid SVG.")
     result = QIcon()
     for size in (16, 24, 32, 48, 64, 96, 128, 256):
         pixmap = QPixmap(size, size)

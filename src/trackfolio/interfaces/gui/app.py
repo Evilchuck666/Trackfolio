@@ -32,11 +32,13 @@ class CatalogApplication(QApplication):
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Trackfolio · catálogo de música")
-    parser.add_argument("--database", type=Path, help="Catálogo SQLite existente.")
-    parser.add_argument("--no-restore", action="store_true", help="Iniciar sin restaurar catálogo.")
+    parser = argparse.ArgumentParser(description="Trackfolio · music catalog")
+    parser.add_argument("--database", type=Path, help="Existing SQLite catalog.")
     parser.add_argument(
-        "--dev-root", type=Path, help="Proponer catálogos en data/ de este proyecto."
+        "--no-restore", action="store_true", help="Start without restoring a catalog."
+    )
+    parser.add_argument(
+        "--dev-root", type=Path, help="Suggest catalogs in this project's data/ directory."
     )
     args, qt_args = parser.parse_known_args(sys.argv[1:] if argv is None else argv)
     app = CatalogApplication(["Trackfolio", *qt_args])

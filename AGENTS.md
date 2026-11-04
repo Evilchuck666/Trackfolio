@@ -1,9 +1,9 @@
-# Reglas de trabajo
+# Working rules
 
-## Rama de Git
+## Git branch
 
-- Trabaja siempre sobre la rama local activa del usuario. Antes de modificar el proyecto, comprueba cuál es con `git branch --show-current`.
-- No crees ramas locales ni remotas, no cambies de rama y no crees worktrees salvo que el usuario lo pida explícitamente.
-- Ejecuta los planes y los cambios posteriores sobre esa misma rama local. No crees una rama en GitHub para ejecutar un plan ni desvíes el trabajo a otra rama.
-- Si una herramienta o flujo propone crear o usar otra rama, conserva la rama local activa. Si resulta imprescindible cambiarla, explica el motivo y solicita autorización explícita antes de hacerlo.
-- No publiques cambios ni hagas push salvo que el usuario lo solicite.
+- Always work on the user's active local branch. Before modifying the project, check it with `git branch --show-current`.
+- Do not create local or remote branches, switch branches, or create worktrees unless the user explicitly requests it.
+- Execute plans and subsequent changes on that same local branch. Do not create a GitHub branch to execute a plan or divert work to another branch.
+- If a tool or workflow proposes creating or using another branch, keep the active local branch. If switching is essential, explain why and request explicit authorization before doing so.
+- Do not publish changes or push unless the user requests it.

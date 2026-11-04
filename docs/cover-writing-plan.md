@@ -1,199 +1,108 @@
-# Plan de incrustación de miniaturas al escribir etiquetas
+# Plan for embedding thumbnails when writing tags
 
-Estado: implementado localmente el 3 de noviembre de 2026, sobre la rama `thumbnail`.
-Sin crear ramas ni publicar cambios. Validación y pendientes de CI/escritorio en
-[VALIDATION.md](../VALIDATION.md#incrustación-de-portadas-al-escribir-etiquetas-2026-11-03).
+Status: implemented locally on November 3, 2026 on branch `thumbnail`, without creating branches or publishing changes. Validation and pending CI/desktop work are in [VALIDATION.md](../VALIDATION.md#embedding-artwork-when-writing-tags-2026-11-03).
 
-## Resultado esperado
+## Expected result
 
-Al pulsar **Escribir etiquetas** en el diálogo de selección o de todo el catálogo,
-buscar imágenes en la carpeta de cada canción destinataria e incrustar la elegida
-como portada frontal en sus FLAC/MP3. Sustituir la portada frontal que ya contengan.
-La operación también funcionará cuando no haya diferencias en las etiquetas de texto.
-**Guardar** seguirá guardando las ediciones del catálogo sin modificar la música.
+Clicking **Write tags** in the selection or entire-catalog dialog searches each target song's folder for images and embeds the chosen image as the front cover in FLAC/MP3, replacing any existing front cover. This also works without text-tag differences. **Save** continues to save catalog edits without modifying music.
 
-| Imágenes encontradas en la carpeta | Comportamiento |
+| Images found in the folder | Behavior |
 | --- | --- |
-| Ninguna | Escribir los cambios de texto/NFO que correspondan y conservar la portada incrustada actual. Si no tiene portada, seguirá sin ella. |
-| Una | Utilizarla automáticamente, aunque ya exista otra portada incrustada. |
-| Varias | Preguntar qué imagen usar antes de iniciar la publicación de archivos. Una elección por carpeta, compartida por sus canciones destinatarias. |
+| None | Write applicable text/NFO changes and preserve the embedded cover or its absence |
+| One | Use automatically, even when another cover is embedded |
+| Multiple | Ask which image to use before file publication; one choice per folder shared by its target songs |
 
-Se considerarán `.jpg`, `.jpeg` y `.png`, sin distinguir mayúsculas en la extensión.
-Un único PNG tendrá el mismo tratamiento automático que un único JPG. No se dará
-preferencia silenciosa a `album.jpg`, `folder.jpg` u otro nombre si hay varias imágenes.
+Recognize `.jpg`, `.jpeg` and `.png` with case-insensitive extensions. A single PNG is as automatic as a single JPG. Multiple images do not silently favor `album.jpg`, `folder.jpg` or another name.
 
-La búsqueda se limita a la misma carpeta del audio, sin recorrer subcarpetas ni
-carpetas superiores. No se utilizará como sustituto la miniatura de SQLite ni una
-referencia `thumb` del NFO. La imagen original se lee sin modificarla ni renombrarla.
-No se descargan imágenes ni se convierten JPEG a PNG o viceversa.
+Search only the audio folder, without traversing subfolders or parents. Neither the SQLite thumbnail nor an NFO `thumb` reference substitutes for a source image. Read the original without modifying or renaming it. Do not download images or convert between JPEG and PNG.
 
-## Elección de imagen y cancelación
+## Image selection and cancellation
 
-1. Resolver los borradores pendientes mediante Guardar/Descartar/Cancelar, como ahora,
-   y congelar los identificadores de las canciones destinatarias.
-2. Explorar las carpetas en un trabajador, agrupando por directorio físico y
-   normalizando las raíces que sean alias, con las mismas reglas que la escritura NFO.
-3. Si hay carpetas con varias imágenes, mostrar un diálogo Qt con sus candidatos:
-   nombre, vista previa y dimensiones. Exigir una selección explícita en cada carpeta
-   o permitir **Conservar portada actual** para omitir la imagen de esa carpeta.
-4. Para un catálogo con muchas carpetas, presentar las elecciones en un mismo diálogo
-   organizado por carpeta. No preguntar por cada canción ni bloquear el trabajador
-   esperando a que Qt responda.
-5. Confirmar las elecciones y preparar la escritura de texto, imágenes y NFO. Revalidar
-   el inventario y los archivos elegidos antes de publicar.
+1. Resolve pending drafts through Save/Discard/Cancel, as now, and freeze target song IDs.
+2. Scan folders in a worker, grouping by physical directory and normalizing aliased roots under the same rules as NFO writing.
+3. For folders with multiple images, show a Qt dialog listing filenames, previews and dimensions. Require an explicit selection per folder or allow **Keep current cover** to skip that folder's image.
+4. For catalogs with many folders, collect choices in one folder-organized dialog. Do not ask per song or block the worker waiting for Qt.
+5. Confirm choices and prepare text, image and NFO writing. Revalidate inventory and selected files before publication.
 
-Cancelar o cerrar el selector cancela ese intento completo antes de crear respaldos
-o publicar música/NFO. Se podrá volver a intentarlo desde el diálogo principal.
-Durante la exploración y publicación, **Cerrar** conservará la cancelación cooperativa
-actual. La selección de portada será válida para ese intento; no se guardarán
-preferencias implícitas para futuras operaciones.
+Cancelling or closing the selector cancels the whole attempt before backups or music/NFO publication. Retry remains available from the main dialog. During scanning and publication, **Close** retains existing cooperative cancellation. Cover choices apply to that attempt only; no implicit preferences are saved for future operations.
 
-Con selección parcial, sólo se incrustará la imagen en las canciones destinatarias.
-Las pistas no seleccionadas de la misma carpeta no se escribirán. La agregación NFO
-de álbum seguirá consultando las pistas necesarias sin ampliar esa selección musical.
+Partial selection embeds images only in target songs. Unselected tracks in the same folder are not written. NFO album aggregation still queries necessary tracks without expanding the music selection.
 
-## Significado de sobrescribir la miniatura
+## Meaning of replacing the thumbnail
 
-La imagen elegida sustituirá las imágenes marcadas como **portada frontal**, dejando
-exactamente una portada frontal. Se conservarán contraportadas, libretos y otros
-tipos de imágenes, con sus bytes, atributos y descripciones. Si antes sólo había una
-imagen de otro tipo, se añadirá la frontal elegida y el lector la priorizará.
+The chosen image replaces pictures marked **front cover**, leaving exactly one front cover. Back covers, booklets and other picture types retain their bytes, attributes and descriptions. If only another picture type existed, add the chosen front cover and prioritize it in the reader.
 
-| Formato | Escritura propuesta |
+| Format | Proposed write |
 | --- | --- |
-| FLAC | Bloque `PICTURE` frontal, con los bytes originales de la imagen y su MIME/dimensiones. Conservar los demás bloques e imágenes. |
-| MP3 | Frame `APIC` de tipo frontal, conservando la versión ID3 admitida. Evitar colisiones de descripción con imágenes de otros tipos. |
+| FLAC | Front `PICTURE` block with original image bytes and MIME/dimensions; preserve other blocks and images |
+| MP3 | Front `APIC` frame retaining the supported ID3 version; avoid description collisions with other picture types |
 
-Estas representaciones corresponden a las APIs de
-[FLAC Picture](https://mutagen.readthedocs.io/en/latest/api/flac.html#mutagen.flac.Picture)
-y [ID3 APIC](https://mutagen.readthedocs.io/en/latest/api/id3_frames.html#mutagen.id3.APIC)
-de Mutagen. No se recodifica el audio. Se mantienen las restricciones actuales sobre
-versiones ID3 y archivos que no puedan preservarse de forma verificable.
+These representations match Mutagen's [FLAC Picture](https://mutagen.readthedocs.io/en/latest/api/flac.html#mutagen.flac.Picture) and [ID3 APIC](https://mutagen.readthedocs.io/en/latest/api/id3_frames.html#mutagen.id3.APIC) APIs. Audio is not re-encoded. Existing restrictions on ID3 versions and files that cannot be verifiably preserved remain.
 
-Si ya hay exactamente una portada frontal con los mismos bytes y MIME, no es
-necesario reemplazar el archivo sólo por esa imagen. Dos frontales duplicadas sí
-requieren normalización. El segundo intento, sin cambios posteriores, será idempotente.
+If exactly one front cover already has the same bytes and MIME, the file need not be replaced solely for that image. Duplicate front covers do require normalization. A second attempt without further changes is idempotent.
 
-**Ninguna imagen** y **Conservar portada actual** significan ausencia de una petición
-de cambio de portada; nunca una orden de borrarla. Este caso debe representarse
-explícitamente en el dominio y no confundirse con una imagen vacía.
+**No image** and **Keep current cover** mean no cover-change request, never a deletion request. Represent this explicitly in the domain, distinct from an empty image.
 
-## Preparación de la fuente y comprobaciones
+## Source preparation and checks
 
-Añadir un adaptador de descubrimiento/lectura de imágenes independiente de Qt.
-Reutilizar, extrayéndolo a un helper compartido si conviene, el reconocimiento JPEG/PNG
-actual de `infrastructure/metadata.py`. Obtener el tipo real y las dimensiones del
-contenido, sin asumir que la extensión garantiza el formato. La GUI comprobará que
-puede decodificar las vistas previas y señalará las imágenes que no pueda representar.
+Add a Qt-independent image discovery/reading adapter. Reuse JPEG/PNG recognition from `infrastructure/metadata.py`, extracting a shared helper if useful. Detect actual content type and dimensions rather than trusting extensions. The GUI checks preview decoding and flags images it cannot display.
 
-Proponer un máximo de **15 MiB por imagen**, además de comprobar que el bloque/frame
-resultante cabe en su formato. Una imagen vacía, ilegible, con formato no admitido o
-fuera de los límites será una incidencia; no se tratará como una carpeta sin imágenes
-ni provocará el borrado de la portada existente. Se podrá elegir otra imagen u omitir
-la portada de esa carpeta. Si la única imagen no es utilizable, las canciones de esa
-carpeta quedarán bloqueadas para ese intento; otras carpetas podrán continuar.
-Un fallo al explorar la carpeta también será una incidencia, no un resultado de cero imágenes.
+Propose a maximum of **15 MiB per image**, also ensuring the resulting block/frame fits its format. Empty, unreadable, unsupported or oversized images are issues, not empty-folder results, and must not erase an existing cover. Users may choose another image or skip that folder's cover. If the only image is unusable, block that folder's songs for the attempt; other folders may continue. Folder scan failures are also issues, not zero-image results.
 
-Registrar ruta, identidad, tamaño, fecha y SHA-256 de la imagen seleccionada. Congelar
-sus bytes para que todas las canciones de la carpeta reciban el mismo contenido.
-Revalidar la fuente antes de cada publicación: si cambia, desaparece o se sustituye,
-registrar conflicto y conservar las canciones aún no publicadas. Si cambia el inventario
-entre exploración y elección, volver a resolverlo sin elegir automáticamente otro archivo.
+Record selected image path, identity, size, timestamp and SHA-256. Freeze bytes so all songs in a folder receive the same content. Revalidate the source before each publication: changes, disappearance or replacement cause a conflict and preserve unpublished songs. If inventory changes between scanning and selection, resolve it again without automatically choosing another file.
 
-Aceptar las raíces importadas que sean alias normalizados; conservar su representación
-POSIX en las consultas SQLite. No seguir enlaces simbólicos/junctions de las imágenes
-ni de directorios internos, ni permitir rutas fuera de la raíz importada.
+Accept normalized imported-root aliases and retain their POSIX spelling in SQLite queries. Do not follow image/internal-directory symlinks or junctions, or allow paths outside the imported root.
 
-## Integración con la escritura recuperable
+## Integration with recoverable writing
 
-La portada debe formar parte de la misma planificación y del mismo reemplazo que las
-etiquetas de texto de cada canción. No realizar un segundo guardado directo sobre el
-original después de que el escritor haya terminado.
+Artwork belongs in the same plan and replacement as each song's text tags. Do not perform a second direct save on the original after the writer finishes.
 
-1. Incorporar al plan musical una intención de portada separada de `EDIT_FIELDS`:
-   conservar, utilizar imagen elegida o ya coincidente. Una diferencia de portada
-   por sí sola debe convertir la canción en escribible.
-2. Crear el respaldo completo y el temporal de audio mediante las primitivas actuales.
-3. Escribir los cambios de texto y la portada en ese temporal.
-4. Reabrirlo y comprobar directamente sus bloques `PICTURE`/frames `APIC`: tipo frontal,
-   cantidad, MIME y hash de los bytes incrustados deben coincidir con lo planificado.
-5. Verificar el hash del audio y los metadatos/imágenes ajenos. Adaptar las firmas de
-   preservación para permitir exclusivamente el cambio frontal solicitado, sin
-   excluir de la comparación todas las imágenes o todos los frames APIC.
-6. Revalidar imagen fuente, original musical y catálogo; sincronizar y publicar una vez.
-7. Confirmar en SQLite los datos observados, incluida la portada incrustada, y registrar
-   el resultado. Procesar después el NFO de acuerdo con las condiciones actuales.
-8. Limpiar los respaldos sólo tras finalizar correctamente el conjunto audio/portada/NFO.
-   Errores, conflictos, catálogo pendiente o cancelación conservan las copias del lote.
+1. Add a cover intent separate from `EDIT_FIELDS`: preserve, use selected image or already matching. Artwork differences alone make a song writable.
+2. Create a complete backup and audio temporary using existing primitives.
+3. Write text and artwork changes into that temporary.
+4. Reopen and directly inspect `PICTURE` blocks/`APIC` frames: front type, count, MIME and embedded-byte hash must match the plan.
+5. Verify audio hash and unrelated metadata/images. Adapt preservation signatures to allow only the requested front-cover change, without excluding all pictures/APIC frames.
+6. Revalidate image source, music original and catalog; sync and publish once.
+7. Confirm observed data in SQLite, including embedded artwork, and log the result. Process NFO afterward under existing conditions.
+8. Clean up backups only after successful completion of audio/artwork/NFO. Errors, conflicts, catalog-pending states or cancellation retain batch copies.
 
-La verificación no puede basarse sólo en `read_metadata(...).artwork`: ese lector puede
-devolver `album.jpg` como alternativa aunque la incrustación haya fallado. Es necesario
-demostrar que los bytes están dentro del archivo musical.
+Verification cannot rely only on `read_metadata(...).artwork`: that reader can return `album.jpg` as fallback even if embedding failed. Bytes must be proven present inside the music file.
 
-Ampliar la reserva de espacio para considerar el crecimiento de los archivos y los
-respaldos: una portada se repite en cada canción, aunque se lea una vez por carpeta.
-El informe distinguirá portada conservada, incrustada, sustituida, ya coincidente u
-omitida por elección, y mostrará la ruta fuente sin contar imágenes como canciones.
+Expand space reservation for file growth and backups: artwork repeats in every song even if read once per folder. Reports distinguish preserved, embedded, replaced, already matching and explicitly skipped covers, and show the source path without counting images as songs.
 
-Versionar la ampliación del registro persistente y admitir las versiones anteriores,
-que no contienen intenciones de portada. Guardar ruta fuente, huella y resultado,
-sin serializar imágenes en base64 dentro de `journal.json`. La revisión técnica usará
-los hashes y respaldos de audio y seguirá sin restaurar ni reescribir automáticamente.
+Version the persistent-log extension and accept older versions without cover intents. Store source path, fingerprint and result, without base64 images in `journal.json`. Technical review uses audio hashes/backups and still never automatically restores or rewrites.
 
-## Catálogo y miniatura mostrada
+## Catalog and displayed thumbnail
 
-Ampliar la instantánea y `SqliteTagCatalog.confirm`: actualmente confirma `raw_tags`
-y cambios de fecha, pero no reemplaza la imagen del catálogo.
+Extend the snapshot and `SqliteTagCatalog.confirm`, which currently confirms `raw_tags` and date changes but does not replace catalog artwork.
 
-Tras una publicación correcta, almacenar/reutilizar la imagen en `artworks`, actualizar
-`cover_artwork_id`, marcar la procedencia como `embedded` y retirar la ruta alternativa
-de esa canción. Refrescar el detalle para mostrar la portada recién incrustada.
-La comparación de instantáneas también debe proteger cambios concurrentes de portada.
+After successful publication, store/reuse the image in `artworks`, update `cover_artwork_id`, mark source `embedded` and remove that song's fallback path. Refresh details to display the newly embedded cover. Snapshot comparison must also protect concurrent artwork changes.
 
-Si la portada del audio ya coincide pero la imagen de SQLite está desactualizada,
-sincronizar sólo esa observación del catálogo, sin reemplazar de nuevo el audio.
-Sin fuente elegida, conservar la portada física y los datos de imagen actuales.
-Un fallo de confirmación posterior a la publicación seguirá siendo **catálogo pendiente**.
+If audio artwork already matches but SQLite artwork is stale, synchronize only that catalog observation without replacing audio again. Without a selected source, preserve physical artwork and current image data. Confirmation failure after publication remains **catalog pending**.
 
-## Componentes y orden de ejecución
+## Components and execution order
 
-| Fase | Componentes | Resultado verificable |
+| Phase | Components | Verifiable result |
 | --- | --- | --- |
-| 1. Contratos y descubrimiento | `domain/tag_write.py`, nuevo adaptador de imágenes y puertos de aplicación. | Inventarios y decisiones explícitas, sin Qt ni escritura musical. |
-| 2. Elección GUI | `controller.py`, diálogo de escritura y selector de portadas. | Varias imágenes se resuelven antes de publicar, con cancelación segura. |
-| 3. Codec y verificación | `infrastructure/tag_write.py`, reconocimiento compartido de imágenes. | FLAC/MP3 contienen la frontal elegida y conservan audio y otras imágenes. |
-| 4. Coordinación y catálogo | `application/write_tags.py`, `tag_write_catalog.py`, `tag_write_files.py`, `startup.py`. | Escritura sólo de portada, respaldo, confirmación, informe y recuperación compatibles. |
-| 5. Entrega | Pruebas, probe, workflow y documentación. | Validación local y matriz CI registradas con su estado real. |
+| 1. Contracts and discovery | `domain/tag_write.py`, new image adapter and application ports | Explicit inventories/decisions without Qt or music writing |
+| 2. GUI selection | `controller.py`, write dialog and cover selector | Multiple images resolved before publication with safe cancellation |
+| 3. Codec and verification | `infrastructure/tag_write.py`, shared image recognition | FLAC/MP3 contain the selected front cover while preserving audio and other images |
+| 4. Coordination and catalog | `application/write_tags.py`, `tag_write_catalog.py`, `tag_write_files.py`, `startup.py` | Compatible cover-only writes, backup, confirmation, report and recovery |
+| 5. Delivery | Tests, probe, workflow and documentation | Local validation and CI matrix recorded with actual status |
 
-No se prevé modificar el esquema SQLite: la tabla de imágenes y las referencias
-por archivo ya existen. Mantener el núcleo libre de Qt y reutilizar las dependencias
-actuales para la lectura básica de imágenes y la escritura musical.
+No SQLite schema changes are expected: the image table and per-file references already exist. Keep the core Qt-free and reuse existing dependencies for basic image reading and music writing.
 
-## Pruebas y aceptación
+## Tests and acceptance
 
-- Cero imágenes: conservar una portada existente; mantener sin portada una canción
-  que carece de ella. No utilizar la miniatura de SQLite como fuente implícita.
-- Una imagen JPG o PNG: incrustarla automáticamente en FLAC/MP3, con y sin frontal
-  previa, incluso sin diferencias de texto. Incluir `.jpeg` y extensiones en mayúsculas.
-- Varias imágenes: elección explícita por carpeta, vista previa, varias carpetas en
-  una operación, omisión voluntaria y cancelación antes de publicar cualquier archivo.
-- Selección parcial: sólo se escriben las canciones destinatarias. La misma imagen
-  se usa en todas las seleccionadas de esa carpeta; cada carpeta conserva su elección.
-- Reemplazar frontales duplicadas conservando contraportadas, libretos, imágenes
-  desconocidas y APIC con descripciones que puedan colisionar. Preservar ID3v2.3/v2.4.
-- Leer los bloques/frames incrustados con Mutagen y comprobar sus bytes, sin depender
-  de `album.jpg`, la carátula de SQLite ni la vista previa de Qt para acreditar el resultado.
-- Imagen ilegible/no admitida, límites, enlaces, cambios de fuente/inventario, rutas
-  Unicode, raíces con alias y formato de rutas Windows en SQLite.
-- Fallos antes/después de publicar, espacio insuficiente, cancelación y catálogo
-  pendiente; respaldos conservados y reintento que respeta la elección nueva.
-- Idempotencia y actualización de SQLite cuando sólo su miniatura esté desactualizada;
-  compatibilidad de registros antiguos y revisión tras interrupción real del proceso.
-- Integración Qt en trabajadores, selector accesible, detalle refrescado, progreso e
-  informe de errores. Ejecución con CP1252 simulado y codificaciones explícitas en fixtures.
+- Zero images: retain existing covers or absence; never implicitly use SQLite thumbnails.
+- One JPG/PNG: automatically embed in FLAC/MP3 with or without prior front artwork, even without text differences; include `.jpeg` and uppercase extensions.
+- Multiple images: explicit per-folder choice, previews, multiple folders per operation, voluntary skipping and cancellation before any publication.
+- Partial selection: write targets only; share one image among selected songs in a folder and retain separate choices per folder.
+- Replace duplicate fronts while preserving backs, booklets, unknown images and potentially colliding APIC descriptions; preserve ID3v2.3/v2.4.
+- Read embedded blocks/frames with Mutagen and compare bytes without relying on `album.jpg`, SQLite artwork or Qt previews as proof.
+- Unreadable/unsupported images, limits, links, source/inventory changes, Unicode paths, aliased roots and Windows SQLite path spelling.
+- Failures before/after publication, insufficient space, cancellation and catalog-pending states; backups retained and retries respect the new choice.
+- Idempotence and SQLite-only updates when its thumbnail alone is stale; old-log compatibility and review after actual process interruption.
+- Qt worker integration, accessible selector, refreshed details, progress and error reporting; simulated CP1252 execution and explicit fixture encodings.
 
-Actualizar `docs/tag-writing.md`, `docs/tag-write-plan.md`, README y `VALIDATION.md` al
-implementar. Ejecutar Ruff, formato, mypy, pytest y diagnóstico; validar también el wheel
-instalado fuera del checkout, primero sin Qt y después con GUI. Ampliar el probe y CI
-para comprobar la incrustación real y registrar por separado Linux, Windows y macOS,
-además de cualquier revisión visual manual pendiente.
+Update `docs/tag-writing.md`, `docs/tag-write-plan.md`, README and `VALIDATION.md` during implementation. Run Ruff, formatting, mypy, pytest and diagnostics; also validate the installed wheel outside the checkout, first without Qt and then with the GUI. Extend the probe and CI to verify actual embedding, recording Linux, Windows and macOS separately alongside pending manual visual review.

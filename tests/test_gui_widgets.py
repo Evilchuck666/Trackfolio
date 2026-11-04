@@ -149,7 +149,7 @@ def test_partial_detail_clears_previous_cover_lyrics_and_totals(window):
             TrackMetadata(
                 title="Anterior",
                 artists=("Artista",),
-                album="Álbum",
+                album="Album",
                 album_year=2000,
                 track_number=4,
                 track_total=8,
@@ -227,7 +227,7 @@ def test_actions_errors_and_loading_remain_recoverable(window, qt_app):
     assert window.status_label.text() == "1 canción cargada."
     window.set_catalog(None, ())
     assert not window.refresh_button.isEnabled()
-    assert window.catalog_label.text() == "Sin catálogo"
+    assert window.catalog_label.text() == "No catalog"
 
 
 def test_qt_title_controls_toggle_maximize_and_close(window, qt_app):

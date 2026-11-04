@@ -1,141 +1,80 @@
-# Arquitectura de Trackfolio
+# Trackfolio architecture
 
-El núcleo importa, consulta y edita un catálogo de archivos FLAC/MP3 y escribe sus etiquetas mediante contratos independientes de Qt. La GUI utiliza estos contratos; las interfaces CLI/TUI y de servidor se mantienen como posibilidades futuras.
+The core imports, queries and edits a FLAC/MP3 file catalog and writes its tags through Qt-independent contracts. The GUI uses these contracts; CLI/TUI and server interfaces remain future possibilities.
 
-## Dependencias entre capas
+## Dependencies between layers
 
 ```mermaid
 flowchart LR
-    GUI[GUI Qt] --> Application[Casos de uso y contratos]
-    CLI[CLI / TUI futura] --> Application
-    API[API futura] --> Application
-    Application --> Domain[Dominio]
-    Infrastructure[Adaptadores de infraestructura] --> Application
+    GUI[Qt GUI] --> Application[Use cases and contracts]
+    CLI[Future CLI / TUI] --> Application
+    API[Future API] --> Application
+    Application --> Domain[Domain]
+    Infrastructure[Infrastructure adapters] --> Application
     Infrastructure --> Domain
-    Startup[Punto de arranque] --> GUI
+    Startup[Startup entry point] --> GUI
     Startup --> Application
     Startup --> Infrastructure
 ```
 
-Las dependencias de código apuntan hacia el dominio y los contratos internos. Los casos de uso llaman a adaptadores mediante contratos; el punto de arranque construye los adaptadores y los conecta. Así, la persistencia o la GUI pueden sustituirse sin cambiar las reglas del catálogo.
+Code dependencies point toward the domain and internal contracts. Use cases call adapters through contracts; the startup entry point constructs and connects the adapters. Persistence or the GUI can therefore be replaced without changing catalog rules.
 
-| Paquete | Responsabilidad prevista | Dependencias permitidas |
+| Package | Intended responsibility | Allowed dependencies |
 | --- | --- | --- |
-| `domain` | Entidades, valores, invariantes y reglas musicales | Biblioteca estándar; sin Qt, ORM o acceso a archivos |
-| `application` | Casos de uso, contratos de repositorio y acceso a metadatos, resultados y errores de aplicación | Dominio y biblioteca estándar |
-| `infrastructure` | SQLite/SQLAlchemy, migraciones Alembic, Mutagen, archivos y directorios de usuario | Contratos internos y librerías técnicas |
-| `interfaces/gui` | Widgets, presentación y traducción de eventos del usuario | Casos de uso y Qt; adaptadores conectados desde el arranque |
-| `resources` | Recursos visuales incluidos en el paquete | Acceso mediante recursos de Python/Qt al implementar la GUI |
+| `domain` | Entities, values, invariants and music rules | Standard library; no Qt, ORM or file access |
+| `application` | Use cases, repository and metadata access contracts, application results and errors | Domain and standard library |
+| `infrastructure` | SQLite/SQLAlchemy, Alembic migrations, Mutagen, files and user directories | Internal contracts and technical libraries |
+| `interfaces/gui` | Widgets, presentation and translation of user events | Use cases and Qt; adapters wired at startup |
+| `resources` | Visual assets included in the package | Access through Python/Qt resources when implementing the GUI |
 
-Los contratos públicos de dominio y aplicación no expondrán `QObject`, señales Qt, widgets, modelos ORM, sesiones SQLAlchemy ni objetos de Mutagen. Usarán tipos de Python y resultados definidos por la aplicación. La conversión a esos tipos corresponde a cada adaptador.
+Public domain and application contracts must not expose `QObject`, Qt signals, widgets, ORM models, SQLAlchemy sessions or Mutagen objects. They use Python types and application-defined results. Each adapter converts its data into those types.
 
-## GUI y futuras interfaces
+## GUI and future interfaces
 
-La GUI es una capa de presentación: recoge una solicitud, invoca un caso de uso y muestra su resultado o error. No decide las reglas de edición de etiquetas, no construye consultas SQL y no escribe directamente los archivos musicales. Los casos de uso también coordinan las operaciones que necesitan varios adaptadores.
+The GUI is a presentation layer: it collects a request, invokes a use case and displays its result or error. It does not decide tag editing rules, build SQL queries or write music files directly. Use cases also coordinate operations requiring multiple adapters.
 
-El controlador gráfico ejecuta consultas mediante un pool de tareas Qt y sólo modifica widgets en el hilo gráfico. Usa identificadores de solicitud para descartar resultados de selecciones o catálogos anteriores. Las conexiones SQLite se obtienen por operación; el cierre espera a las consultas activas antes de liberar las sesiones y los objetos Qt. Los casos de uso permanecen independientes del bucle de eventos.
+The graphical controller executes queries through a Qt task pool and only modifies widgets on the GUI thread. Request identifiers discard results from previous selections or catalogs. SQLite connections are obtained per operation; shutdown waits for active queries before releasing sessions and Qt objects. Use cases remain independent of the event loop.
 
-`ImportCatalog` coordina una carpeta con contratos de exploración, lectura y destino de
-escritura. Solicitud, progreso, incidencias e informe son dataclasses inmutables Python.
-Los adaptadores convierten errores técnicos a errores de aplicación. La exploración
-selecciona rutas FLAC/MP3; la lectura y escritura son secuenciales, con una transacción
-por archivo y resultados ligeros de creación/actualización sin recargar BLOBs.
+`ImportCatalog` coordinates a folder through scanning, reading and write-destination contracts. Requests, progress, issues and reports are immutable Python dataclasses. Adapters convert technical errors into application errors. Scanning selects FLAC/MP3 paths; reading and writing are sequential, with one transaction per file and lightweight created/updated results without reloading BLOBs.
 
-La GUI invalida y termina sus consultas pendientes antes de retirar el lector e iniciar
-el escritor. Durante la importación deshabilita cambios de catálogo y selección; progreso
-y resultados llegan mediante señales encoladas. La cancelación es cooperativa y conserva
-las escrituras confirmadas. Al terminar libera el escritor y reabre el lector, conservando
-la selección cuando actualiza el mismo catálogo. El cierre de ventana y las solicitudes
-normales de salida de Qt mantienen activo el bucle de eventos hasta liberar el trabajador;
-la disposición final garantiza que sus objetos Qt no se destruyen antes de ese cierre.
+The GUI invalidates and finishes pending queries before retiring the reader and starting the writer. During import it disables catalog and selection changes; progress and results arrive through queued signals. Cancellation is cooperative and preserves confirmed writes. At completion it releases the writer and reopens the reader, retaining selection when updating the same catalog. Window close and normal Qt exit requests keep the event loop active until the worker is released; final disposal ensures Qt objects are not destroyed before shutdown.
 
-Una futura CLI/TUI utilizará los mismos casos de uso. Para una biblioteca remota, el servidor ejecutará los casos de uso junto a su música y su almacenamiento; el frontend web consumirá su API. Autenticación, protocolo, concurrencia y despliegue se diseñarán cuando se implemente esa interfaz. Esta preparación no añade un servidor.
+A future CLI/TUI will use the same use cases. For a remote library, the server will execute use cases alongside its music and storage; the web frontend will consume its API. Authentication, protocol, concurrency and deployment will be designed when that interface is implemented. This preparation does not add a server.
 
-`GetEditableTrack`, `FindArtists`, `FindGenres` y `UpdateCatalogTrack` usan valores
-inmutables y un patch explícito de campos modificados. La validación reside en el núcleo;
-obtener sugerencias o preparar un borrador sólo abre lectores. La fábrica de edición
-abre un escritor de SQLite únicamente para un cambio válido y efectivo.
+`GetEditableTrack`, `FindArtists`, `FindGenres` and `UpdateCatalogTrack` use immutable values and an explicit patch of changed fields. Validation belongs in the core; obtaining suggestions or preparing a draft opens readers only. The editing factory opens a SQLite writer only for a valid, effective change.
 
-El controlador mantiene la instantánea y el borrador, invalida consultas anteriores al
-iniciar la edición y espera a los trabajadores antes de guardar. Guardar, cancelar y la
-navegación con cambios pendientes son estados explícitos. Un conflicto conserva el
-borrador; el cierre durante una escritura espera su resultado. Las continuaciones
-diferidas se descartan si otro evento inició una nueva operación.
+The controller keeps the snapshot and draft, invalidates earlier queries when editing starts, and waits for workers before saving. Save, cancel and navigation with pending changes are explicit states. A conflict preserves the draft; closing during a write waits for its result. Deferred continuations are discarded if another event started a new operation.
 
-## Persistencia y rutas
+## Persistence and paths
 
-SQLAlchemy implementa el repositorio SQLite y Alembic gestiona su esquema. El snapshot
-`migrations/initial_schema.py` y la revisión `001_initial` permanecen inmutables.
-`infrastructure/schema.py` copia esa metadata y define el esquema vigente, con el índice
-único de nombres de artista añadido por `002_unique_artists`. Las exportaciones SQL
-histórica y vigente se generan desde la misma cadena de Alembic.
+SQLAlchemy implements the SQLite repository and Alembic manages its schema. The `migrations/initial_schema.py` snapshot and `001_initial` revision remain immutable. `infrastructure/schema.py` copies that metadata and defines the current schema, including the unique artist-name index added by `002_unique_artists`. Historical and current SQL exports are generated from the same Alembic chain.
 
-`schema_validation.py` reconoce ambos esquemas para lectura y exige el vigente para
-escritura, incluida la unicidad global y exacta. El respaldo SQLite y la migración
-transaccional se comparten entre el destino de importación, el script individual y el
-comando de actualización. El escritor reserva el catálogo antes del respaldo y revalida
-su revisión bajo ese bloqueo. Abrir para consultar nunca migra el archivo.
+`schema_validation.py` recognizes both schemas for reading and requires the current schema for writing, including global exact-name uniqueness. SQLite backup and transactional migration are shared by the import destination, individual-file script and upgrade command. The writer reserves the catalog before backup and revalidates its revision under that lock. Opening for browsing never migrates the file.
 
-El repositorio resuelve artistas por nombre exacto en todo el catálogo, con inserciones
-que reutilizan el índice único. El contexto del álbum decide su agrupación, pero no la
-identidad del artista. `ImportAudio`, `GetTrack` y `ListTracks` usan contratos de repositorio
-y dataclasses de dominio; el lector Mutagen y el repositorio SQLAlchemy son adaptadores
-intercambiables. Consulta el [modelo y sus reglas de importación](database.md).
+The repository resolves artists by exact name across the catalog, with inserts that reuse the unique index. Album context determines grouping, not artist identity. `ImportAudio`, `GetTrack` and `ListTracks` use repository contracts and domain dataclasses; the Mutagen reader and SQLAlchemy repository are interchangeable adapters. See the [model and import rules](database.md).
 
-El adaptador de edición compara una instantánea musical bajo `BEGIN IMMEDIATE` antes
-de aplicar un patch. Los nombres, roles y posiciones hacen que el token siga siendo
-válido tras consolidar artistas de `001` a `002`. La misma transacción resuelve artistas
-exactos, copia pistas compartidas, reasigna álbumes y obtiene el resultado confirmado.
-No reutiliza la sustitución completa del importador. Los valores técnicos, carátulas,
-`raw_tags` y roles ajenos al campo editado se conservan.
+The editing adapter compares a musical snapshot under `BEGIN IMMEDIATE` before applying a patch. Names, roles and positions keep the token valid after artist consolidation from `001` to `002`. The same transaction resolves exact artists, copies shared tracks, reassigns albums and obtains the confirmed result. It does not reuse the importer's complete replacement. Technical values, artwork, `raw_tags` and roles unrelated to the edited field are preserved.
 
-Las correcciones modifican SQLite. Reimportar sigue tomando los metadatos del archivo
-como origen y reemplaza las correcciones del catálogo, conservando roles adicionales.
-La edición no añade tablas ni dependencias y reutiliza el respaldo de catálogos antiguos.
+Corrections modify SQLite. Reimporting still uses file metadata as its source and replaces catalog corrections while preserving additional roles. Editing adds no tables or dependencies and reuses the backup of older catalogs.
 
-La importación guarda cada archivo en una transacción y no modifica la música.
-`TagWriteService.execute` calcula todas las diferencias guardadas y ejecuta la escritura.
-`PreviewTagWrites` prepara internamente el plan contra los archivos actuales,
-sin migraciones ni escrituras. `WriteTagWrites` coordina secuencialmente respaldo,
-edición en una copia, verificación, publicación y confirmación parcial en SQLite.
-`domain/tag_write.py` define solicitudes, instantáneas, diferencias, estados e informes;
-los contratos de aplicación no dependen de Mutagen, SQLAlchemy ni Qt.
+Import saves each file in a transaction and does not modify music. `TagWriteService.execute` calculates all saved differences and performs writing. `PreviewTagWrites` internally prepares the plan against current files without migrations or writes. `WriteTagWrites` sequentially coordinates backup, editing a copy, verification, publication and partial SQLite confirmation. `domain/tag_write.py` defines requests, snapshots, differences, states and reports; application contracts do not depend on Mutagen, SQLAlchemy or Qt.
 
-`infrastructure/tag_write.py` conserva familias de alias y versión ID3, verifica todos
-los valores semánticos y los metadatos ajenos, y compara hashes de audio FLAC/MPEG.
-`tag_write_files.py` proporciona copias exclusivas, huellas completas, reemplazo local
-y registros JSON sincronizados en el directorio de datos del usuario. Tras el éxito
-completo del lote y su confirmación persistida, elimina `.trackfolio-backups` entero
-en cada carpeta afectada; ante errores o cancelación conserva las copias. Los fallos
-de limpieza se incluyen en el resultado y se actualizan las rutas aún disponibles.
-Se registra el
-hash posterior antes del reemplazo para reconocer una publicación interrumpida.
-`tag_write_catalog.py` compara la instantánea musical y `raw_tags` bajo transacción;
-confirma únicamente las observaciones y la fecha física afectada, sin reimportar ni
-reemplazar otras correcciones del catálogo.
+`infrastructure/tag_write.py` preserves alias families and ID3 version, verifies all semantic values and unrelated metadata, and compares FLAC/MPEG audio hashes. `tag_write_files.py` provides exclusive copies, full fingerprints, local replacement and synchronized JSON logs in the user's data directory. After complete batch success and persisted confirmation, it removes the entire `.trackfolio-backups` directory in every affected folder; errors or cancellation retain copies. Cleanup failures appear in the result and available paths are updated. The post-write hash is recorded before replacement so an interrupted publication can be recognized. `tag_write_catalog.py` compares the musical snapshot and `raw_tags` in a transaction; it confirms only observations and the affected physical date, without reimporting or replacing other catalog corrections.
 
-`ReviewTagWrites` inspecciona el registro y los hashes. La confirmación explícita puede
-reconciliar SQLite y retirar un temporal propio verificado; nunca publica ni restaura
-música automáticamente. La atomicidad es por archivo, no por lote ni entre música y
-SQLite. Si el archivo se escribió y la confirmación falla, el informe conserva el estado
-**catálogo pendiente**. La GUI ejecuta la preparación y escritura en un trabajador,
-con cancelación cooperativa y cierre diferido. Muestra siempre las canciones y el progreso;
-los dos botones son Cerrar y Escribir etiquetas. Los errores ofrecen exportar el informe
-en un pop-up. La revisión técnica de registros se conserva en el núcleo y no tiene GUI. Véanse el [plan](tag-write-plan.md) y la
-[guía de formatos y recuperación](tag-writing.md).
+`ReviewTagWrites` inspects the log and hashes. Explicit confirmation can reconcile SQLite and remove a verified, owned temporary file; it never publishes or restores music automatically. Atomicity is per file, not per batch or across music and SQLite. If the file was written but confirmation fails, the report retains **catalog pending** status. The GUI runs preparation and writing in a worker with cooperative cancellation and deferred close. It always displays songs and progress; the two buttons are Close and Write tags. Errors offer report export in a popup. Technical log review remains in the core and has no GUI. See the [plan](tag-write-plan.md) and [format and recovery guide](tag-writing.md).
 
-Se usan `pathlib`, una raíz de biblioteca configurable y rutas relativas para los archivos. La ruta identifica la ubicación importada, no la identidad musical de una grabación. El esquema separa pistas y archivos, pero el importador inicial crea una pista por cada archivo nuevo; la identificación entre ediciones y la reasignación de raíces al mover una biblioteca quedan pendientes.
+Paths use `pathlib`, a configurable library root and relative file paths. A path identifies the imported location, not a recording's musical identity. The schema separates tracks and files, but the initial importer creates one track per new file; cross-edition identification and root reassignment when moving a library remain pending.
 
-`platformdirs` ubicará la configuración, caché y base de datos en directorios del usuario adecuados a cada sistema. Durante la revisión se utiliza explícitamente `data/database.tfo`, excluido de Git. La música y los datos locales no se guardan en el repositorio. Trasladar el código mediante Git y trasladar una biblioteca musical son operaciones distintas.
+`platformdirs` locates configuration, cache and databases in suitable per-system user directories. Review explicitly uses `data/database.tfo`, excluded from Git. Music and local data are not stored in the repository. Moving source through Git and moving a music library are separate operations.
 
-## Apariencia compartida
+## Shared appearance
 
-La GUI usa Qt Widgets con **Fusion** explícito, paleta y estilos compartidos, Inter 4.1 empaquetada con su licencia e iconos SVG propios. Los recursos se cargan con `importlib.resources`; el diálogo de apertura es Qt sin modo nativo. [Estilos disponibles en Qt](https://doc.qt.io/qt-6.11/qstylefactory.html).
+The GUI uses Qt Widgets with explicit **Fusion**, a shared palette and styles, Inter 4.1 packaged with its license, and original SVG icons. Resources load through `importlib.resources`; the open dialog uses Qt's non-native mode. [Available Qt styles](https://doc.qt.io/qt-6.11/qstylefactory.html).
 
-La ventana incluye barra de título y controles Qt propios, con operaciones de movimiento y redimensionado del sistema y alternativas según backend. Si un compositor Wayland rechaza esas operaciones, se usa el marco nativo para mantener la ventana operativa. La validación visual compara controles, colores, tipografía, iconos y distribución; el rasterizado y el escalado DPI pueden variar entre sistemas.
+The window includes a custom Qt title bar and controls, system move/resize operations and backend-specific fallbacks. If a Wayland compositor rejects those operations, the native frame keeps the window usable. Visual validation compares controls, colors, typography, icons and layout; rasterization and DPI scaling may vary across systems.
 
-## Estrategia de comprobación
+## Verification strategy
 
-Las reglas del dominio y los casos de uso se probarán sin Qt ni SQLite, usando adaptadores de prueba para sus contratos. Las pruebas de infraestructura usarán bases de datos temporales y archivos de prueba controlados. Las pruebas de GUI comprobarán la presentación y la integración con esos casos de uso.
+Domain rules and use cases are tested without Qt or SQLite, using test adapters for their contracts. Infrastructure tests use temporary databases and controlled test files. GUI tests check presentation and integration with those use cases.
 
-Las comprobaciones cubren reconstrucción del entorno, límites entre paquetes, disponibilidad de dependencias, migraciones, lectura de contenedores FLAC/MP3 sintéticos, importación y consulta mediante SQLite, y arranque mínimo de Qt. La prueba `offscreen` se registra por separado de las pruebas de escritorio real.
+Checks cover environment reconstruction, package boundaries, dependency availability, migrations, synthetic FLAC/MP3 container reading, SQLite import and queries, and minimal Qt startup. The `offscreen` test is recorded separately from actual desktop tests.

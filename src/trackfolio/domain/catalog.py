@@ -1,4 +1,4 @@
-"""Registros del catálogo independientes de la persistencia y de Qt."""
+"""Catalog records independent of persistence and Qt."""
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -17,7 +17,7 @@ class CatalogEntry:
 
 @dataclass(frozen=True, slots=True)
 class CatalogSummary:
-    """Datos ligeros de una canción para listas, sin portada ni líricas."""
+    """Lightweight song data for lists, without artwork or lyrics."""
 
     file_id: int
     track_id: int

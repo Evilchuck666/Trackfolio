@@ -41,9 +41,9 @@ def catalog(tmp_path):
         repository = SqliteCatalogRepository(engine)
         full = repository.save(
             TrackMetadata(
-                title="Canción",
+                title="Song",
                 artists=("Artista B", "Artista A"),
-                album="Álbum",
+                album="Album",
                 album_year=1981,
                 track_number=3,
                 track_total=10,
@@ -77,9 +77,9 @@ def test_gui_reads_sqlite_with_no_music_then_clears_every_missing_field(qt_app, 
         controller.open_database(database)
         wait_until(qt_app, lambda: completed == [full.file_id])
         assert window.model.rowCount() == 2
-        assert window.fields["title"].text() == "Canción"
+        assert window.fields["title"].text() == "Song"
         assert window.fields["artists"].text() == "Artista B; Artista A"
-        assert window.fields["album"].text() == "Álbum"
+        assert window.fields["album"].text() == "Album"
         assert window.fields["album_year"].text() == "1981"
         assert window.fields["track_number"].text() == "3"
         assert window.fields["track_total"].text() == "10"
@@ -155,7 +155,7 @@ def test_bad_catalog_is_recoverable_then_a_valid_one_opens(qt_app, catalog, tmp_
         controller.open_database(database)
         wait_until(qt_app, lambda: completed == [full.file_id])
         assert window.error_label.text() == ""
-        assert window.fields["title"].text() == "Canción"
+        assert window.fields["title"].text() == "Song"
     finally:
         window.close()
 

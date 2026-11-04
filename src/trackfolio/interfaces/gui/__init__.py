@@ -1,1 +1,1 @@
-"""Interfaz Qt pendiente de desarrollo; no carga Qt al importar el paquete."""
+"""Qt interface; importing the package does not load Qt."""

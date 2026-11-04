@@ -1,4 +1,4 @@
-"""Exploración de música recursiva, cancelable y sin atravesar enlaces."""
+"""Recursive, cancellable music scanning without following links."""
 
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ class FileSystemAudioScanner:
                 with os.scandir(directory) as iterator:
                     entries = sorted(iterator, key=lambda entry: entry.name)
             except OSError as exc:
-                message = f"No se puede explorar la carpeta {directory}: {exc}"
+                message = f"Cannot scan folder {directory}: {exc}"
                 if directory == root:
                     raise AudioScanError(message) from exc
                 issues.append(ImportIssue(directory, "scan", message))
@@ -58,9 +58,7 @@ class FileSystemAudioScanner:
                         sources.append(AudioSource(path, path.relative_to(root).as_posix()))
                         on_discovered(len(sources))
                 except OSError as exc:
-                    issues.append(
-                        ImportIssue(path, "scan", f"No se puede inspeccionar {path}: {exc}")
-                    )
+                    issues.append(ImportIssue(path, "scan", f"Cannot inspect {path}: {exc}"))
             directories.extend(reversed(children))
         sources.sort(key=lambda source: source.relative_path)
         return ScanResult(tuple(sources), tuple(issues))

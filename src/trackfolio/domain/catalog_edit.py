@@ -1,4 +1,4 @@
-"""Valores de edición del catálogo independientes de interfaces y persistencia."""
+"""Catalog editing values independent of interfaces and persistence."""
 
 from __future__ import annotations
 

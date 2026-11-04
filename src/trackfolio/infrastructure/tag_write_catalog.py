@@ -24,7 +24,7 @@ from trackfolio.infrastructure.database import artworks, audio_files, libraries,
 def _snapshot(connection: Connection, file_id: int) -> TagCatalogSnapshot:
     snapshot = _read_snapshot(connection, file_id)
     if snapshot is None:
-        raise TagWriteConflict("La canción ya no existe en el catálogo.")
+        raise TagWriteConflict("The song no longer exists in the catalog.")
     raw = tuple(
         tuple(row)
         for row in connection.execute(
@@ -102,7 +102,7 @@ class SqliteTagCatalog:
                         continue
                     snapshot = _read_snapshot(connection, record.id)
                     if snapshot is None:
-                        raise TagWriteConflict("Una pista dejó de estar disponible.")
+                        raise TagWriteConflict("A track is no longer available.")
                     values = snapshot.editable.values
                     result.append(
                         AlbumNfoTrack(
@@ -133,7 +133,7 @@ class SqliteTagCatalog:
     def check(self, path: Path, snapshot: TagCatalogSnapshot) -> None:
         current = self.snapshot(path, snapshot.file_id)
         if current.token != snapshot.token or not _same_cover(snapshot, current):
-            raise TagWriteConflict("El catálogo cambió. Revisa otra vez las diferencias.")
+            raise TagWriteConflict("The catalog changed. Review the differences again.")
 
     def confirm(
         self,
@@ -183,13 +183,13 @@ class SqliteTagCatalog:
                     ):
                         return  # The transaction committed before its acknowledgement was lost.
                     raise TagWriteConflict(
-                        "Las etiquetas se escribieron, pero el catálogo cambió. "
+                        "The tags were written, but the catalog changed. "
                         "Sus nuevas correcciones se han conservado."
                     )
                 if date_written and snapshot.album_date != observed.album_date:
                     original = _read_snapshot(connection, snapshot.file_id)
                     if original is None:
-                        raise TagWriteError("La canción dejó de estar disponible.")
+                        raise TagWriteError("The song is no longer available.")
                     track_id = separate_shared_track(
                         connection, snapshot.file_id, original.editable.track_id
                     )
@@ -212,9 +212,7 @@ class SqliteTagCatalog:
                 if cover_written:
                     artwork = observed.artwork
                     if artwork is None or artwork.source != "embedded":
-                        raise TagWriteError(
-                            "La portada observada no está incrustada en la canción."
-                        )
+                        raise TagWriteError("The observed cover is not embedded in the song.")
                     digest = hashlib.sha256(artwork.data).hexdigest()
                     artwork_id: int | None = connection.execute(
                         select(artworks.c.id).where(artworks.c.sha256 == digest)

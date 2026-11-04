@@ -25,11 +25,11 @@ class FileCoverAccess:
     def _paths(self, root: Path, folder: Path) -> tuple[Path, ...]:
         root = validate_library_root(root)
         if folder.resolve(strict=True) != folder or not folder.is_relative_to(root):
-            raise TagWriteConflict("La carpeta de portadas cambió o está fuera de la biblioteca.")
+            raise TagWriteConflict("The cover folder changed or is outside the library.")
         current = folder
         while current != root:
             if current.is_symlink() or current.is_junction():
-                raise TagWriteConflict("No se siguen enlaces internos para buscar portadas.")
+                raise TagWriteConflict("Internal links are not followed when searching for covers.")
             current = current.parent
         return tuple(
             sorted(
@@ -46,16 +46,16 @@ class FileCoverAccess:
         prepare_audio_source(path, validate_library_root(root))
         before = path.stat(follow_symlinks=False)
         if not stat.S_ISREG(before.st_mode) or not 0 < before.st_size <= MAX_COVER_BYTES:
-            raise TagWriteError("La portada debe ser un archivo regular de hasta 15 MiB, no vacío.")
+            raise TagWriteError("The cover must be a nonempty regular file no larger than 15 MiB.")
         with path.open("rb") as stream:
             opened = os.fstat(stream.fileno())
             if (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino):
-                raise TagWriteConflict("La portada fue sustituida al abrirla.")
+                raise TagWriteConflict("The cover was replaced while opening it.")
             chunks = []
             remaining = MAX_COVER_BYTES + 1
             while remaining:
                 if cancelled():
-                    raise TagWriteCancelled("Lectura de portada cancelada.")
+                    raise TagWriteCancelled("Cover read cancelled.")
                 chunk = stream.read(min(1024 * 1024, remaining))
                 if not chunk:
                     break
@@ -69,7 +69,7 @@ class FileCoverAccess:
             after.st_size,
             after.st_mtime_ns,
         ) or len(data) != before.st_size:
-            raise TagWriteConflict("La portada cambió durante su lectura.")
+            raise TagWriteConflict("The cover changed while being read.")
         return data, FileFingerprint(
             before.st_dev,
             before.st_ino,
@@ -87,7 +87,7 @@ class FileCoverAccess:
                 data, fingerprint = self._read(root, path, cancelled)
                 info = _image_info(data)
                 if info is None or info[0] not in ("image/jpeg", "image/png"):
-                    raise TagWriteError("La portada no contiene una imagen JPEG/PNG válida.")
+                    raise TagWriteError("The cover does not contain a valid JPEG/PNG image.")
                 candidates.append(CoverCandidate(path, fingerprint, *info))
             except TagWriteCancelled:
                 raise
@@ -99,10 +99,10 @@ class FileCoverAccess:
         self, root: Path, candidate: CoverCandidate, cancelled: Callable[[], bool]
     ) -> CoverImage:
         if candidate.error or candidate.fingerprint is None:
-            raise TagWriteError(candidate.error or "No se pudo preparar la portada.")
+            raise TagWriteError(candidate.error or "Could not prepare the cover.")
         data, fingerprint = self._read(root, candidate.path, cancelled)
         if fingerprint != candidate.fingerprint:
-            raise TagWriteConflict("La portada cambió después de elegirla.")
+            raise TagWriteConflict("The cover changed after selection.")
         return CoverImage(
             candidate.path,
             root,
@@ -118,9 +118,7 @@ class FileCoverAccess:
     ) -> None:
         paths = self._paths(folder.library_root, folder.path)
         if paths != tuple(candidate.path for candidate in folder.candidates):
-            raise TagWriteConflict(
-                "Las imágenes de la carpeta cambiaron; vuelve a elegir la portada."
-            )
+            raise TagWriteConflict("The folder's images changed; choose the cover again.")
         for candidate in folder.candidates:
             if candidate.fingerprint is not None:
                 info = candidate.path.stat(follow_symlinks=False)
@@ -131,8 +129,8 @@ class FileCoverAccess:
                     old.size,
                     old.modified_ns,
                 ):
-                    raise TagWriteConflict("Una imagen cambió después de explorar la carpeta.")
+                    raise TagWriteConflict("An image changed after the folder was scanned.")
         if image is not None:
             _, fingerprint = self._read(folder.library_root, image.path, cancelled)
             if fingerprint != image.fingerprint:
-                raise TagWriteConflict("La portada elegida cambió antes de publicar la canción.")
+                raise TagWriteConflict("The selected cover changed before publishing the song.")

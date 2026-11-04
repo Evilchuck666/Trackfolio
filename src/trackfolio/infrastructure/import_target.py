@@ -1,4 +1,4 @@
-"""Destinos SQLite de importación con creación exclusiva y recursos acotados."""
+"""SQLite import destinations with exclusive creation and bounded resources."""
 
 from __future__ import annotations
 
@@ -29,16 +29,16 @@ def _target_error(error: Exception, message: str) -> ImportTargetError:
     code = getattr(original, "sqlite_errorcode", 0) & 0xFF
     if code in (sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED):
         return ImportTargetError(
-            "El catálogo está ocupado por otra aplicación. Vuelve a intentarlo en unos segundos."
+            "The catalog is busy in another application. Try again in a few seconds."
         )
     if code in (sqlite3.SQLITE_READONLY, sqlite3.SQLITE_PERM):
-        return ImportTargetError("No hay permiso para escribir en el catálogo de destino.")
+        return ImportTargetError("Permission denied when writing to the destination catalog.")
     if code in (sqlite3.SQLITE_NOTADB, sqlite3.SQLITE_CORRUPT):
         return ImportTargetError(
-            "El catálogo de destino no es una base SQLite válida o está dañado."
+            "The destination catalog is not a valid SQLite database or is damaged."
         )
     if code == sqlite3.SQLITE_FULL:
-        return ImportTargetError("No queda espacio para guardar el catálogo de destino.")
+        return ImportTargetError("No space left to save the destination catalog.")
     if isinstance(error, (ValueError, CatalogAccessError, ImportTargetError)):
         return ImportTargetError(str(error))
     return ImportTargetError(message)
@@ -52,7 +52,7 @@ def _require_writable(path: Path, *, directory: bool = False) -> None:
     if permissions & (stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH) == 0 or not os.access(
         path, access_mode
     ):
-        raise ImportTargetError(f"No hay permiso para escribir en el destino: {path}")
+        raise ImportTargetError(f"Permission denied when writing to the destination: {path}")
 
 
 def _check_parent(path: Path) -> None:
@@ -60,7 +60,7 @@ def _check_parent(path: Path) -> None:
     while not parent.exists() and not parent.is_symlink():
         parent = parent.parent
     if not parent.is_dir():
-        raise ImportTargetError("El directorio del catálogo de destino no es válido.")
+        raise ImportTargetError("The destination catalog directory is invalid.")
     _require_writable(parent, directory=True)
 
 
@@ -80,13 +80,11 @@ class SqliteImportTarget:
 
     def write(self, metadata: TrackMetadata, library_root: Path, relative_path: str) -> SaveOutcome:
         if self._closed:
-            raise ImportTargetError("El catálogo de destino está cerrado.")
+            raise ImportTargetError("The destination catalog is closed.")
         try:
             outcome = self._repository.write(metadata, library_root, relative_path)
         except (OSError, ValueError, RuntimeError, SQLAlchemyError) as exc:
-            raise _target_error(
-                exc, "No se pudo guardar el archivo en el catálogo de destino."
-            ) from exc
+            raise _target_error(exc, "Could not save the file to the destination catalog.") from exc
         self._committed = True
         return outcome
 
@@ -96,10 +94,10 @@ class SqliteImportTarget:
             try:
                 self._engine.dispose()
             except (OSError, SQLAlchemyError) as exc:
-                raise _target_error(exc, "No se pudo cerrar el catálogo de destino.") from exc
+                raise _target_error(exc, "Could not close the destination catalog.") from exc
 
     def discard(self) -> None:
-        """Eliminar únicamente un catálogo propio sin escrituras confirmadas."""
+        """Remove only a catalog we own that has no confirmed writes."""
         self.close()
         if self._owned_identity is None or self._committed:
             return
@@ -108,30 +106,30 @@ class SqliteImportTarget:
                 return
             if _identity(self.database_path) != self._owned_identity:
                 raise ImportTargetError(
-                    "El destino cambió durante la importación; no se ha eliminado el archivo."
+                    "The destination changed during import; the file has not been removed."
                 )
             self.database_path.unlink()
         except OSError as exc:
             raise ImportTargetError(
-                f"No se pudo eliminar el catálogo nuevo sin canciones: {self.database_path}"
+                f"Could not remove the new catalog without songs: {self.database_path}"
             ) from exc
 
 
 class SqliteImportTargetFactory:
     def validate(self, database_path: Path, mode: ImportMode) -> Path:
-        """Comprobar el formulario sin crear archivos, directorios ni migraciones."""
+        """Check the form without creating files, directories or migrations."""
         try:
             if mode == "create":
                 original = database_path.expanduser()
                 database = original.parent.resolve() / original.name
                 if database.exists() or database.is_symlink():
                     raise ImportTargetError(
-                        "El catálogo de destino ya existe. Selecciona un archivo nuevo."
+                        "The destination catalog already exists. Select a new file."
                     )
                 _check_parent(database)
                 return database
             if mode != "update":
-                raise ImportTargetError("El modo de importación no es válido.")
+                raise ImportTargetError("The import mode is invalid.")
             session = open_catalog(database_path)
             try:
                 database = session.database_path
@@ -141,7 +139,7 @@ class SqliteImportTargetFactory:
             finally:
                 session.close()
         except (OSError, ValueError, CatalogAccessError, SQLAlchemyError) as exc:
-            raise _target_error(exc, "No se pudo acceder al catálogo de destino.") from exc
+            raise _target_error(exc, "Could not access the destination catalog.") from exc
 
     def open(self, database_path: Path, mode: ImportMode) -> SqliteImportTarget:
         engine: Engine | None = None
@@ -170,22 +168,22 @@ class SqliteImportTargetFactory:
                     engine.dispose()
                 except (OSError, SQLAlchemyError) as close_error:
                     cleanup_issue = ImportIssue(
-                        database, "cleanup", f"No se pudo cerrar el catálogo: {close_error}"
+                        database, "cleanup", f"Could not close the catalog: {close_error}"
                     )
             if owned_identity is not None:
                 try:
                     if _identity(database) == owned_identity:
                         database.unlink()
                     else:
-                        raise OSError("El archivo de destino ya no pertenece a esta importación.")
+                        raise OSError("The destination file no longer belongs to this import.")
                 except FileNotFoundError:
                     pass
                 except OSError as cleanup_error:
                     cleanup_issue = ImportIssue(
                         database,
                         "cleanup",
-                        f"No se pudo eliminar el catálogo nuevo sin canciones: {cleanup_error}",
+                        f"Could not remove the new catalog without songs: {cleanup_error}",
                     )
-            error = _target_error(exc, "No se pudo preparar el catálogo de destino.")
+            error = _target_error(exc, "Could not prepare the destination catalog.")
             error.cleanup_issue = cleanup_issue
             raise error from exc

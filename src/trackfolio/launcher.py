@@ -10,7 +10,7 @@ def main() -> int:
     if find_spec("PySide6") is None:
         if sys.stderr is not None:
             print(
-                "Falta la interfaz Qt. Ejecuta: uv sync --locked --extra gui --group dev",
+                "Qt interface missing. Run: uv sync --locked --extra gui --group dev",
                 file=sys.stderr,
             )
         return 2

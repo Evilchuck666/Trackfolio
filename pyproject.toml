@@ -1,7 +1,7 @@
 [project]
 name = "trackfolio"
 version = "0.1.0"
-description = "Entorno y núcleo independiente para gestionar metadatos de bibliotecas FLAC y MP3."
+description = "Environment and independent core for managing metadata in FLAC and MP3 libraries."
 readme = "README.md"
 requires-python = ">=3.13,<3.14"
 dependencies = [

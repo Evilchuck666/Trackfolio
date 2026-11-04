@@ -1,4 +1,4 @@
-"""Repositorio SQLAlchemy del catálogo; los contratos públicos usan dataclasses."""
+"""SQLAlchemy catalog repository; public contracts use dataclasses."""
 
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ def _insert_id(connection: Connection, table: Table, values: dict[str, Any]) -> 
     result = connection.execute(insert(table).values(**values))
     primary_key = result.inserted_primary_key
     if primary_key is None or primary_key[0] is None:
-        raise RuntimeError("La inserción no devolvió una clave primaria.")
+        raise RuntimeError("The insert did not return a primary key.")
     return int(primary_key[0])
 
 
@@ -50,7 +50,7 @@ def album_import_key(
     disc_total: int | None,
     artist_names: tuple[str, ...],
 ) -> str:
-    """Identidad de agrupación compartida por la importación y la edición."""
+    """Grouping identity shared by import and editing."""
     context = {
         "library_id": library_id,
         "directory": directory,
@@ -66,7 +66,7 @@ def album_import_key(
 
 
 def separate_shared_track(connection: Connection, file_id: int, track_id: int) -> int:
-    """Copiar pista y créditos cuando editar un archivo afectaría a otros."""
+    """Copy track and credits when editing a file would affect others."""
     references = connection.execute(
         select(func.count()).select_from(audio_files).where(audio_files.c.track_id == track_id)
     ).scalar_one()
@@ -93,7 +93,7 @@ class SqliteCatalogRepository:
         self._write_schema: tuple[int, int, str] | None = None
 
     def _validate_write_schema(self, connection: Connection) -> None:
-        """Exigir el esquema vigente y reutilizar su inspección mientras no cambie."""
+        """Require the current schema and reuse its inspection until it changes."""
         schema_version = int(connection.exec_driver_sql("PRAGMA schema_version").scalar_one())
         application_id = int(connection.exec_driver_sql("PRAGMA application_id").scalar_one())
         if self._write_schema is not None:
@@ -158,14 +158,14 @@ class SqliteCatalogRepository:
         outcome = self.write(metadata, library_root, relative_path)
         entry = self.get(outcome.file_id)
         if entry is None:
-            raise RuntimeError("La importación no produjo un registro consultable.")
+            raise RuntimeError("The import did not produce a queryable record.")
         return entry
 
     def write(self, metadata: TrackMetadata, library_root: Path, relative_path: str) -> SaveOutcome:
-        """Guardar una transacción y devolver sus identificadores, sin releer el detalle."""
+        """Save a transaction and return its identifiers without rereading the detail."""
         relative = PurePosixPath(relative_path)
         if relative.is_absolute() or ".." in relative.parts or not relative.parts:
-            raise ValueError("La ruta del archivo debe ser relativa a la biblioteca.")
+            raise ValueError("The file path must be relative to the library.")
         directory = relative.parent.as_posix()
         with self.engine.begin() as connection:
             self._validate_write_schema(connection)
@@ -281,7 +281,7 @@ class SqliteCatalogRepository:
                 )
                 cover_source = artwork.source
                 if artwork.source == "album.jpg":
-                    # Conservar la ubicación de búsqueda, incluso si album.jpg es un enlace.
+                    # Preserve the search location, even if album.jpg is a link.
                     cover_relative_path = (relative.parent / "album.jpg").as_posix()
             file_values: dict[str, Any] = {
                 "library_id": library_id,
@@ -317,7 +317,7 @@ class SqliteCatalogRepository:
             return self.get_from_connection(connection, file_id)
 
     def get_from_connection(self, connection: Connection, file_id: int) -> CatalogEntry | None:
-        """Leer un detalle dentro de la transacción que lo acaba de guardar."""
+        """Read a detail within the transaction that just saved it."""
         record = (
             connection.execute(
                 select(
@@ -446,7 +446,7 @@ class SqliteCatalogRepository:
     def summary_from_connection(
         self, connection: Connection, file_id: int
     ) -> CatalogSummary | None:
-        """Resumen confirmado del archivo sin abrir otra conexión."""
+        """Confirmed file summary without opening another connection."""
         row = (
             connection.execute(
                 select(
@@ -491,7 +491,7 @@ class SqliteCatalogRepository:
 
     @staticmethod
     def summaries_from_connection(connection: Connection) -> tuple[CatalogSummary, ...]:
-        """Leer todas las filas de la lista sin cargar el detalle de cada archivo."""
+        """Read all list rows without loading each file's details."""
         statement = (
             select(
                 audio_files.c.id.label("file_id"),

@@ -71,7 +71,7 @@ def _hash_stream(stream: BinaryIO, length: int | None = None, prefix: bytes = b"
         chunk = stream.read(1024 * 1024 if length is None else min(length, 1024 * 1024))
         if not chunk:
             if length:
-                raise TagWriteError("El archivo terminó antes de lo indicado por su contenedor.")
+                raise TagWriteError("The file ended before the end specified by its container.")
             break
         digest.update(chunk)
         if length is not None:
@@ -85,7 +85,7 @@ def _flac_layout(
     blocks = []
     with path.open("rb") as stream:
         if stream.read(4) != b"fLaC":
-            raise TagWriteError("No se escribe FLAC con encabezados ajenos al contenedor.")
+            raise TagWriteError("FLAC files with headers outside the container are not written.")
         for _ in range(10000):
             header = stream.read(4)
             if len(header) != 4:
@@ -114,7 +114,7 @@ def _mp3_payload(path: Path) -> tuple[str, str]:
         header = stream.read(10)
         if header[:3] == b"ID3":
             if len(header) != 10 or any(value & 0x80 for value in header[6:10]):
-                raise TagWriteError("Tamaño ID3 no válido.")
+                raise TagWriteError("Invalid ID3 size.")
             start = 10 + sum(
                 value << shift for value, shift in zip(header[6:10], (21, 14, 7, 0), strict=True)
             )
@@ -126,7 +126,7 @@ def _mp3_payload(path: Path) -> tuple[str, str]:
             stream.seek(end - 128)
             if stream.read(3) == b"TAG":
                 raise TagWriteError(
-                    "ID3v1 presente: esta entrega conserva ese archivo sin escribir."
+                    "ID3v1 present: this release preserves the file without writing."
                 )
         tail_hash = hashlib.sha256().hexdigest()
         if end >= 32:
@@ -135,7 +135,7 @@ def _mp3_payload(path: Path) -> tuple[str, str]:
             if footer[:8] == b"APETAGEX":
                 length = int.from_bytes(footer[12:16], "little")
                 if not 32 <= length <= end - start:
-                    raise TagWriteError("Etiqueta APEv2 no válida.")
+                    raise TagWriteError("Invalid APEv2 tag.")
                 end -= length
                 if end - start >= 32:
                     stream.seek(end - 32)
@@ -144,7 +144,7 @@ def _mp3_payload(path: Path) -> tuple[str, str]:
                 stream.seek(end)
                 tail_hash = _hash_stream(stream, size - end)
         if not 0 <= start <= end:
-            raise TagWriteError("Segmentos MP3 no válidos.")
+            raise TagWriteError("Invalid MP3 segments.")
         stream.seek(start)
         return _hash_stream(stream, end - start), tail_hash
 
@@ -193,7 +193,7 @@ def _new_date(value: str | None, year: int | None, allow_loss: bool) -> str | No
     if year is None:
         if value and not allow_loss:
             raise TagWriteError(
-                "Vaciar el año elimina la fecha. Confirma esa pérdida de precisión."
+                "Clearing the year removes the date. Confirm this loss of precision."
             )
         return None
     replacement = f"{year:04d}"
@@ -210,7 +210,7 @@ def _new_date(value: str | None, year: int | None, allow_loss: bool) -> str | No
         except ValueError:
             if not allow_loss:
                 raise TagWriteError(
-                    "La fecha resultante no es válida. Confirma escribir solo el año."
+                    "The resulting date is invalid. Confirm writing only the year."
                 ) from None
     return replacement
 
@@ -263,7 +263,7 @@ class MutagenTagCodec:
                     mp3_version = tags.version[1]
                 if mp3_version not in (3, 4):
                     raise TagWriteError(
-                        "ID3v2.2 requiere una conversión que no se realiza automáticamente."
+                        "ID3v2.2 requires a conversion that is not performed automatically."
                     )
                 version = f"ID3v2.{mp3_version}"
                 keys = tuple(tags.keys())
@@ -275,7 +275,7 @@ class MutagenTagCodec:
                 selected = dict(request.lyrics_keys).get(snapshot.file_id)
                 if "lyrics" in request.fields:
                     if selected is not None and selected not in candidates:
-                        raise TagWriteError("La versión de letras elegida ya no existe.")
+                        raise TagWriteError("The selected lyrics version no longer exists.")
                     explicit_lyrics = selected is not None
                     if (
                         len(candidates) > 1
@@ -283,7 +283,7 @@ class MutagenTagCodec:
                         and before.lyrics != snapshot.values.lyrics
                     ):
                         raise TagWriteError(
-                            "Hay varias versiones de letras. Elige idioma y descripción."
+                            "There are multiple lyrics versions. Choose a language and description."
                         )
                     selected = selected or (candidates[0] if candidates else "USLT::und")
                     if selected in tags and len(candidates) > 1 and explicit_lyrics:
@@ -300,7 +300,7 @@ class MutagenTagCodec:
                     for frame in tags.values()
                 ):
                     raise TagWriteError(
-                        "ID3v2.3 contiene listas que no se pueden guardar sin unirlas."
+                        "ID3v2.3 contains lists that cannot be saved without joining them."
                     )
             changes = []
             for field in request.fields:
@@ -317,8 +317,8 @@ class MutagenTagCodec:
                     ):
                         if not request.allow_date_loss:
                             raise TagWriteError(
-                                "ID3v2.3 no conserva esa precisión de fecha. "
-                                "Confirma escribir solo el año o excluye este campo."
+                                "ID3v2.3 does not preserve this date precision. "
+                                "Confirm writing only the year or exclude this field."
                             )
                         after_date = after_date[:4]
                 if (
@@ -328,7 +328,7 @@ class MutagenTagCodec:
                     and len(value) > 1
                 ):
                     raise TagWriteError(
-                        "ID3v2.3 no admite esta lista sin pérdidas. El archivo no se convertirá."
+                        "ID3v2.3 cannot store this list without loss. The file will not be converted."
                     )
                 after = replace(after, **{field: value})
                 aliases = set(_ALIASES[field])
@@ -418,9 +418,7 @@ class MutagenTagCodec:
             or self._fronts(temporary, plan.audio_format)
             != ((plan.cover.mime_type, plan.cover.data),)
         ):
-            raise TagWriteError(
-                "La portada no está incrustada correctamente en el archivo musical."
-            )
+            raise TagWriteError("The cover is not correctly embedded in the music file.")
         actual = self.observed(temporary)
         actual_values = EditableValues.from_metadata(actual)
         for field in actual_values.as_dict():
@@ -431,10 +429,10 @@ class MutagenTagCodec:
                 value = str(frame.text) if frame is not None else None
             if value != getattr(plan.after, field):
                 raise TagWriteError(
-                    f"La verificación del campo {field} no coincide; original conservado."
+                    f"Verification of field {field} does not match; original preserved."
                 )
         if actual.album_date != plan.after_date:
-            raise TagWriteError("La fecha escrita no coincide con la vista previa.")
+            raise TagWriteError("The written date does not match the preview.")
         return actual
 
     def _write_flac(self, path: Path, plan: PlannedTags, fields: set[EditField]) -> None:
@@ -451,9 +449,7 @@ class MutagenTagCodec:
         if plan.cover_changed and plan.cover is not None:
             cover = plan.cover
             if cover.data is None:
-                raise TagWriteError(
-                    "La imagen del plan no está disponible; prepara otra escritura."
-                )
+                raise TagWriteError("The planned image is unavailable; prepare another write.")
             remaining = [picture for picture in audio.pictures if picture.type != 3]
             audio.clear_pictures()
             for picture in remaining:
@@ -516,9 +512,7 @@ class MutagenTagCodec:
         if plan.cover_changed and plan.cover is not None:
             cover = plan.cover
             if cover.data is None:
-                raise TagWriteError(
-                    "La imagen del plan no está disponible; prepara otra escritura."
-                )
+                raise TagWriteError("The planned image is unavailable; prepare another write.")
             for key, frame in list(tags.items()):
                 if isinstance(frame, APIC) and cast(Any, frame).type == 3:
                     del tags[key]
@@ -543,7 +537,7 @@ class MutagenTagCodec:
             if _flac_layout(backup, replace_front=plan.cover_changed) != _flac_layout(
                 temporary, replace_front=plan.cover_changed
             ):
-                raise TagWriteError("Cambió el audio o un bloque FLAC no seleccionado.")
+                raise TagWriteError("The audio or an unselected FLAC block changed.")
 
             def flac_signature(path: Path) -> object:
                 audio = cast(Any, FLAC)(str(path))
@@ -560,10 +554,10 @@ class MutagenTagCodec:
 
             had_comments = cast(Any, FLAC)(str(backup)).tags is not None
             if flac_signature(backup) != flac_signature(temporary):
-                raise TagWriteError("Cambió un comentario FLAC no seleccionado.")
+                raise TagWriteError("An unselected FLAC comment changed.")
         else:
             if _mp3_payload(backup) != _mp3_payload(temporary):
-                raise TagWriteError("Cambió el audio MP3 o sus etiquetas finales.")
+                raise TagWriteError("The MP3 audio or its trailing tags changed.")
 
             def id3_signature(path: Path) -> str:
                 tags = _id3(path)
@@ -583,4 +577,4 @@ class MutagenTagCodec:
                 return json.dumps(data, sort_keys=True)
 
             if id3_signature(backup) != id3_signature(temporary):
-                raise TagWriteError("Cambió un frame ID3 no seleccionado.")
+                raise TagWriteError("An unselected ID3 frame changed.")

@@ -39,12 +39,12 @@ def album_values(
     tracks: tuple[AlbumNfoTrack, ...], selected_ids: tuple[int, ...] = ()
 ) -> AlbumNfoValues:
     if not tracks:
-        raise TagWriteConflict("La carpeta no contiene pistas catalogadas.")
+        raise TagWriteConflict("The folder contains no cataloged tracks.")
     if len({track.album for track in tracks}) != 1 or len({track.year for track in tracks}) != 1:
-        raise TagWriteConflict("Las pistas de la carpeta tienen álbumes o años distintos.")
+        raise TagWriteConflict("The folder's tracks have different albums or years.")
     credits = {track.album_artists for track in tracks}
     if len(credits) != 1:
-        raise TagWriteConflict("Las pistas de la carpeta tienen créditos de álbum contradictorios.")
+        raise TagWriteConflict("The folder's tracks have conflicting album credits.")
     artists: tuple[str, ...] | None = tracks[0].album_artists
     if not artists:
         artists = tracks[0].artists if len({track.artists for track in tracks}) == 1 else None
@@ -87,12 +87,12 @@ class AlbumNfoWrites:
         items = []
         for index, (path, file_ids) in enumerate(sorted(groups.items())):
             if cancelled():
-                raise TagWriteCancelled("Preparación NFO cancelada.")
+                raise TagWriteCancelled("NFO preparation cancelled.")
             item = AlbumNfoItem(path, sorted(roots[path])[0], tuple(file_ids))
             progress(TagWriteProgress("nfo_reading", index, len(groups), path))
             try:
                 if len(roots[path]) != 1:
-                    raise TagWriteConflict("El NFO pertenece a bibliotecas superpuestas.")
+                    raise TagWriteConflict("The NFO belongs to overlapping libraries.")
                 # Validate the folder even when the optional file is absent.
                 members = self.files.folder_members(item.library_root, path.parent)
                 item = replace(item, members=members)
@@ -101,7 +101,7 @@ class AlbumNfoWrites:
                     continue
                 resolved = self.files.resolve_target(item.library_root, path)
                 if resolved != path:
-                    raise TagWriteConflict("La ruta NFO cambió al resolverla.")
+                    raise TagWriteConflict("The NFO path changed during resolution.")
                 fingerprint = self.files.fingerprint(path, cancelled)
                 tracks = self.catalog.album_tracks(
                     preview.request.database_path, item.library_root, path.parent
@@ -110,7 +110,7 @@ class AlbumNfoWrites:
                 catalog_members = tuple(sorted(PurePosixPath(t.relative_path).name for t in tracks))
                 if catalog_members != members:
                     raise TagWriteConflict(
-                        "La carpeta contiene audio sin catalogar o pistas ausentes."
+                        "The folder contains uncataloged audio or missing tracks."
                     )
                 values = album_values(tracks, item.file_ids)
                 covers = {
@@ -121,7 +121,7 @@ class AlbumNfoWrites:
                     and audio.tags.cover is not None
                 }
                 if len(covers) > 1:
-                    raise TagWriteConflict("Se han seleccionado distintas portadas para el NFO.")
+                    raise TagWriteConflict("Different covers have been selected for the NFO.")
                 if covers:
                     values = replace(values, thumb=next(iter(covers)))
                 item = replace(item, values=values)
@@ -146,31 +146,27 @@ class AlbumNfoWrites:
         try:
             identity = self.files.identity(preview.request.database_path)
         except OSError as exc:
-            raise TagJournalError(f"El catálogo ya no está disponible: {exc}") from exc
+            raise TagJournalError(f"The catalog is no longer available: {exc}") from exc
         if identity != preview.catalog_identity:
-            raise TagJournalError("El catálogo fue sustituido durante la escritura NFO.")
+            raise TagJournalError("The catalog was replaced during the NFO write.")
         if self.files.folder_members(item.library_root, item.path.parent) != item.members:
-            raise TagWriteConflict(
-                "La composición de la carpeta cambió después de preparar el NFO."
-            )
+            raise TagWriteConflict("The folder contents changed after NFO preparation.")
         if item.state == "absent":
             if item.path.exists() or item.path.is_symlink():
-                raise TagWriteConflict(
-                    "El NFO apareció después de la preparación; vuelve a intentarlo."
-                )
+                raise TagWriteConflict("The NFO appeared after preparation; try again.")
             return
         try:
             self.files.resolve_target(item.library_root, item.path)
             current = self.files.fingerprint(item.path, cancelled)
         except FileNotFoundError as exc:
-            raise TagWriteConflict("El NFO desapareció después de preparar la escritura.") from exc
+            raise TagWriteConflict("The NFO disappeared after write preparation.") from exc
         if current != item.fingerprint:
-            raise TagWriteConflict("El NFO cambió después de preparar la escritura.")
+            raise TagWriteConflict("The NFO changed after write preparation.")
         tracks = self.catalog.album_tracks(
             preview.request.database_path, item.library_root, item.path.parent
         )
         if tracks != item.tracks:
-            raise TagWriteConflict("Los datos del álbum cambiaron después de preparar el NFO.")
+            raise TagWriteConflict("The album data changed after NFO preparation.")
 
     def unchanged_results(
         self, preview: TagWritePreview, cancelled: Callable[[], bool]
@@ -180,7 +176,7 @@ class AlbumNfoWrites:
         for item in preview.nfo_items:
             try:
                 if cancelled():
-                    raise TagWriteCancelled("Comprobación NFO cancelada.")
+                    raise TagWriteCancelled("NFO check cancelled.")
                 self.check(preview, item, cancelled)
                 assert item.state in ("absent", "unchanged")
                 results.append(AlbumNfoResult(item.path, item.state))
@@ -231,7 +227,7 @@ class AlbumNfoWrites:
                     AlbumNfoResult(
                         item.path,
                         "pending",
-                        "NFO pendiente: el grupo de audio no terminó correctamente.",
+                        "NFO pending: the audio group did not finish successfully.",
                     )
                 )
                 continue
@@ -258,14 +254,14 @@ class AlbumNfoWrites:
                     temporary_identity=(after.device, after.inode),
                 )
                 if cancelled():
-                    raise TagWriteCancelled("Cancelado antes de publicar el NFO.")
+                    raise TagWriteCancelled("Cancelled before publishing the NFO.")
                 self.check(preview, item, cancelled)
                 journal.record_nfo(item, "publishing", after_hash=after.sha256)
                 self.files.publish(item, temporary)
                 published = True
                 journal.record_nfo(item, "written", after_hash=after.sha256)
                 if self.files.fingerprint(item.path, lambda: False).sha256 != after.sha256:
-                    raise TagWriteConflict("El NFO cambió después de publicarse.")
+                    raise TagWriteConflict("The NFO changed after publication.")
                 journal.record_nfo(item, "updated", after_hash=after.sha256)
                 results.append(
                     AlbumNfoResult(item.path, "updated", backup_path=backup, published=True)
@@ -279,7 +275,7 @@ class AlbumNfoWrites:
                     else "conflict"
                     if isinstance(exc, TagWriteConflict)
                     else "failed",
-                    ("NFO reemplazado; requiere revisión. " if published else "") + str(exc),
+                    ("NFO replaced; review required. " if published else "") + str(exc),
                     backup if backed_up else None,
                     published,
                 )
@@ -289,7 +285,7 @@ class AlbumNfoWrites:
                         item, result.state, error=result.message, published=published
                     )
                 except Exception as record_error:
-                    fatal = f"No se pudo registrar el resultado NFO: {record_error}"
+                    fatal = f"Could not record the NFO result: {record_error}"
                 if isinstance(exc, TagJournalError) or (
                     isinstance(exc, OSError)
                     and exc.errno in (errno.ENOSPC, errno.EDQUOT, errno.EIO)
@@ -299,7 +295,7 @@ class AlbumNfoWrites:
                 try:
                     self.files.discard_temporary(temporary)
                 except OSError as exc:
-                    fatal = fatal or f"No se pudo limpiar el temporal NFO: {exc}"
+                    fatal = fatal or f"Could not clean up the temporary NFO: {exc}"
         return tuple(results), fatal
 
 
@@ -317,7 +313,7 @@ def review_nfos(
         published = False
         try:
             if cancelled():
-                raise TagWriteCancelled("Revisión NFO cancelada.")
+                raise TagWriteCancelled("NFO review cancelled.")
             state = journal.nfo_state(item)
             if item.state == "absent" and not item.path.exists() and not item.path.is_symlink():
                 results.append(AlbumNfoResult(item.path, "absent"))
@@ -332,7 +328,7 @@ def review_nfos(
                     AlbumNfoResult(
                         item.path,
                         "updated",
-                        "Publicación NFO verificada por hash.",
+                        "NFO publication verified by hash.",
                         available,
                         True,
                     )
@@ -344,13 +340,13 @@ def review_nfos(
                     AlbumNfoResult(
                         item.path,
                         "unchanged" if state.state == "unchanged" else "pending",
-                        "NFO original intacto. No se reanuda su escritura."
+                        "Original NFO intact. Writing is not resumed."
                         + (f" Temporal conservado: {temporary}" if temporary.exists() else ""),
                         available,
                     )
                 )
             else:
-                raise TagWriteConflict("El NFO no coincide con ninguna versión registrada.")
+                raise TagWriteConflict("The NFO does not match any recorded version.")
         except Exception as exc:
             results.append(
                 AlbumNfoResult(

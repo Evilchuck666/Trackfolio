@@ -281,9 +281,9 @@ def read_metadata(path: Path) -> TrackMetadata:
             artwork = _embedded_artwork(_id3_pictures(id3))
             info, audio_format = cast(_Mp3File, audio).info, "mp3"
         else:
-            raise UnsupportedAudioError(f"Formato no compatible con FLAC/MP3: {path}")
+            raise UnsupportedAudioError(f"Unsupported FLAC/MP3 format: {path}")
     except (OSError, mutagen.MutagenError, ValueError) as exc:
-        raise MetadataReadError(f"No se pueden leer los metadatos de {path}: {exc}") from exc
+        raise MetadataReadError(f"Cannot read metadata from {path}: {exc}") from exc
     if artwork is None:
         artwork = _fallback_artwork(path)
     return _metadata(raw_tags, artwork, info, audio_format)

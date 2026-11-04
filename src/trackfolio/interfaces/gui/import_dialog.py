@@ -54,7 +54,7 @@ class ImportDialog(QDialog):
         initial_directory: Path,
     ) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Importar música")
+        self.setWindowTitle("Import music")
         self.setWindowIcon(icon("import"))
         self.setModal(True)
         self.setMinimumWidth(600)
@@ -65,56 +65,54 @@ class ImportDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(18)
-        layout.addWidget(_label("Importar música", self, name="PageTitle"))
-        root_group = QGroupBox("Carpeta de música", self)
+        layout.addWidget(_label("Import music", self, name="PageTitle"))
+        root_group = QGroupBox("Music folder", self)
         root_layout = QVBoxLayout(root_group)
         root_row = QHBoxLayout()
         self.root_edit = QLineEdit(root_group)
-        self.root_edit.setAccessibleName("Carpeta de música")
-        self.root_edit.setPlaceholderText("Selecciona la carpeta que contiene tu música")
-        self.folder_button = QPushButton(icon("open"), "Elegir carpeta…", root_group)
+        self.root_edit.setAccessibleName("Music folder")
+        self.root_edit.setPlaceholderText("Select the folder containing your music")
+        self.folder_button = QPushButton(icon("open"), "Choose folder…", root_group)
         self.folder_button.clicked.connect(self._choose_root)
         root_row.addWidget(self.root_edit, 1)
         root_row.addWidget(self.folder_button)
         root_layout.addLayout(root_row)
-        root_layout.addWidget(
-            _label("Se incluyen las subcarpetas y los archivos FLAC y MP3.", self)
-        )
+        root_layout.addWidget(_label("Includes subfolders and FLAC and MP3 files.", self))
         layout.addWidget(root_group)
 
         destination_group = QGroupBox("Destino", self)
         destination_layout = QVBoxLayout(destination_group)
         destination_layout.setSpacing(12)
-        self.update_radio = QRadioButton("Usar el catálogo abierto", destination_group)
+        self.update_radio = QRadioButton("Use the open catalog", destination_group)
         self.update_radio.setEnabled(current_catalog is not None)
         destination_layout.addWidget(self.update_radio)
         self.current_label = _label(
-            str(current_catalog) if current_catalog is not None else "No hay un catálogo abierto.",
+            str(current_catalog) if current_catalog is not None else "No catalog is open.",
             destination_group,
         )
         self.current_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         destination_layout.addWidget(self.current_label)
         self.update_note = _label(
-            "Se añadirán canciones nuevas y se actualizarán las ya importadas. "
-            "Se volverán a leer los metadatos de los archivos "
-            "y se sustituirán los valores del catálogo, incluidas las correcciones manuales.",
+            "New songs will be added and previously imported songs will be updated. "
+            "File metadata will be read again "
+            "and replace catalog values, including manual corrections.",
             destination_group,
         )
         destination_layout.addWidget(self.update_note)
-        self.create_radio = QRadioButton("Crear un catálogo nuevo", destination_group)
+        self.create_radio = QRadioButton("Create a new catalog", destination_group)
         destination_layout.addWidget(self.create_radio)
         destination_row = QHBoxLayout()
         self.destination_edit = QLineEdit(destination_group)
-        self.destination_edit.setAccessibleName("Archivo del catálogo nuevo")
+        self.destination_edit.setAccessibleName("New catalog file")
         self.destination_edit.setText(str(initial_directory / DEFAULT_CATALOG_NAME))
         self.destination_edit.setCursorPosition(0)
-        self.destination_button = QPushButton("Elegir archivo…", destination_group)
+        self.destination_button = QPushButton("Choose file…", destination_group)
         self.destination_button.clicked.connect(self._choose_destination)
         destination_row.addWidget(self.destination_edit, 1)
         destination_row.addWidget(self.destination_button)
         destination_layout.addLayout(destination_row)
         self.create_note = _label(
-            "Elige un archivo nuevo. Los catálogos existentes no se sobrescriben.",
+            "Choose a new file. Existing catalogs will not be overwritten.",
             destination_group,
         )
         destination_layout.addWidget(self.create_note)
@@ -125,9 +123,9 @@ class ImportDialog(QDialog):
 
         actions = QHBoxLayout()
         actions.addStretch()
-        self.cancel_button = QPushButton("Cancelar", self)
+        self.cancel_button = QPushButton("Cancel", self)
         self.cancel_button.clicked.connect(self.reject)
-        self.import_button = QPushButton(icon("import"), "Importar", self)
+        self.import_button = QPushButton(icon("import"), "Import", self)
         self.import_button.setObjectName("PrimaryButton")
         self.import_button.setDefault(True)
         self.import_button.clicked.connect(self.accept)
@@ -164,7 +162,7 @@ class ImportDialog(QDialog):
         self.error_label.hide()
 
     def _choose_root(self) -> None:
-        dialog = QFileDialog(self, "Elegir carpeta de música")
+        dialog = QFileDialog(self, "Choose music folder")
         dialog.setOption(QFileDialog.Option.DontUseNativeDialog, True)
         dialog.setOption(QFileDialog.Option.ShowDirsOnly, True)
         dialog.setFileMode(QFileDialog.FileMode.Directory)
@@ -177,12 +175,12 @@ class ImportDialog(QDialog):
                 self.root_edit.setCursorPosition(0)
 
     def _choose_destination(self) -> None:
-        dialog = QFileDialog(self, "Crear catálogo de Trackfolio")
+        dialog = QFileDialog(self, "Create Trackfolio catalog")
         dialog.setOption(QFileDialog.Option.DontUseNativeDialog, True)
         dialog.setOption(QFileDialog.Option.DontConfirmOverwrite, True)
         dialog.setAcceptMode(QFileDialog.AcceptMode.AcceptSave)
         dialog.setFileMode(QFileDialog.FileMode.AnyFile)
-        dialog.setNameFilter("Catálogos de Trackfolio (*.tfo)")
+        dialog.setNameFilter("Trackfolio catalogs (*.tfo)")
         dialog.setDefaultSuffix("tfo")
         destination = Path(self.destination_edit.text().strip())
         dialog.setDirectory(
@@ -204,11 +202,11 @@ class ImportDialog(QDialog):
         destination = self.destination_edit.text().strip()
         message = ""
         if not root:
-            message = "Selecciona una carpeta de música."
+            message = "Select a music folder."
         elif self.create_radio.isChecked() and not destination:
-            message = "Selecciona el archivo del catálogo nuevo."
+            message = "Select the new catalog file."
         elif self.update_radio.isChecked() and self._current_catalog is None:
-            message = "Abre un catálogo o elige crear uno nuevo."
+            message = "Open a catalog or choose to create a new one."
         if message:
             self.error_label.setText(message)
             self.error_label.show()
@@ -238,7 +236,7 @@ class ImportProgressDialog(QDialog):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Importación de música")
+        self.setWindowTitle("Music import")
         self.setWindowIcon(icon("import"))
         self.setMinimumWidth(580)
         self._active = True
@@ -246,18 +244,18 @@ class ImportProgressDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(16)
-        self.phase_label = _label("Preparando importación…", self, name="PageTitle")
+        self.phase_label = _label("Preparing import…", self, name="PageTitle")
         layout.addWidget(self.phase_label)
         self.progress_bar = QProgressBar(self)
-        self.progress_bar.setAccessibleName("Progreso de importación")
+        self.progress_bar.setAccessibleName("Import progress")
         self.progress_bar.setRange(0, 0)
         layout.addWidget(self.progress_bar)
         self.current_label = _label("", self)
         self.current_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         layout.addWidget(self.current_label)
-        self.counts_label = _label("Encontrados: 0", self)
+        self.counts_label = _label("Found: 0", self)
         layout.addWidget(self.counts_label)
-        self.note_label = _label("Cancelar conserva las canciones que ya se hayan guardado.", self)
+        self.note_label = _label("Cancelling preserves songs that have already been saved.", self)
         layout.addWidget(self.note_label)
         self.error_label = _label("", self, name="ErrorMessage")
         self.error_label.hide()
@@ -266,14 +264,14 @@ class ImportProgressDialog(QDialog):
         self.issues_label.hide()
         layout.addWidget(self.issues_label)
         self.issues = QPlainTextEdit(self)
-        self.issues.setAccessibleName("Incidencias de importación")
+        self.issues.setAccessibleName("Import issues")
         self.issues.setReadOnly(True)
         self.issues.setMinimumHeight(150)
         self.issues.hide()
         layout.addWidget(self.issues, 1)
         actions = QHBoxLayout()
         actions.addStretch()
-        self.action_button = QPushButton("Cancelar", self)
+        self.action_button = QPushButton("Cancel", self)
         self.action_button.clicked.connect(self._activate_button)
         actions.addWidget(self.action_button)
         layout.addLayout(actions)
@@ -284,10 +282,10 @@ class ImportProgressDialog(QDialog):
         if not self._cancelling:
             self.phase_label.setText(
                 {
-                    "preparing": "Preparando importación…",
-                    "scanning": "Explorando carpeta…",
-                    "importing": "Importando música…",
-                    "finalizing": "Finalizando importación…",
+                    "preparing": "Preparing import…",
+                    "scanning": "Scanning folder…",
+                    "importing": "Importing music…",
+                    "finalizing": "Finishing import…",
                 }[progress.phase]
             )
         if progress.total is None:
@@ -298,67 +296,58 @@ class ImportProgressDialog(QDialog):
             self.progress_bar.setFormat(f"{progress.processed} / {progress.total}")
         self.current_label.setText(str(progress.current_path) if progress.current_path else "")
         self.counts_label.setText(
-            f"Encontrados: {progress.discovered} · Nuevos: {progress.created} · "
-            f"Actualizados: {progress.updated} · Fallidos: {progress.failed}"
+            f"Found: {progress.discovered} · New: {progress.created} · "
+            f"Updated: {progress.updated} · Failed: {progress.failed}"
         )
 
     def set_cancelling(self) -> None:
         if not self._active:
             return
         self._cancelling = True
-        self.phase_label.setText("Cancelando…")
-        self.note_label.setText(
-            "Esperando a que termine el archivo actual y se cierre el catálogo."
-        )
-        self.action_button.setText("Cancelando…")
+        self.phase_label.setText("Cancelling…")
+        self.note_label.setText("Waiting for the current file to finish and the catalog to close.")
+        self.action_button.setText("Cancelling…")
         self.action_button.setEnabled(False)
 
     def set_report(self, report: ImportReport) -> None:
         self._active = False
         self._cancelling = False
         title = {
-            "completed": "Importación completada",
-            "cancelled": "Importación cancelada",
-            "failed": "No se pudo completar la importación",
+            "completed": "Import complete",
+            "cancelled": "Import cancelled",
+            "failed": "Could not complete the import",
         }[report.state]
         if report.state == "completed" and report.issues:
-            title += " con incidencias"
+            title += " with issues"
         self.phase_label.setText(title)
         self.progress_bar.setRange(0, max(1, report.total or report.processed))
         self.progress_bar.setValue(report.processed)
-        total = str(report.total) if report.total is not None else "total desconocido"
+        total = str(report.total) if report.total is not None else "unknown total"
         self.progress_bar.setFormat(f"{report.processed} / {total}")
-        destination = "Catálogo" if report.saved else "Destino solicitado"
+        destination = "Catalog" if report.saved else "Requested destination"
         self.current_label.setText(f"{destination}: {report.database_path}")
-        pending = str(report.pending) if report.pending is not None else "total desconocido"
+        pending = str(report.pending) if report.pending is not None else "unknown total"
         self.counts_label.setText(
-            f"Nuevos: {report.created} · Actualizados: {report.updated} · "
-            f"Fallidos: {report.failed} · Pendientes: {pending}"
+            f"New: {report.created} · Updated: {report.updated} · "
+            f"Failed: {report.failed} · Pending: {pending}"
         )
         if report.total is None:
-            self.counts_label.setText(
-                f"Encontrados: {report.discovered}\n{self.counts_label.text()}"
-            )
+            self.counts_label.setText(f"Found: {report.discovered}\n{self.counts_label.text()}")
         if report.saved:
-            noun = "canción" if report.saved == 1 else "canciones"
-            saved = "Se ha guardado" if report.saved == 1 else "Se han guardado"
-            retained = "se conserva" if report.saved == 1 else "se conservan"
-            adjective = "guardada" if report.saved == 1 else "guardadas"
+            noun = "song" if report.saved == 1 else "songs"
             self.note_label.setText(
-                f"{saved} {report.saved} {noun}."
+                f"Saved {report.saved} {noun}."
                 if report.state == "completed"
-                else f"Resultado parcial: {retained} {report.saved} {noun} {adjective}."
+                else f"Partial result: {report.saved} saved {noun} retained."
             )
         elif report.state == "completed" and report.total == 0:
-            self.note_label.setText(
-                "No se encontraron archivos FLAC o MP3. No se creó un catálogo."
-            )
+            self.note_label.setText("No FLAC or MP3 files found. No catalog was created.")
         else:
-            self.note_label.setText("No se guardaron canciones.")
+            self.note_label.setText("No songs were saved.")
         self.error_label.setText(report.fatal_error or "")
         self.error_label.setVisible(bool(report.fatal_error))
         stages = {
-            "scan": "Exploración",
+            "scan": "Scan",
             "read": "Lectura",
             "write": "Guardado",
             "cleanup": "Limpieza",
@@ -370,7 +359,7 @@ class ImportProgressDialog(QDialog):
         )
         self.issues_label.setVisible(bool(report.issues))
         self.issues.setVisible(bool(report.issues))
-        self.action_button.setText("Cerrar")
+        self.action_button.setText("Close")
         self.action_button.setEnabled(True)
         self.action_button.setDefault(True)
 

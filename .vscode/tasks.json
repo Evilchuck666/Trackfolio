@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Trackfolio: iniciar GUI con la muestra",
+      "label": "Trackfolio: start GUI with sample",
       "type": "process",
       "command": "bash",
       "args": ["${workspaceFolder}/setup.sh", "--run-uv", "run", "--locked", "--extra", "gui", "python", "-m", "trackfolio.interfaces.gui", "--dev-root", "${workspaceFolder}", "--database", "${workspaceFolder}/data/database.tfo"],
@@ -26,7 +26,7 @@
       "problemMatcher": []
     },
     {
-      "label": "Trackfolio: ejecutar pruebas GUI sin pantalla",
+      "label": "Trackfolio: run headless GUI tests",
       "type": "process",
       "command": "bash",
       "args": ["${workspaceFolder}/setup.sh", "--run-uv", "run", "--locked", "--extra", "gui", "pytest"],
@@ -39,7 +39,7 @@
       "group": "test"
     },
     {
-      "label": "Trackfolio: preparar núcleo",
+      "label": "Trackfolio: set up core",
       "type": "process",
       "command": "bash",
       "args": ["${workspaceFolder}/setup.sh", "--core", "--skip-editor", "--non-interactive"],
@@ -51,7 +51,7 @@
       "problemMatcher": []
     },
     {
-      "label": "Trackfolio: preparar GUI",
+      "label": "Trackfolio: set up GUI",
       "type": "process",
       "command": "bash",
       "args": ["${workspaceFolder}/setup.sh", "--gui", "--skip-editor", "--non-interactive"],
@@ -63,7 +63,7 @@
       "problemMatcher": []
     },
     {
-      "label": "Trackfolio: diagnosticar núcleo",
+      "label": "Trackfolio: diagnose core",
       "type": "process",
       "command": "bash",
       "args": ["${workspaceFolder}/setup.sh", "--run-uv", "run", "--locked", "python", "scripts/doctor.py", "--core"],
@@ -75,7 +75,7 @@
       "problemMatcher": []
     },
     {
-      "label": "Trackfolio: diagnosticar GUI",
+      "label": "Trackfolio: diagnose GUI",
       "type": "process",
       "command": "bash",
       "args": ["${workspaceFolder}/setup.sh", "--run-uv", "run", "--locked", "--extra", "gui", "python", "scripts/doctor.py", "--gui"],
@@ -87,7 +87,7 @@
       "problemMatcher": []
     },
     {
-      "label": "Trackfolio: diagnosticar GUI sin pantalla",
+      "label": "Trackfolio: diagnose headless GUI",
       "type": "process",
       "command": "bash",
       "args": ["${workspaceFolder}/setup.sh", "--run-uv", "run", "--locked", "--extra", "gui", "python", "scripts/doctor.py", "--gui", "--platform", "offscreen"],
@@ -99,7 +99,7 @@
       "problemMatcher": []
     },
     {
-      "label": "Trackfolio: analizar código",
+      "label": "Trackfolio: lint code",
       "type": "process",
       "command": "bash",
       "args": ["${workspaceFolder}/setup.sh", "--run-uv", "run", "--locked", "--extra", "gui", "ruff", "check", "."],
@@ -111,7 +111,7 @@
       "problemMatcher": []
     },
     {
-      "label": "Trackfolio: comprobar formato",
+      "label": "Trackfolio: check formatting",
       "type": "process",
       "command": "bash",
       "args": ["${workspaceFolder}/setup.sh", "--run-uv", "run", "--locked", "--extra", "gui", "ruff", "format", "--check", "."],
@@ -123,7 +123,7 @@
       "problemMatcher": []
     },
     {
-      "label": "Trackfolio: comprobar tipos",
+      "label": "Trackfolio: check types",
       "type": "process",
       "command": "bash",
       "args": ["${workspaceFolder}/setup.sh", "--run-uv", "run", "--locked", "--extra", "gui", "mypy"],
@@ -135,7 +135,7 @@
       "problemMatcher": []
     },
     {
-      "label": "Trackfolio: ejecutar pruebas",
+      "label": "Trackfolio: run tests",
       "type": "process",
       "command": "bash",
       "args": ["${workspaceFolder}/setup.sh", "--run-uv", "run", "--locked", "--extra", "gui", "pytest"],
@@ -148,13 +148,13 @@
       "group": "test"
     },
     {
-      "label": "Trackfolio: comprobaciones",
+      "label": "Trackfolio: checks",
       "dependsOrder": "sequence",
       "dependsOn": [
-        "Trackfolio: analizar código",
-        "Trackfolio: comprobar formato",
-        "Trackfolio: comprobar tipos",
-        "Trackfolio: ejecutar pruebas"
+        "Trackfolio: lint code",
+        "Trackfolio: check formatting",
+        "Trackfolio: check types",
+        "Trackfolio: run tests"
       ],
       "problemMatcher": [],
       "group": { "kind": "build", "isDefault": true }

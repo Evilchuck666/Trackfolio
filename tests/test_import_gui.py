@@ -223,7 +223,7 @@ def test_progress_switches_from_scan_to_exact_counts(progress_dialog, tmp_path):
     progress_dialog.set_progress(ImportProgress("scanning", 7, None, 0, 0, 0))
     assert progress_dialog.progress_bar.minimum() == progress_dialog.progress_bar.maximum() == 0
     assert "Explorando" in progress_dialog.phase_label.text()
-    assert "Encontrados: 7" in progress_dialog.counts_label.text()
+    assert "Found: 7" in progress_dialog.counts_label.text()
     path = tmp_path / "<artista>" / "Música.flac"
     progress_dialog.set_progress(ImportProgress("importing", 7, 7, 2, 1, 1, path))
     assert progress_dialog.progress_bar.maximum() == 7
@@ -231,7 +231,7 @@ def test_progress_switches_from_scan_to_exact_counts(progress_dialog, tmp_path):
     assert progress_dialog.progress_bar.format() == "4 / 7"
     assert progress_dialog.current_label.text() == str(path)
     assert progress_dialog.current_label.textFormat() == Qt.TextFormat.PlainText
-    assert "Nuevos: 2" in progress_dialog.counts_label.text()
+    assert "New: 2" in progress_dialog.counts_label.text()
 
 
 @pytest.mark.parametrize("action", ["button", "close", "escape"])
@@ -245,10 +245,10 @@ def test_cancel_keeps_progress_alive_and_is_requested_once(progress_dialog, acti
         QTest.keyClick(progress_dialog, Qt.Key.Key_Escape)
     assert cancelled.count() == 1
     assert progress_dialog.isVisible()
-    assert progress_dialog.phase_label.text() == "Cancelando…"
+    assert progress_dialog.phase_label.text() == "Cancelling…"
     assert not progress_dialog.action_button.isEnabled()
     progress_dialog.set_progress(ImportProgress("finalizing", 4, 4, 2, 0, 0))
-    assert progress_dialog.phase_label.text() == "Cancelando…"
+    assert progress_dialog.phase_label.text() == "Cancelling…"
     progress_dialog.close()
     assert cancelled.count() == 1
 
@@ -274,7 +274,7 @@ def test_partial_report_shows_preserved_commits_pending_and_plain_incidents(
     assert progress_dialog.issues.isVisible() and progress_dialog.issues.isReadOnly()
     assert "<broken>.mp3" in progress_dialog.issues.toPlainText()
     assert "No se pudo leer <archivo>." in progress_dialog.issues.toPlainText()
-    assert progress_dialog.action_button.text() == "Cerrar"
+    assert progress_dialog.action_button.text() == "Close"
     assert progress_dialog.action_button.isEnabled()
     QTest.mouseClick(progress_dialog.action_button, Qt.MouseButton.LeftButton)
     assert not progress_dialog.isVisible()
@@ -288,16 +288,16 @@ def test_failed_report_and_cancelled_scan_display_unknown_total(progress_dialog,
     )
     assert progress_dialog.error_label.text() == "El destino no es compatible."
     assert progress_dialog.error_label.isVisible()
-    assert "Pendientes: total desconocido" in progress_dialog.counts_label.text()
-    assert "Encontrados: 2" in progress_dialog.counts_label.text()
-    assert progress_dialog.current_label.text().startswith("Destino solicitado:")
+    assert "Pendientes: unknown total" in progress_dialog.counts_label.text()
+    assert "Found: 2" in progress_dialog.counts_label.text()
+    assert progress_dialog.current_label.text().startswith("Requested destination:")
     assert progress_dialog.progress_bar.maximum() == 1
     progress_dialog.set_report(
         ImportReport(tmp_path / "result.tfo", "cancelled", 2, None, 0, 0, 0, ())
     )
     assert progress_dialog.error_label.isHidden()
     assert progress_dialog.issues.isHidden()
-    assert progress_dialog.note_label.text() == "No se guardaron canciones."
+    assert progress_dialog.note_label.text() == "No songs were saved."
 
 
 def test_empty_and_completed_with_incidents_are_presented_as_completed(progress_dialog, tmp_path):
@@ -317,9 +317,9 @@ def test_empty_and_completed_with_incidents_are_presented_as_completed(progress_
             (ImportIssue(tmp_path / "inaccessible", "scan", "Carpeta inaccesible."),),
         )
     )
-    assert progress_dialog.phase_label.text() == "Importación completada con incidencias"
+    assert progress_dialog.phase_label.text() == "Importación completada with issues"
     assert progress_dialog.note_label.text() == "Se ha guardado 1 canción."
-    assert "Exploración" in progress_dialog.issues.toPlainText()
+    assert "Scan" in progress_dialog.issues.toPlainText()
 
 
 def test_import_available_without_catalog_and_import_state_overrides_query_busy(main_window):

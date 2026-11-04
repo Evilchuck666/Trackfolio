@@ -40,7 +40,7 @@ def test_import_roundtrip_uses_database_after_source_is_removed(repository, tmp_
     source.write_bytes(b"reader injected in application test")
     metadata = TrackMetadata(
         title="Título de prueba",
-        album="Álbum de prueba",
+        album="Test album",
         album_year=2020,
         album_date="2020-05-03",
         track_number=1,

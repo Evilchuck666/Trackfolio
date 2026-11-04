@@ -41,7 +41,7 @@ class CoverSources(Protocol):
 
 class CoverSelectionRequired(TagWriteError):
     def __init__(self, discovery: CoverDiscovery) -> None:
-        super().__init__("Elige una imagen para cada carpeta con varias portadas.")
+        super().__init__("Choose an image for each folder with multiple covers.")
         self.discovery = discovery
 
 
@@ -59,7 +59,7 @@ def discover_covers(
     groups: dict[tuple[Path, Path], list[int]] = {}
     for index, file_id in enumerate(file_ids):
         if cancelled():
-            raise TagWriteCancelled("Exploración de portadas cancelada.")
+            raise TagWriteCancelled("Cover scan cancelled.")
         progress(TagWriteProgress("cover_discovery", index, len(file_ids)))
         snapshot = catalog.snapshot(database, file_id)
         snapshots.append(snapshot)
@@ -68,7 +68,7 @@ def discover_covers(
     folders = []
     for (root, folder), ids in sorted(groups.items()):
         if cancelled():
-            raise TagWriteCancelled("Exploración de portadas cancelada.")
+            raise TagWriteCancelled("Cover scan cancelled.")
         try:
             candidates = sources.scan(root, folder, cancelled)
             folders.append(CoverFolder(folder, root, tuple(ids), candidates))
@@ -77,7 +77,7 @@ def discover_covers(
         except Exception as exc:
             folders.append(CoverFolder(folder, root, tuple(ids), error=str(exc)))
     if files.identity(database) != identity:
-        raise TagWriteConflict("El catálogo cambió durante la exploración de portadas.")
+        raise TagWriteConflict("The catalog changed during the cover scan.")
     return CoverDiscovery(database, file_ids, identity, tuple(snapshots), tuple(folders))
 
 
@@ -88,10 +88,10 @@ def resolve_covers(
     cancelled: Callable[[], bool],
 ) -> tuple[tuple[tuple[int, CoverImage], ...], tuple[int, ...], dict[int, str]]:
     if len({choice.folder for choice in choices}) != len(choices):
-        raise TagWriteError("Hay elecciones de portada duplicadas.")
+        raise TagWriteError("There are duplicate cover choices.")
     selected = {choice.folder: choice.image for choice in choices}
     if any(path not in {folder.path for folder in discovery.folders} for path in selected):
-        raise TagWriteError("La elección de portada no pertenece a la selección.")
+        raise TagWriteError("The cover choice does not belong to the selection.")
     if any(
         len(folder.candidates) > 1 and folder.path not in selected for folder in discovery.folders
     ):
@@ -101,7 +101,7 @@ def resolve_covers(
     errors: dict[int, str] = {}
     for folder in discovery.folders:
         if cancelled():
-            raise TagWriteCancelled("Selección de portadas cancelada.")
+            raise TagWriteCancelled("Cover selection cancelled.")
         try:
             if folder.error:
                 raise TagWriteError(folder.error)
@@ -114,7 +114,7 @@ def resolve_covers(
                     (c for c in folder.candidates if c.path == selected[folder.path]), None
                 )
                 if candidate is None:
-                    raise TagWriteConflict("La imagen elegida ya no pertenece a esta carpeta.")
+                    raise TagWriteConflict("The chosen image no longer belongs to this folder.")
             elif len(folder.candidates) == 1:
                 candidate = folder.candidates[0]
             sources.check(folder, None, cancelled)

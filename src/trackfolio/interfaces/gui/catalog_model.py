@@ -12,7 +12,7 @@ _ROOT_INDEX = QModelIndex()
 class CatalogTableModel(QAbstractTableModel):
     """Display catalog data without opening files or consulting persistence."""
 
-    HEADERS = ("Canción", "Artista(s)", "Álbum", "Año", "Archivo")
+    HEADERS = ("Song", "Artist(s)", "Album", "Year", "File")
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -27,7 +27,7 @@ class CatalogTableModel(QAbstractTableModel):
         return self._rows
 
     def update_summary(self, summary: CatalogSummary) -> bool:
-        """Actualizar una canción conservando la selección y el resto de la lista."""
+        """Update a song while preserving the selection and the rest of the list."""
         row = self.row_for_file(summary.file_id)
         if row is None:
             return False

@@ -29,35 +29,35 @@ from trackfolio.domain.catalog import CatalogSummary
 from trackfolio.domain.tag_write import TagWriteProgress, TagWriteReport
 
 _STATES = {
-    "unchanged": "Sin cambios",
-    "conflict": "Conflicto",
-    "confirmed": "Escrito",
-    "catalog_pending": "Archivo escrito / catálogo pendiente",
-    "excluded": "No escribible",
-    "failed": "Fallido",
-    "pending": "Pendiente",
+    "unchanged": "Unchanged",
+    "conflict": "Conflict",
+    "confirmed": "Written",
+    "catalog_pending": "File written / catalog pending",
+    "excluded": "Not writable",
+    "failed": "Failed",
+    "pending": "Pending",
 }
 
 _NFO_STATES = {
-    "updated": "NFO actualizado",
-    "unchanged": "NFO sin cambios",
-    "absent": "NFO ausente",
-    "pending": "NFO pendiente",
-    "conflict": "Conflicto NFO",
-    "failed": "NFO fallido",
+    "updated": "NFO updated",
+    "unchanged": "NFO unchanged",
+    "absent": "NFO absent",
+    "pending": "NFO pending",
+    "conflict": "NFO conflict",
+    "failed": "NFO failed",
 }
 
 _COVER_STATES = {
-    "preserved": "Portada conservada",
-    "embedded": "Portada incrustada",
-    "replaced": "Portada sustituida",
-    "unchanged": "Portada ya coincidente",
-    "skipped": "Portada conservada por elección",
+    "preserved": "Cover preserved",
+    "embedded": "Cover embedded",
+    "replaced": "Cover replaced",
+    "unchanged": "Cover already matches",
+    "skipped": "Cover preserved by choice",
 }
 
 
 def report_text(report: TagWriteReport) -> str:
-    lines = ["Escritura de etiquetas" + (" · Cancelada" if report.cancelled else "")]
+    lines = ["Tag writing" + (" · Cancelled" if report.cancelled else "")]
     if report.fatal_error:
         lines.append(report.fatal_error)
     for item in report.results:
@@ -67,17 +67,17 @@ def report_text(report: TagWriteReport) -> str:
         if item.cover_action != "preserved" or item.cover_path:
             lines.append(_COVER_STATES[item.cover_action])
             if item.cover_path:
-                lines.append(f"Imagen fuente: {item.cover_path}")
+                lines.append(f"Source image: {item.cover_path}")
         if item.backup_path:
-            lines.append(f"Respaldo: {item.backup_path}")
+            lines.append(f"Backup: {item.backup_path}")
     for nfo in report.nfo_results:
         lines.append(f"\n{nfo.path}\n{_NFO_STATES[nfo.state]}")
         if nfo.message:
             lines.append(nfo.message)
         if nfo.backup_path:
-            lines.append(f"Respaldo: {nfo.backup_path}")
+            lines.append(f"Backup: {nfo.backup_path}")
     if report.journal_path:
-        lines.append(f"\nRegistro de recuperación: {report.journal_path}")
+        lines.append(f"\nRecovery log: {report.journal_path}")
     return "\n".join(lines)
 
 
@@ -94,7 +94,7 @@ class TagWriteDialog(QDialog):
         all_catalog: bool = False,
     ) -> None:
         super().__init__(parent)
-        title = "Escribir etiquetas de todo el catálogo" if all_catalog else "Escribir etiquetas"
+        title = "Write tags for the entire catalog" if all_catalog else "Write tags"
         self.setWindowTitle(title)
         self.setModal(True)
         self.resize(800, 600)
@@ -114,14 +114,14 @@ class TagWriteDialog(QDialog):
         heading.setObjectName("PageTitle")
         layout.addWidget(heading)
         description = QLabel(
-            "Se actualizarán las etiquetas, la portada disponible y album.nfo si existe. "
-            "Si hay varias imágenes, podrás elegir una.",
+            "Tags, available artwork and album.nfo (if present) will be updated. "
+            "If there are multiple images, you can choose one.",
             self,
         )
         description.setWordWrap(True)
         layout.addWidget(description)
         self.table = QTableWidget(len(songs), 4, self)
-        self.table.setHorizontalHeaderLabels(["Canción", "Artista(s)", "Archivo", "Estado"])
+        self.table.setHorizontalHeaderLabels(["Song", "Artist(s)", "File", "Status"])
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
@@ -131,7 +131,7 @@ class TagWriteDialog(QDialog):
                     song.title or Path(song.relative_path).name,
                     "; ".join(song.artists),
                     song.relative_path,
-                    "Pendiente",
+                    "Pending",
                 )
             ):
                 cell = QTableWidgetItem(value)
@@ -142,7 +142,7 @@ class TagWriteDialog(QDialog):
         self.output.setReadOnly(True)
         self.output.setAccessibleName("Progreso de escritura de etiquetas")
         layout.addWidget(self.output, 2)
-        self.summary = QLabel(f"{len(songs)} canciones para escribir.", self)
+        self.summary = QLabel(f"{len(songs)} songs to write.", self)
         self.summary.setWordWrap(True)
         layout.addWidget(self.summary)
         self.progress = QProgressBar(self)
@@ -151,9 +151,9 @@ class TagWriteDialog(QDialog):
         layout.addWidget(self.progress)
         buttons = QHBoxLayout()
         buttons.addStretch()
-        self.close_button = QPushButton("Cerrar", self)
+        self.close_button = QPushButton("Close", self)
         self.close_button.clicked.connect(self.reject)
-        self.write_button = QPushButton("Escribir etiquetas", self)
+        self.write_button = QPushButton("Write tags", self)
         self.write_button.setObjectName("PrimaryButton")
         self.write_button.clicked.connect(self._request_write)
         self.write_button.setEnabled(bool(songs))
@@ -171,9 +171,9 @@ class TagWriteDialog(QDialog):
         for row in range(self.table.rowCount()):
             cell = self.table.item(row, 3)
             assert cell is not None
-            cell.setText("Pendiente")
+            cell.setText("Pending")
         self.progress.setRange(0, 0)
-        self.summary.setText("Preparando escritura…")
+        self.summary.setText("Preparing write…")
         self.write_requested.emit()
 
     def set_busy(self, busy: bool) -> None:
@@ -182,15 +182,15 @@ class TagWriteDialog(QDialog):
 
     def set_progress(self, progress: TagWriteProgress) -> None:
         names = {
-            "preview": "Preparando canciones",
-            "cover_discovery": "Buscando portadas",
-            "reading": "Leyendo etiquetas",
-            "checking": "Comprobando archivo",
-            "backup": "Creando respaldo",
-            "writing": "Escribiendo y verificando",
-            "nfo_reading": "Comprobando album.nfo",
-            "nfo_writing": "Actualizando album.nfo",
-            "finished": "Escritura terminada",
+            "preview": "Preparing songs",
+            "cover_discovery": "Finding covers",
+            "reading": "Reading tags",
+            "checking": "Checking file",
+            "backup": "Creating backup",
+            "writing": "Writing and verifying",
+            "nfo_reading": "Checking album.nfo",
+            "nfo_writing": "Updating album.nfo",
+            "finished": "Writing complete",
         }
         phase = names.get(progress.phase, progress.phase)
         text = f"{phase} · {progress.processed}/{progress.total}"
@@ -206,7 +206,7 @@ class TagWriteDialog(QDialog):
         self.set_busy(False)
         self._error_message = message
         self.output.appendPlainText(message)
-        self.summary.setText("No se pudo completar la escritura.")
+        self.summary.setText("Could not complete writing.")
         self.progress.setRange(0, max(1, len(self.file_ids)))
         if self._close_pending:
             super().reject()
@@ -232,7 +232,7 @@ class TagWriteDialog(QDialog):
             if item.cover_action != "preserved" or item.cover_path:
                 self.output.appendPlainText(_COVER_STATES[item.cover_action])
                 if item.cover_path:
-                    self.output.appendPlainText(f"Imagen fuente: {item.cover_path}")
+                    self.output.appendPlainText(f"Source image: {item.cover_path}")
             if (row := self._rows.get(item.file_id)) is not None:
                 cell = self.table.item(row, 3)
                 assert cell is not None
@@ -243,13 +243,13 @@ class TagWriteDialog(QDialog):
             if nfo.message:
                 self.output.appendPlainText(nfo.message)
             if nfo.backup_path:
-                self.output.appendPlainText(f"Respaldo: {nfo.backup_path}")
+                self.output.appendPlainText(f"Backup: {nfo.backup_path}")
         written = sum(item.state in ("confirmed", "catalog_pending") for item in report.results)
         self.summary.setText(
-            f"{'Escritura cancelada' if report.cancelled else 'Escritura terminada'} · "
-            f"{written} archivos escritos."
+            f"{'Writing cancelled' if report.cancelled else 'Writing complete'} · "
+            f"{written} files written."
             + (
-                f" {sum(n.state == 'updated' for n in report.nfo_results)} NFO actualizados."
+                f" {sum(n.state == 'updated' for n in report.nfo_results)} NFO files updated."
                 if report.nfo_results
                 else ""
             )
@@ -275,15 +275,13 @@ class TagWriteDialog(QDialog):
 
     def _offer_error_report(self) -> None:
         popup = QMessageBox(self)
-        popup.setWindowTitle("Error al escribir etiquetas")
+        popup.setWindowTitle("Tag writing error")
         popup.setIcon(QMessageBox.Icon.Warning)
-        popup.setText("La operación terminó con errores.")
-        popup.setInformativeText(
-            "Puedes guardar el informe con los errores y las rutas de respaldo."
-        )
+        popup.setText("The operation ended with errors.")
+        popup.setInformativeText("You can save a report with errors and backup paths.")
         popup.setDetailedText(report_text(self._report) if self._report else self._error_message)
-        save = popup.addButton("Guardar informe…", QMessageBox.ButtonRole.ActionRole)
-        popup.addButton("Cerrar", QMessageBox.ButtonRole.RejectRole)
+        save = popup.addButton("Save report…", QMessageBox.ButtonRole.ActionRole)
+        popup.addButton("Close", QMessageBox.ButtonRole.RejectRole)
         popup.buttonClicked.connect(
             lambda button: self._export_report() if button is save else None
         )
@@ -298,12 +296,12 @@ class TagWriteDialog(QDialog):
 
     def _export_report(self) -> None:
         dialog = QFileDialog(
-            self, "Guardar informe de escritura", str(Path.home() / "escritura-etiquetas.json")
+            self, "Save write report", str(Path.home() / "escritura-etiquetas.json")
         )
         dialog.setOption(QFileDialog.Option.DontUseNativeDialog, True)
         dialog.setAcceptMode(QFileDialog.AcceptMode.AcceptSave)
         dialog.setDefaultSuffix("json")
-        dialog.setNameFilter("Informe JSON (*.json)")
+        dialog.setNameFilter("JSON report (*.json)")
         if dialog.exec() == QDialog.DialogCode.Accepted and dialog.selectedFiles():
             payload = (
                 asdict(self._report)
@@ -320,14 +318,14 @@ class TagWriteDialog(QDialog):
                     encoding="utf-8",
                 )
             except OSError as exc:
-                self.set_error(f"No se pudo guardar el informe: {exc}", offer_report=False)
+                self.set_error(f"Could not save the report: {exc}", offer_report=False)
         dialog.deleteLater()
 
     def reject(self) -> None:
         if self._busy:
             self._close_pending = True
             self.cancel_requested.emit()
-            self.summary.setText("Cerrando… Se espera a que termine el archivo en curso.")
+            self.summary.setText("Closing… Waiting for the current file to finish.")
         else:
             super().reject()
 

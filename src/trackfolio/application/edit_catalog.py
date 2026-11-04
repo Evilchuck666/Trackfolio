@@ -1,4 +1,4 @@
-"""Lectura y actualización parcial del catálogo sin Qt, ORM ni acceso al audio."""
+"""Read and partially update the catalog without Qt, ORM or audio access."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ from trackfolio.domain.catalog_edit import (
 
 
 class CatalogEditError(CatalogAccessError):
-    """Fallo recuperable de edición, con mensaje apto para cualquier interfaz."""
+    """Recoverable editing failure with a message suitable for any interface."""
 
     def __init__(self, message: str, *, backup_path: Path | None = None) -> None:
         self.backup_path = backup_path
@@ -32,17 +32,17 @@ class CatalogEditError(CatalogAccessError):
 
 
 class CatalogEditConflict(CatalogEditError):
-    """El registro o sus relaciones cambiaron desde que se preparó el borrador."""
+    """The record or its relationships changed after the draft was prepared."""
 
 
 class CatalogRecordMissing(CatalogEditError):
-    """El archivo seleccionado ya no existe en el catálogo."""
+    """The selected file no longer exists in the catalog."""
 
 
 class CatalogEditValidationError(CatalogEditError):
     def __init__(self, errors: tuple[FieldError, ...]) -> None:
         self.errors = errors
-        super().__init__("Revisa los campos indicados antes de guardar.")
+        super().__init__("Check the highlighted fields before saving.")
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,7 +86,7 @@ _NUMERIC_FIELDS = frozenset(
 
 
 def validate_edit_patch(values: EditableValues, patch: TrackEditPatch) -> TrackEditPatch:
-    """Normalizar sólo lo solicitado, manteniendo ausente y borrado como casos distintos."""
+    """Normalize only requested values, keeping absent and cleared fields distinct."""
     errors: list[FieldError] = []
     normalized: dict[EditField, EditValue] = {}
     previous = values.as_dict()
@@ -94,9 +94,9 @@ def validate_edit_patch(values: EditableValues, patch: TrackEditPatch) -> TrackE
     for change in patch.changes:
         field, value = change.field, change.value
         if field not in EDIT_FIELDS:
-            raise CatalogEditError("El cambio contiene un campo que no se puede editar.")
+            raise CatalogEditError("The change contains a field that cannot be edited.")
         if field in seen:
-            errors.append(FieldError(field, "El campo aparece más de una vez en la solicitud."))
+            errors.append(FieldError(field, "The field appears more than once in the request."))
             continue
         seen.add(field)
         if field in _NUMERIC_FIELDS:
@@ -107,25 +107,25 @@ def validate_edit_patch(values: EditableValues, patch: TrackEditPatch) -> TrackE
                 elif re.fullmatch(r"[0-9]{1,19}", text):
                     value = int(text)
                 else:
-                    errors.append(FieldError(field, "Introduce un entero positivo o deja vacío."))
+                    errors.append(FieldError(field, "Enter a positive integer or leave blank."))
                     continue
             maximum = 9999 if field == "album_year" else 2**63 - 1
             if value is not None and (type(value) is not int or not 1 <= value <= maximum):
                 message = (
-                    "Introduce un año entre 1 y 9999 o deja vacío."
+                    "Enter a year between 1 and 9999 or leave blank."
                     if field == "album_year"
-                    else "Introduce un entero positivo dentro del rango admitido por el catálogo."
+                    else "Enter a positive integer within the range supported by the catalog."
                 )
                 errors.append(FieldError(field, message))
                 continue
         elif field in ("artists", "genres", "album_artists"):
             if not isinstance(value, tuple) or any(not isinstance(item, str) for item in value):
-                errors.append(FieldError(field, "Introduce una lista de nombres completos."))
+                errors.append(FieldError(field, "Enter a list of full names."))
                 continue
             value = tuple(dict.fromkeys(item for item in value if item.strip()))
         else:
             if value is not None and not isinstance(value, str):
-                errors.append(FieldError(field, "Introduce texto o deja el campo vacío."))
+                errors.append(FieldError(field, "Enter text or leave the field blank."))
                 continue
             if isinstance(value, str) and (
                 value == "" or (field != "lyrics" and not value.strip())
@@ -143,8 +143,8 @@ def validate_edit_patch(values: EditableValues, patch: TrackEditPatch) -> TrackE
                 and type(resulting_total) is int
                 and resulting_number > resulting_total
             ):
-                errors.append(FieldError(number_field, "El número no puede superar su total."))
-                errors.append(FieldError(total_field, "El total no puede ser menor que el número."))
+                errors.append(FieldError(number_field, "The number cannot exceed its total."))
+                errors.append(FieldError(total_field, "The total cannot be less than the number."))
     if errors:
         raise CatalogEditValidationError(tuple(errors))
     return TrackEditPatch(tuple(FieldChange(field, value) for field, value in normalized.items()))
@@ -193,24 +193,24 @@ class UpdateCatalogTrack:
             try:
                 session.close()
             except Exception as cleanup:
-                exc.add_note(f"No se pudo cerrar el acceso al catálogo: {cleanup}")
+                exc.add_note(f"Could not close catalog access: {cleanup}")
             raise
         try:
             session.close()
         except Exception as exc:
             return replace(
                 outcome,
-                warning=f"Los cambios se guardaron, pero no se pudo cerrar el acceso: {exc}",
+                warning=f"Changes were saved, but access could not be closed: {exc}",
             )
         return outcome
 
 
 def validate_batch_edit(originals: tuple[EditableTrack, ...], patch: TrackEditPatch) -> None:
     if not originals or len({item.file_id for item in originals}) != len(originals):
-        raise CatalogEditError("Selecciona canciones distintas para editar en grupo.")
+        raise CatalogEditError("Select distinct songs for batch editing.")
     if any(change.field not in BATCH_EDIT_FIELDS for change in patch.changes):
         raise CatalogEditError(
-            "En grupo solo se pueden editar álbum, artistas de pista o álbum, año y géneros."
+            "Batch editing supports only album, track or album artists, year and genres."
         )
     for original in originals:
         validate_edit_patch(original.values, patch)
@@ -237,7 +237,7 @@ class UpdateCatalogTracks:
             try:
                 session.close()
             except Exception as cleanup:
-                exc.add_note(f"No se pudo cerrar el acceso al catálogo: {cleanup}")
+                exc.add_note(f"Could not close catalog access: {cleanup}")
             raise
         try:
             session.close()
@@ -245,7 +245,7 @@ class UpdateCatalogTracks:
             return tuple(
                 replace(
                     outcome,
-                    warning=f"Los cambios se guardaron, pero no se pudo cerrar el acceso: {exc}",
+                    warning=f"Changes were saved, but access could not be closed: {exc}",
                 )
                 for outcome in outcomes
             )

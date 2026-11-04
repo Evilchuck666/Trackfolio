@@ -72,7 +72,7 @@ def test_edit_actions_need_an_enabled_adapter_and_loaded_detail(window):
     assert not window.save_button.isEnabled()
     assert window.cancel_edit_button.isEnabled()
     assert not window.edit_dirty()
-    assert window.edit_status.text() == "Cambios en el catálogo"
+    assert window.edit_status.text() == "Catalog changes"
 
 
 def test_draft_has_only_user_changes_and_preserves_plain_text(window):
@@ -85,7 +85,7 @@ def test_draft_has_only_user_changes_and_preserves_plain_text(window):
     assert window.edit_dirty()
     assert window.save_button.isEnabled()
     assert dirty.at(1) == [True]
-    assert "Cambios sin guardar" in window.edit_status.text()
+    assert "Unsaved changes" in window.edit_status.text()
     replace_text(window.fields["title"], "Original")
     assert window.edit_patch().empty
     assert not window.save_button.isEnabled()
@@ -195,7 +195,7 @@ def test_ctrl_and_shift_allow_multiple_song_selection(window):
     )
     assert window.selected_file_ids() == (1, 2)
 
-    assert "2 canciones" in window.edit_button.text()
+    assert "2 songs" in window.edit_button.text()
     # Clicking without modifiers restores an individual selection.
     QTest.mouseClick(window.table.viewport(), Qt.MouseButton.LeftButton, pos=second)
     assert window.selected_file_ids() == (2,)
@@ -230,7 +230,7 @@ def test_batch_editor_keeps_actions_visible_while_scrolling(window, qt_app, size
 
 
 def test_ordered_labels_add_remove_and_move_complete_exact_names(qt_app):
-    widget = OrderedLabels("Artista(s)")
+    widget = OrderedLabels("Artist(s)")
     widget.show()
     try:
         widget.set_names(("Earth, Wind & Fire", "Heavy; Progressive"))
@@ -294,7 +294,7 @@ def test_saving_disables_navigation_and_keeps_draft_on_error(window):
     window.begin_edit(load_detail(window))
     replace_text(window.fields["title"], "Unsaved")
     window.set_edit_state(True, saving=True)
-    assert window.edit_status.text() == "Guardando cambios…"
+    assert window.edit_status.text() == "Saving changes…"
     assert not window.open_button.isEnabled()
     assert not window.import_button.isEnabled()
     assert not window.refresh_button.isEnabled()

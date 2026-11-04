@@ -24,7 +24,7 @@ def build_catalog(path):
             TrackMetadata(
                 title="Título",
                 artists=("Dos", "Uno"),
-                album="Álbum",
+                album="Album",
                 album_year=1981,
                 artwork=Artwork(b"cover stored in the database", "image/jpeg"),
                 audio_format="flac",

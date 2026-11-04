@@ -57,15 +57,15 @@ def _audio_source(root: Path) -> Path:
     properties = (44100 << 44) | (1 << 41) | (15 << 36) | 88200
     stream_info = b"\x10\x00\x10\x00" + b"\x00" * 6 + properties.to_bytes(8, "big") + b"\x00" * 16
     tags = (
-        ("TITLE", "Canción de prueba"),
-        ("ALBUM", "Álbum de prueba"),
+        ("TITLE", "Test song"),
+        ("ALBUM", "Test album"),
         ("DATE", "2020"),
-        ("ARTIST", "Artista de prueba"),
+        ("ARTIST", "Test artist"),
         ("GENRE", "Rock"),
         ("GENRE", "Jazz"),
         ("TRACKNUMBER", "3/10"),
         ("DISCNUMBER", "1/2"),
-        ("LYRICS", "Texto inventado\nSegunda línea"),
+        ("LYRICS", "Invented text\nSecond line"),
     )
     vendor = b"Trackfolio diagnostic"
     comments = struct.pack("<I", len(vendor)) + vendor + struct.pack("<I", len(tags))
@@ -94,14 +94,17 @@ def run_probe(argv: list[str]) -> dict[str, object]:
     app = CatalogApplication(["trackfolio-doctor", *argv])
     apply_theme(app)
     with tempfile.TemporaryDirectory(prefix="trackfolio-gui-") as directory:
-        database = Path(directory) / "catálogo portable.tfo"
+        database = Path(directory) / "portable catalog.tfo"
         source = _audio_source(Path(directory))
         window, controller = create_window(tag_journal_root=Path(directory) / "tag-writes")
         assert window.views.currentWidget() is window.artist_view
         window.views.setCurrentWidget(window.splitter)
         app.close_guard = controller.request_close
         app.aboutToQuit.connect(controller.shutdown)
-        state: dict[str, object] = {"events": False, "failure": "La ventana no cargó el detalle."}
+        state: dict[str, object] = {
+            "events": False,
+            "failure": "The window did not load the details.",
+        }
 
         def fail(message: str) -> None:
             state["failure"] = message
@@ -111,7 +114,7 @@ def run_probe(argv: list[str]) -> dict[str, object]:
 
         def inspect_import(report: ImportReport) -> None:
             if report.state != "completed" or report.created != 1 or report.failed:
-                fail(report.fatal_error or "La importación de prueba falló.")
+                fail(report.fatal_error or "The test import failed.")
             else:
                 source.unlink()
                 state["imported"] = True
@@ -120,7 +123,7 @@ def run_probe(argv: list[str]) -> dict[str, object]:
 
         def request_edit() -> None:
             try:
-                assert window.edit_button.isEnabled(), "El botón Editar no se habilitó."
+                assert window.edit_button.isEnabled(), "The Edit button was not enabled."
                 QTest.mouseClick(window.edit_button, Qt.MouseButton.LeftButton)
             except Exception as exc:
                 fail(str(exc) or type(exc).__name__)
@@ -129,9 +132,9 @@ def run_probe(argv: list[str]) -> dict[str, object]:
             if state.get("edited"):
                 return
             expected = {
-                "title": "Canción de prueba",
-                "artists": "Artista de prueba",
-                "album": "Álbum de prueba",
+                "title": "Test song",
+                "artists": "Test artist",
+                "album": "Test album",
                 "album_year": "2020",
                 "track_number": "3",
                 "track_total": "10",
@@ -144,10 +147,10 @@ def run_probe(argv: list[str]) -> dict[str, object]:
                 assert window.isVisible()
                 for key, value in expected.items():
                     assert window.fields[key].text() == value, key
-                assert window.lyrics.toPlainText() == "Texto inventado\nSegunda línea"
+                assert window.lyrics.toPlainText() == "Invented text\nSecond line"
                 assert window.cover.pixmap() is not None and not window.cover.pixmap().isNull()
                 state["events"] = True
-                state["failure"] = "La ventana no preparó la edición del catálogo."
+                state["failure"] = "The window did not prepare catalog editing."
                 # detail_loaded fires before the controller restores idle actions.
                 QTimer.singleShot(0, request_edit)
             except Exception as exc:
@@ -158,7 +161,7 @@ def run_probe(argv: list[str]) -> dict[str, object]:
         def inspect_edit(file_id: int) -> None:
             try:
                 assert file_id == window.current_file_id()
-                assert not source.exists(), "La edición debe funcionar sin el archivo musical."
+                assert not source.exists(), "Editing must work without the music file."
                 assert not window.fields["title"].isReadOnly()
                 assert not window.save_button.isEnabled()
                 window.fields["title"].selectAll()
@@ -170,7 +173,7 @@ def run_probe(argv: list[str]) -> dict[str, object]:
                 QTest.mouseClick(artists.add_button, Qt.MouseButton.LeftButton)
                 assert window.edit_dirty()
                 assert window.save_button.isEnabled()
-                state["failure"] = "La ventana no confirmó el guardado del catálogo."
+                state["failure"] = "The window did not confirm saving the catalog."
                 QTest.mouseClick(window.save_button, Qt.MouseButton.LeftButton)
             except Exception as exc:
                 fail(str(exc) or type(exc).__name__)
@@ -195,21 +198,21 @@ def run_probe(argv: list[str]) -> dict[str, object]:
                     assert stored.metadata.artists == ("Accept",)
                     assert session.list_summaries() == window.model.summaries()
                     assert any(
-                        tag.key.lower() == "title" and tag.value == "Canción de prueba"
+                        tag.key.lower() == "title" and tag.value == "Test song"
                         for tag in stored.metadata.raw_tags
                     )
                     assert stored.metadata.artwork is not None
                 finally:
                     session.close()
                 state["edited"] = True
-                state["failure"] = "La ventana no confirmó la escritura de etiquetas."
+                state["failure"] = "The window did not confirm writing tags."
                 _audio_source(Path(directory))
                 (source.parent / "folder.png").write_bytes(_png(b"\x10\xee\x20"))
                 (source.parent / "album.nfo").write_text(
                     '<?xml version="1.0" encoding="utf-8"?>\n'
-                    "<album><title>Outdated</title><artist>Artista de prueba</artist>"
+                    "<album><title>Outdated</title><artist>Test artist</artist>"
                     "<review>Keep this review</review>"
-                    "<track><position>3</position><title>Canción de prueba</title>"
+                    "<track><position>3</position><title>Test song</title>"
                     "<duration>0:02</duration></track></album>",
                     encoding="utf-8",
                 )
@@ -258,7 +261,7 @@ def run_probe(argv: list[str]) -> dict[str, object]:
                 )
                 assert report.nfo_results[0].backup_path is None
                 nfo = ElementTree.parse(source.parent / "album.nfo").getroot()
-                assert nfo.findtext("title") == "Álbum de prueba", ElementTree.tostring(nfo)
+                assert nfo.findtext("title") == "Test album", ElementTree.tostring(nfo)
                 assert nfo.findtext("review") == "Keep this review"
                 assert nfo.findtext("track/title") == "Catalog correction"
                 assert nfo.findtext("track/duration") == "0:02"
@@ -275,7 +278,7 @@ def run_probe(argv: list[str]) -> dict[str, object]:
                 state["failure"] = ""
                 if controller._tag_dialog is not None:
                     controller._tag_dialog.reject()
-                state["failure"] = "La vista de álbum no confirmó sus datos."
+                state["failure"] = "The album view did not confirm its data."
                 QTimer.singleShot(0, request_albums)
             except Exception as exc:
                 fail(str(exc) or type(exc).__name__)
@@ -291,7 +294,7 @@ def run_probe(argv: list[str]) -> dict[str, object]:
             try:
                 view = window.album_view
                 assert view.list.count() == 1 and view.current_album is not None
-                assert view.title.text() == "Álbum de prueba"
+                assert view.title.text() == "Test album"
                 assert view.table.rowCount() == 1
                 title_cell, artist_cell = view.table.item(0, 2), view.table.item(0, 3)
                 assert title_cell is not None and title_cell.text() == "Catalog correction"

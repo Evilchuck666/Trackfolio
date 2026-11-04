@@ -54,14 +54,14 @@ def read_lock(root: Path) -> dict[str, set[str]]:
     content = tomllib.loads((root / "uv.lock").read_text(encoding="utf-8"))
     packages = content.get("package")
     if not isinstance(packages, list) or not packages:
-        raise ValueError("uv.lock no contiene una lista de paquetes.")
+        raise ValueError("uv.lock does not contain a package list.")
     versions: dict[str, set[str]] = {}
     for package in packages:
         if not isinstance(package, dict):
-            raise ValueError("uv.lock contiene un paquete que no es una tabla TOML.")
+            raise ValueError("uv.lock contains a package that is not a TOML table.")
         name, version = package.get("name"), package.get("version")
         if not isinstance(name, str) or not isinstance(version, str):
-            raise ValueError("uv.lock contiene un paquete sin nombre o versión.")
+            raise ValueError("uv.lock contains a package without a name or version.")
         versions.setdefault(normalize_name(name), set()).add(version)
     return versions
 
@@ -70,15 +70,15 @@ def check_python(root: Path) -> CheckResult:
     try:
         expected = (root / ".python-version").read_text(encoding="utf-8").strip()
     except (OSError, UnicodeError) as exc:
-        return CheckResult("Python", False, f"No se puede leer .python-version: {exc}")
+        return CheckResult("Python", False, f"Cannot read .python-version: {exc}")
     actual = platform.python_version()
     if not re.fullmatch(r"\d+\.\d+\.\d+", expected):
-        return CheckResult("Python", False, ".python-version debe fijar una versión exacta X.Y.Z.")
+        return CheckResult("Python", False, ".python-version must pin an exact X.Y.Z version.")
     if sys.implementation.name != "cpython" or actual != expected:
         return CheckResult(
             "Python",
             False,
-            f"Se requiere CPython {expected}; se usa {sys.implementation.name} {actual}. "
+            f"Required CPython version: {expected}; using {sys.implementation.name} {actual}. "
             "Ejecuta uv python install y luego uv run --locked python scripts/doctor.py.",
         )
     return CheckResult("Python", True, f"CPython {actual}: {sys.executable}")
@@ -92,7 +92,7 @@ def check_versions(root: Path, gui: bool) -> list[CheckResult]:
             CheckResult(
                 "uv.lock",
                 False,
-                f"No se puede comprobar el lock: {exc}. Recupera uv.lock del repositorio.",
+                f"Cannot check the lockfile: {exc}. Restore uv.lock from the repository.",
             )
         ]
     names = CORE_DISTRIBUTIONS + (GUI_DISTRIBUTIONS if gui else ())
@@ -101,19 +101,19 @@ def check_versions(root: Path, gui: bool) -> list[CheckResult]:
     for name in names:
         expected = locked.get(normalize_name(name))
         if not expected:
-            results.append(CheckResult(name, False, f"El paquete no aparece en uv.lock: {name}."))
+            results.append(CheckResult(name, False, f"Package not listed in uv.lock: {name}."))
             continue
         try:
             actual = importlib.metadata.version(name)
         except importlib.metadata.PackageNotFoundError:
-            results.append(CheckResult(name, False, f"No está instalado. Ejecuta {sync_command}."))
+            results.append(CheckResult(name, False, f"Not installed. Run {sync_command}."))
             continue
         ok = actual in expected
         detail = (
             actual
             if ok
             else (
-                f"Instalado {actual}; el lock exige {', '.join(sorted(expected))}. "
+                f"Instalado {actual}; the lockfile requires {', '.join(sorted(expected))}. "
                 f"Ejecuta {sync_command}."
             )
         )
@@ -132,7 +132,7 @@ def check_imports() -> list[CheckResult]:
                     f"Import {name}",
                     False,
                     f"{type(exc).__name__}: {exc}. Ejecuta uv sync --locked --group dev. "
-                    "Si falla sqlite3, reinstala el CPython administrado con uv python install.",
+                    "If sqlite3 fails, reinstall managed CPython with uv python install.",
                 )
             )
         else:
@@ -156,25 +156,25 @@ def check_sqlite() -> CheckResult:
                     )
                     connection.execute(
                         text("INSERT INTO checks (name) VALUES (:name)"),
-                        {"name": "Trackfolio · música FLAC/MP3"},
+                        {"name": "Trackfolio · FLAC/MP3 music"},
                     )
                 with engine.connect() as connection:
                     actual: object = connection.execute(
                         text("SELECT name FROM checks")
                     ).scalar_one()
-                if actual != "Trackfolio · música FLAC/MP3":
-                    raise RuntimeError("La lectura no coincide con la escritura SQLite.")
+                if actual != "Trackfolio · FLAC/MP3 music":
+                    raise RuntimeError("The SQLite read does not match the write.")
             finally:
                 engine.dispose()
         return CheckResult(
-            "SQLite", True, f"SQLite {sqlite3.sqlite_version}; transacción y lectura OK"
+            "SQLite", True, f"SQLite {sqlite3.sqlite_version}; transaction and read OK"
         )
     except Exception as exc:
         return CheckResult(
             "SQLite",
             False,
-            f"{type(exc).__name__}: {exc}. Comprueba el Python administrado, "
-            "uv sync --locked --group dev y permisos del directorio temporal del sistema.",
+            f"{type(exc).__name__}: {exc}. Check managed Python, "
+            "uv sync --locked --group dev and system temporary directory permissions.",
         )
 
 
@@ -203,19 +203,19 @@ def check_resources() -> CheckResult:
             ),
         }
         if not isinstance(assets, dict) or set(assets) != required:
-            raise ValueError("El manifiesto no enumera todos los recursos esperados.")
+            raise ValueError("The manifest does not list all expected resources.")
         for name, digest in assets.items():
             if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
-                raise ValueError(f"SHA-256 inválido para {name}.")
+                raise ValueError(f"Invalid SHA-256 for {name}.")
             content = resources.joinpath(*name.split("/")).read_bytes()
             if not content or hashlib.sha256(content).hexdigest() != digest:
-                raise ValueError(f"El recurso {name} está vacío o su SHA-256 no coincide.")
+                raise ValueError(f"Resource {name} is empty or its SHA-256 does not match.")
     except Exception as exc:
         return CheckResult(
             "Recursos",
             False,
-            f"No se pueden validar los recursos empaquetados de trackfolio.resources: {exc}. "
-            "Comprueba los recursos del paquete y repite uv sync --locked.",
+            f"Cannot validate packaged trackfolio.resources assets: {exc}. "
+            "Check the package resources and run uv sync --locked again.",
         )
     return CheckResult(
         "Recursos",
@@ -257,14 +257,14 @@ def check_gui_platform() -> CheckResult:
                 "Plataforma GUI",
                 False,
                 f"{detail}; libc={libc or 'desconocida'} {libc_version}. "
-                "Se requiere GNU/Linux x86-64 con glibc 2.34+. Consulta docs/environment.md.",
+                "GNU/Linux x86-64 with glibc 2.34+ is required. See docs/environment.md.",
             )
         detail += f"; glibc {libc_version}"
     else:
         return CheckResult(
             "Plataforma GUI",
             False,
-            f"{detail}. La matriz inicial cubre Windows, macOS y GNU/Linux.",
+            f"{detail}. The initial matrix covers Windows, macOS and GNU/Linux.",
         )
     return CheckResult("Plataforma GUI", True, detail)
 
@@ -282,20 +282,20 @@ def qt_failure_help(output: str) -> str:
         )
     ):
         return (
-            "Comprueba DISPLAY o WAYLAND_DISPLAY/XDG_RUNTIME_DIR y la sesión gráfica. "
-            "Para CI usa --platform offscreen o xvfb-run con --platform xcb; "
-            "offscreen no valida el escritorio real."
+            "Check DISPLAY or WAYLAND_DISPLAY/XDG_RUNTIME_DIR and the graphical session. "
+            "For CI, use --platform offscreen or xvfb-run with --platform xcb; "
+            "offscreen does not validate the actual desktop."
         )
     if platform.system() == "Linux":
         return (
-            "Comprueba las bibliotecas del plugin y la sesión gráfica; "
+            "Check the plugin libraries and graphical session; "
             "consulta docs/environment.md. "
             "Si falta libxcb-cursor.so.0: Debian/Ubuntu: sudo apt install libxcb-cursor0; "
             "Arch: sudo pacman -S --needed xcb-util-cursor. "
-            "Si falta otra .so, instala el paquete de sistema indicado en esa documentación."
+            "If another .so is missing, install the system package specified in that documentation."
         )
     return (
-        "Comprueba el sistema mínimo y el escritorio. Reinstala las dependencias con "
+        "Check the minimum system requirements and desktop. Reinstall dependencies with "
         "uv sync --locked --group dev --extra gui; consulta docs/environment.md."
     )
 
@@ -325,23 +325,23 @@ def check_qt(qt_platform: str | None, timeout: float) -> CheckResult:
         return CheckResult(
             "Qt/Fusion",
             False,
-            f"Qt superó el timeout de {timeout:g} s; se ha detenido el subproceso. "
+            f"Qt exceeded the timeout of {timeout:g} s; the subprocess has been stopped. "
             f"{output[-4000:]} {qt_failure_help(output)}",
         )
     except OSError as exc:
-        return CheckResult("Qt/Fusion", False, f"No se pudo iniciar el subproceso Qt: {exc}")
+        return CheckResult("Qt/Fusion", False, f"Could not start the Qt subprocess: {exc}")
     if result.returncode != 0:
-        cause = f"código {result.returncode}"
+        cause = f"code {result.returncode}"
         if result.returncode < 0:
             try:
-                cause = f"señal {signal.Signals(-result.returncode).name}"
+                cause = f"signal {signal.Signals(-result.returncode).name}"
             except ValueError:
-                cause = f"señal {-result.returncode}"
+                cause = f"signal {-result.returncode}"
         output = (result.stderr or result.stdout).strip()
         return CheckResult(
             "Qt/Fusion",
             False,
-            f"El subproceso Qt terminó con {cause}. {output[-4000:]} {qt_failure_help(output)}",
+            f"The Qt subprocess exited with {cause}. {output[-4000:]} {qt_failure_help(output)}",
         )
     payload = next(
         (
@@ -355,9 +355,9 @@ def check_qt(qt_platform: str | None, timeout: float) -> CheckResult:
         report = json.loads(payload or "")
         backend, style, qt_version = report["platform"], report["style"], report["qt_version"]
         if not all(isinstance(value, str) for value in (backend, style, qt_version)):
-            raise ValueError("El informe contiene tipos incorrectos.")
+            raise ValueError("The report contains incorrect types.")
         if style.lower() != "fusion" or report.get("events") is not True:
-            raise ValueError("No se comprobó Fusion o el ciclo de eventos.")
+            raise ValueError("Fusion or the event loop was not verified.")
         if any(
             report.get(key) is not True
             for key in (
@@ -371,21 +371,21 @@ def check_qt(qt_platform: str | None, timeout: float) -> CheckResult:
             )
         ):
             raise ValueError(
-                "No se comprobó la importación y edición, "
-                "incluidas la escritura musical, portada, NFO y vistas de álbum y artistas."
+                "Import and editing were not verified, "
+                "including audio writes, artwork, NFO and album and artist views."
             )
     except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
-        return CheckResult("Qt/Fusion", False, f"El subproceso no confirmó la prueba Qt: {exc}")
+        return CheckResult("Qt/Fusion", False, f"The subprocess did not confirm the Qt test: {exc}")
     scope = (
-        "Prueba sin pantalla; no confirma el escritorio real."
+        "Headless test; does not confirm the actual desktop."
         if backend in ("offscreen", "minimal")
-        else "Ventana del backend gráfico y ciclo de eventos comprobados."
+        else "Graphical backend window and event loop verified."
     )
     return CheckResult(
         "Qt/Fusion",
         True,
         f"Qt {qt_version}, Fusion, backend {backend}; "
-        "importación, edición, etiquetas, portada, NFO y vistas de álbum y artistas comprobadas. "
+        "import, editing, tags, artwork, NFO and album and artist views verified. "
         f"{scope}",
     )
 
@@ -393,17 +393,17 @@ def check_qt(qt_platform: str | None, timeout: float) -> CheckResult:
 def positive_timeout(value: str) -> float:
     timeout = float(value)
     if not 0 < timeout <= 300:
-        raise argparse.ArgumentTypeError("El timeout debe estar entre 0 y 300 segundos.")
+        raise argparse.ArgumentTypeError("The timeout must be between 0 and 300 seconds.")
     return timeout
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group()
-    mode.add_argument("--core", action="store_true", help="Comprobar sólo el núcleo (por defecto).")
-    mode.add_argument("--gui", action="store_true", help="Comprobar también la GUI Qt.")
+    mode.add_argument("--core", action="store_true", help="Check the core only (default).")
+    mode.add_argument("--gui", action="store_true", help="Also check the Qt GUI.")
     parser.add_argument("--platform", choices=("offscreen", "xcb", "wayland"))
-    parser.add_argument("--qt-timeout", type=positive_timeout, default=15.0, metavar="SEGUNDOS")
+    parser.add_argument("--qt-timeout", type=positive_timeout, default=15.0, metavar="SECONDS")
     args = parser.parse_args(argv)
     if args.platform and not args.gui:
         parser.error("--platform necesita --gui.")
@@ -421,7 +421,7 @@ def main(argv: list[str] | None = None) -> int:
     for result in results:
         print(f"{'OK' if result.ok else 'ERROR'} · {result.name}: {result.detail}", flush=True)
     failures = sum(not result.ok for result in results)
-    print(f"Diagnóstico {'GUI' if args.gui else 'núcleo'}: {failures} error(es).")
+    print(f"Diagnostics: {'GUI' if args.gui else 'core'}: {failures} error(s).")
     return 1 if failures else 0
 
 

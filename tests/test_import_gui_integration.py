@@ -115,7 +115,7 @@ def test_import_and_reimport_real_audio_then_read_without_music(qt_app, tmp_path
     music.mkdir()
     source = write_flac(
         music / "a.FLAC",
-        [("TITLE", "Canción"), ("ARTIST", "Artista"), ("LYRICS", "Texto\nOtra línea")],
+        [("TITLE", "Song"), ("ARTIST", "Artista"), ("LYRICS", "Texto\nOtra línea")],
         [(3, png())],
     )
     untagged = write_mp3(music / "b.mp3")
@@ -129,7 +129,7 @@ def test_import_and_reimport_real_audio_then_read_without_music(qt_app, tmp_path
     window.show()
     try:
         controller.start_import(ImportRequest(music, database, "create"))
-        wait_until(qt_app, lambda: len(reports) == 1 and window.fields["title"].text() == "Canción")
+        wait_until(qt_app, lambda: len(reports) == 1 and window.fields["title"].text() == "Song")
         assert (reports[0].created, reports[0].updated, reports[0].failed) == (2, 0, 1)
         assert window.model.rowCount() == 2
         assert preferences.last_catalog() == database
@@ -240,7 +240,7 @@ def test_cancel_or_close_remains_responsive_and_keeps_committed_files(qt_app, tm
     music = tmp_path / "music"
     music.mkdir()
     write_flac(music / "a.flac", [("TITLE", "Guardada")])
-    write_flac(music / "b.flac", [("TITLE", "Pendiente")])
+    write_flac(music / "b.flac", [("TITLE", "Pending")])
     database = tmp_path / "partial.tfo"
     gate = GateReader()
     importer = ImportCatalog(FileSystemAudioScanner(), gate, SqliteImportTargetFactory())

@@ -1,1 +1,1 @@
-"""Entidades y reglas del dominio, independientes de GUI y persistencia."""
+"""Domain entities and rules, independent of GUI and persistence."""

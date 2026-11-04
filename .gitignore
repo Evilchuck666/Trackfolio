@@ -1,4 +1,4 @@
-# Entornos locales y cachés.
+# Local environments and caches.
 .venv/
 .tools/
 venv/
@@ -10,12 +10,12 @@ __pycache__/
 .coverage
 htmlcov/
 
-# Distribuciones generadas.
+# Generated distributions.
 build/
 dist/
 *.egg-info/
 
-# Configuración y datos de cada equipo.
+# Machine-specific configuration and data.
 .env
 .env.*
 !.env.example
@@ -35,7 +35,7 @@ music/
 !tests/fixtures/**/*.sqlite3
 !tests/fixtures/**/*.tfo
 
-# Archivos del sistema y del editor.
+# System and editor files.
 .DS_Store
 Thumbs.db
 Desktop.ini

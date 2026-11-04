@@ -135,8 +135,8 @@ def _check_database(connection: Connection) -> str | None:
         return validate_catalog_connection(connection)
     except UnknownDatabaseError as exc:
         raise UnknownDatabaseError(
-            "La base de datos no está vacía y no tiene un esquema Trackfolio reconocido. "
-            "Selecciona una base nueva; no se adoptan ni sobrescriben bases desconocidas."
+            "The database is not empty and has no recognized Trackfolio schema. "
+            "Select a new database; unknown databases are not adopted or overwritten."
         ) from exc
 
 
@@ -154,7 +154,7 @@ def _backup_database(database: Path) -> Path:
         if status in (sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED) and (
             time.monotonic() - started >= 2.0
         ):
-            raise TimeoutError("El catálogo está ocupado; no se pudo crear su respaldo.")
+            raise TimeoutError("The catalog is busy; its backup could not be created.")
 
     try:
         with (
@@ -186,14 +186,14 @@ def prepare_migration_connection(
     """
     revision = _check_database(connection)
     if require_catalog and revision is None:
-        raise UnknownDatabaseError("El archivo no contiene un catálogo Trackfolio compatible.")
+        raise UnknownDatabaseError("The file does not contain a compatible Trackfolio catalog.")
     if revision == REVISION:
         return revision, None
     connection.exec_driver_sql("ROLLBACK")
     connection.exec_driver_sql("BEGIN IMMEDIATE")
     revision = _check_database(connection)
     if require_catalog and revision is None:
-        raise UnknownDatabaseError("El archivo no contiene un catálogo Trackfolio compatible.")
+        raise UnknownDatabaseError("The file does not contain a compatible Trackfolio catalog.")
     backup = _backup_database(database) if revision == LEGACY_REVISION else None
     return revision, backup
 
@@ -217,7 +217,7 @@ def _migration_engine(path: Path | str, *, require_existing: bool = False) -> tu
     if require_existing or original.exists() or original.is_symlink():
         database = original.resolve(strict=True)
         if not database.is_file():
-            raise ValueError("Selecciona un archivo SQLite existente.")
+            raise ValueError("Select an existing SQLite file.")
         return database, writable_engine(database)
     database = original.resolve()
     database.parent.mkdir(parents=True, exist_ok=True)
@@ -269,24 +269,20 @@ def current_schema_sql() -> str:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Exportar SQL o actualizar un catálogo Trackfolio."
-    )
+    parser = argparse.ArgumentParser(description="Export SQL or upgrade a Trackfolio catalog.")
     action = parser.add_mutually_exclusive_group(required=True)
-    action.add_argument("--export-sql", type=Path, help="Exportar el esquema histórico 001.")
-    action.add_argument("--export-current-sql", type=Path, help="Exportar el esquema vigente.")
-    action.add_argument(
-        "--upgrade", type=Path, help="Respaldar y actualizar un catálogo existente."
-    )
+    action.add_argument("--export-sql", type=Path, help="Export historical schema 001.")
+    action.add_argument("--export-current-sql", type=Path, help="Export the current schema.")
+    action.add_argument("--upgrade", type=Path, help="Back up and upgrade an existing catalog.")
     args = parser.parse_args()
     if args.upgrade is not None:
         try:
             backup = upgrade_database(args.upgrade)
         except (OSError, ValueError, sqlite3.Error, SQLAlchemyError) as exc:
-            parser.exit(1, f"No se pudo actualizar el catálogo: {exc}\n")
-        print(f"Catálogo actualizado a {REVISION}: {args.upgrade}")
+            parser.exit(1, f"Could not upgrade the catalog: {exc}\n")
+        print(f"Catalog upgraded to {REVISION}: {args.upgrade}")
         if backup is not None:
-            print(f"Respaldo anterior: {backup}")
+            print(f"Previous backup: {backup}")
         return
     target = args.export_sql if args.export_sql is not None else args.export_current_sql
     sql = initial_schema_sql() if args.export_sql is not None else current_schema_sql()
