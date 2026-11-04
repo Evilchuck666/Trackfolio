@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 
 from trackfolio.domain.tag_write import CoverChoice, CoverDiscovery, CoverFolder
 from trackfolio.infrastructure.cover_files import FileCoverAccess
+from trackfolio.interfaces.gui.theme import icon
 
 
 class CoverChoiceDialog(QDialog):
@@ -127,6 +128,8 @@ class CoverChoiceDialog(QDialog):
         self.buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self
         )
+        self.buttons.button(QDialogButtonBox.StandardButton.Ok).setIcon(icon("check"))
+        self.buttons.button(QDialogButtonBox.StandardButton.Cancel).setIcon(icon("close"))
         self.buttons.button(QDialogButtonBox.StandardButton.Ok).setText("Use selection")
         self.buttons.button(QDialogButtonBox.StandardButton.Ok).setObjectName("PrimaryButton")
         self.buttons.accepted.connect(self.accept)

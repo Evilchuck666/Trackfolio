@@ -11,6 +11,7 @@
     "fonts/Inter-Regular.ttf": "40d692fce188e4471e2b3cba937be967878f631ad3ebbbdcd587687c7ebe0c82",
     "fonts/Inter-SemiBold.ttf": "78a843fade9d4612a5567302fb595b56976eb5fcebf4fea5a5912d638bafcde3",
     "fonts/LICENSE.txt": "262481e844521b326f5ecd053e59b98c8b2da78c8ee1bdbb6e8174305e54935a",
-    "icons/import.svg": "dcb4bd5d4934608ec38226f123ff68171599c165520ebc044fe4be098c570fef"
+    "icons/import.svg": "dcb4bd5d4934608ec38226f123ff68171599c165520ebc044fe4be098c570fef",
+    "icons/check.svg": "f59a75ec12acf83b636def549663785db14b1291123cab7ab8017fd930c8b66b"
   }
 }

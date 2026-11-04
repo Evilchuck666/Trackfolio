@@ -195,6 +195,7 @@ def check_resources() -> CheckResult:
                     "open",
                     "import",
                     "refresh",
+                    "check",
                     "close",
                     "minimize",
                     "maximize",
