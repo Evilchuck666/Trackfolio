@@ -88,7 +88,7 @@ def test_current_catalog_defaults_to_update_and_can_switch_to_create(qt_app, tmp
         assert dialog.update_radio.isChecked()
         assert not dialog.destination_edit.isEnabled()
         assert not dialog.destination_button.isEnabled()
-        assert "actualizarán" in dialog.update_note.text()
+        assert "updated" in dialog.update_note.text()
         dialog.root_edit.setText(str(tmp_path / "music"))
         QTest.mouseClick(dialog.create_radio, Qt.MouseButton.LeftButton, pos=QPoint(8, 8))
         assert dialog.create_radio.isChecked()
@@ -105,13 +105,13 @@ def test_form_validates_missing_values_without_accepting(import_dialog):
     accepted = QSignalSpy(import_dialog.accepted)
     import_dialog.accept()
     assert accepted.count() == 0
-    assert "carpeta" in import_dialog.error_label.text()
+    assert "folder" in import_dialog.error_label.text()
     import_dialog.root_edit.setText("music")
     import_dialog.destination_edit.clear()
     assert not import_dialog.import_button.isEnabled()
     import_dialog.accept()
     assert accepted.count() == 0
-    assert "archivo" in import_dialog.error_label.text()
+    assert "file" in import_dialog.error_label.text()
     assert import_dialog.request() is None
 
 
@@ -222,9 +222,9 @@ def test_missing_data_directory_uses_existing_parent_for_destination(qt_app, tmp
 def test_progress_switches_from_scan_to_exact_counts(progress_dialog, tmp_path):
     progress_dialog.set_progress(ImportProgress("scanning", 7, None, 0, 0, 0))
     assert progress_dialog.progress_bar.minimum() == progress_dialog.progress_bar.maximum() == 0
-    assert "Explorando" in progress_dialog.phase_label.text()
+    assert "Scanning" in progress_dialog.phase_label.text()
     assert "Found: 7" in progress_dialog.counts_label.text()
-    path = tmp_path / "<artista>" / "Música.flac"
+    path = tmp_path / "<artist>" / "Música.flac"
     progress_dialog.set_progress(ImportProgress("importing", 7, 7, 2, 1, 1, path))
     assert progress_dialog.progress_bar.maximum() == 7
     assert progress_dialog.progress_bar.value() == 4
@@ -265,15 +265,15 @@ def test_partial_report_shows_preserved_commits_pending_and_plain_incidents(
             2,
             1,
             1,
-            (ImportIssue(tmp_path / "<broken>.mp3", "read", "No se pudo leer <archivo>."),),
+            (ImportIssue(tmp_path / "<broken>.mp3", "read", "Could not read <file>."),),
         )
     )
-    assert "cancelada" in progress_dialog.phase_label.text()
-    assert "se conservan 3" in progress_dialog.note_label.text()
-    assert "Pendientes: 6" in progress_dialog.counts_label.text()
+    assert "cancelled" in progress_dialog.phase_label.text()
+    assert "3 saved songs retained" in progress_dialog.note_label.text()
+    assert "Pending: 6" in progress_dialog.counts_label.text()
     assert progress_dialog.issues.isVisible() and progress_dialog.issues.isReadOnly()
     assert "<broken>.mp3" in progress_dialog.issues.toPlainText()
-    assert "No se pudo leer <archivo>." in progress_dialog.issues.toPlainText()
+    assert "Could not read <file>." in progress_dialog.issues.toPlainText()
     assert progress_dialog.action_button.text() == "Close"
     assert progress_dialog.action_button.isEnabled()
     QTest.mouseClick(progress_dialog.action_button, Qt.MouseButton.LeftButton)
@@ -283,12 +283,20 @@ def test_partial_report_shows_preserved_commits_pending_and_plain_incidents(
 def test_failed_report_and_cancelled_scan_display_unknown_total(progress_dialog, tmp_path):
     progress_dialog.set_report(
         ImportReport(
-            tmp_path / "result.tfo", "failed", 2, None, 0, 0, 0, (), "El destino no es compatible."
+            tmp_path / "result.tfo",
+            "failed",
+            2,
+            None,
+            0,
+            0,
+            0,
+            (),
+            "The destination is incompatible.",
         )
     )
-    assert progress_dialog.error_label.text() == "El destino no es compatible."
+    assert progress_dialog.error_label.text() == "The destination is incompatible."
     assert progress_dialog.error_label.isVisible()
-    assert "Pendientes: unknown total" in progress_dialog.counts_label.text()
+    assert "Pending: unknown total" in progress_dialog.counts_label.text()
     assert "Found: 2" in progress_dialog.counts_label.text()
     assert progress_dialog.current_label.text().startswith("Requested destination:")
     assert progress_dialog.progress_bar.maximum() == 1
@@ -304,7 +312,7 @@ def test_empty_and_completed_with_incidents_are_presented_as_completed(progress_
     progress_dialog.set_report(
         ImportReport(tmp_path / "result.tfo", "completed", 0, 0, 0, 0, 0, ())
     )
-    assert "No se encontraron archivos FLAC o MP3" in progress_dialog.note_label.text()
+    assert "No FLAC or MP3 files found" in progress_dialog.note_label.text()
     progress_dialog.set_report(
         ImportReport(
             tmp_path / "result.tfo",
@@ -314,11 +322,11 @@ def test_empty_and_completed_with_incidents_are_presented_as_completed(progress_
             1,
             0,
             0,
-            (ImportIssue(tmp_path / "inaccessible", "scan", "Carpeta inaccesible."),),
+            (ImportIssue(tmp_path / "inaccessible", "scan", "Inaccessible folder."),),
         )
     )
-    assert progress_dialog.phase_label.text() == "Importación completada with issues"
-    assert progress_dialog.note_label.text() == "Se ha guardado 1 canción."
+    assert progress_dialog.phase_label.text() == "Import complete with issues"
+    assert progress_dialog.note_label.text() == "Saved 1 song."
     assert "Scan" in progress_dialog.issues.toPlainText()
 
 

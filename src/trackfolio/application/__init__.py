@@ -1,1 +1,1 @@
-"""Casos de uso y contratos de acceso al dominio."""
+"""Use cases and domain access contracts."""

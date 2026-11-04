@@ -341,7 +341,7 @@ def review_nfos(
                         item.path,
                         "unchanged" if state.state == "unchanged" else "pending",
                         "Original NFO intact. Writing is not resumed."
-                        + (f" Temporal conservado: {temporary}" if temporary.exists() else ""),
+                        + (f" Temporary file retained: {temporary}" if temporary.exists() else ""),
                         available,
                     )
                 )

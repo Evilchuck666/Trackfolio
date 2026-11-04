@@ -64,7 +64,7 @@ def test_confirmed_edit_survives_cleanup_failure(tmp_path):
 
     assert outcome is not None
     assert outcome.warning is not None
-    assert "guardaron" in outcome.warning
+    assert "were saved" in outcome.warning
     assert "cleanup failed" in outcome.warning
     assert replace(outcome, warning=None) == session.outcome
     assert session.applied == [(original, patch)]

@@ -110,7 +110,7 @@ def test_multivalued_text_and_original_unknown_tags_are_preserved(tmp_path):
     tags = [
         ("TITLE", "Título de prueba"),
         ("ARTIST", "AC/DC"),
-        ("ARTIST", "Otro artista"),
+        ("ARTIST", "Other artist"),
         ("GENRE", "Heavy Metal"),
         ("GENRE", "Rock"),
         ("CUSTOM_TAG", "  keep whitespace  "),
@@ -119,14 +119,14 @@ def test_multivalued_text_and_original_unknown_tags_are_preserved(tmp_path):
     ]
     metadata = read_metadata(write_flac(tmp_path / "track.flac", tags))
     assert metadata.title == "Título de prueba"
-    assert metadata.artists == ("AC/DC", "Otro artista")
+    assert metadata.artists == ("AC/DC", "Other artist")
     assert metadata.album_artists == ()
     assert metadata.genres == ("Heavy Metal", "Rock")
     assert metadata.lyrics == "Line one\nLine two\n"
     assert metadata.raw_tags == (
         RawTagValue("TITLE", "Título de prueba", 0),
         RawTagValue("ARTIST", "AC/DC", 0),
-        RawTagValue("ARTIST", "Otro artista", 1),
+        RawTagValue("ARTIST", "Other artist", 1),
         RawTagValue("GENRE", "Heavy Metal", 0),
         RawTagValue("GENRE", "Rock", 1),
         RawTagValue("CUSTOM_TAG", "  keep whitespace  ", 0),
@@ -323,7 +323,7 @@ def test_audio_file_is_unchanged_after_reading_metadata(tmp_path):
 
 
 def test_missing_and_unsupported_files_produce_adapter_errors(tmp_path):
-    with pytest.raises(MetadataReadError, match="No se pueden leer"):
+    with pytest.raises(MetadataReadError, match="Cannot read"):
         read_metadata(tmp_path / "missing.flac")
     path = tmp_path / "unsupported.bin"
     path.write_bytes(b"not an audio container")

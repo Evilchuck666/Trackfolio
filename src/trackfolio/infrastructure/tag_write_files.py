@@ -164,7 +164,7 @@ def _copy_windows_metadata(source: Path, target: Path) -> None:
     if permissions(original_security) != permissions(copied_security):
         raise TagWriteError(
             "The copy does not preserve the original owner, group and DACL. "
-            f"Original: {original_security}; copia: {copied_security}"
+            f"Original: {original_security}; copy: {copied_security}"
         )
 
     class StreamData(ctypes.Structure):
@@ -242,7 +242,7 @@ def _copy_macos_metadata(source: Path, target: Path) -> None:
             raise OSError(ctypes.get_errno(), "Could not read macOS attributes.")
         names = ctypes.create_string_buffer(length)
         if system.listxattr(filename, names, length, 1) != length:
-            raise TagWriteError("Los atributos cambiaron mientras se verificaban.")
+            raise TagWriteError("The attributes changed during verification.")
         values = {}
         for name in names.raw.split(b"\0"):
             if not name:

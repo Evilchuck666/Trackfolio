@@ -413,7 +413,7 @@ def test_real_jpeg_bytes_are_embedded_without_conversion(setup_tags, tmp_path, k
         "anN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk"
         "5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDLooor5k+EP//Z"
     )
-    (source.parent / "Portada.JPEG").write_bytes(data)
+    (source.parent / "Cover.JPEG").write_bytes(data)
     report = service_for(setup_tags).execute(database, (entry.file_id,))
     assert report.results[0].state == "confirmed", report
     assert front(source) == [("image/jpeg", data)]

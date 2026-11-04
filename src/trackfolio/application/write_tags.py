@@ -559,7 +559,7 @@ class ReviewTagWrites:
                         item.file_id,
                         item.path,
                         cast(TagResultState, state.state),
-                        "Resultado registrado previamente.",
+                        "Result previously recorded.",
                         available_backup if state.state == "confirmed" else None,
                     )
                 )

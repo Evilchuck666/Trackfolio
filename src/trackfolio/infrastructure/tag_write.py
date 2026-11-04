@@ -89,12 +89,12 @@ def _flac_layout(
         for _ in range(10000):
             header = stream.read(4)
             if len(header) != 4:
-                raise TagWriteError("Bloques FLAC incompletos.")
+                raise TagWriteError("Incomplete FLAC blocks.")
             kind, length = header[0] & 0x7F, int.from_bytes(header[1:], "big")
             front = False
             if kind == 6 and replace_front:
                 if length < 4:
-                    raise TagWriteError("Bloque de imagen FLAC incompleto.")
+                    raise TagWriteError("Incomplete FLAC picture block.")
                 prefix = stream.read(4)
                 front = int.from_bytes(prefix, "big") == 3
                 digest = _hash_stream(stream, length - 4, prefix)
@@ -104,7 +104,7 @@ def _flac_layout(
                 blocks.append((kind, digest))
             if header[0] & 0x80:
                 return _hash_stream(stream), tuple(blocks)
-    raise TagWriteError("Demasiados bloques FLAC.")
+    raise TagWriteError("Too many FLAC blocks.")
 
 
 def _mp3_payload(path: Path) -> tuple[str, str]:
@@ -328,7 +328,8 @@ class MutagenTagCodec:
                     and len(value) > 1
                 ):
                     raise TagWriteError(
-                        "ID3v2.3 cannot store this list without loss. The file will not be converted."
+                        "ID3v2.3 cannot store this list without loss. "
+                        "The file will not be converted."
                     )
                 after = replace(after, **{field: value})
                 aliases = set(_ALIASES[field])
@@ -411,7 +412,7 @@ class MutagenTagCodec:
         elif plan.audio_format == "mp3":
             self._write_mp3(temporary, plan, fields)
         else:
-            raise TagWriteError("Formato de escritura desconocido.")
+            raise TagWriteError("Unknown write format.")
         self._verify_preservation(backup, temporary, plan, fields)
         if plan.cover is not None and (
             plan.cover.data is None

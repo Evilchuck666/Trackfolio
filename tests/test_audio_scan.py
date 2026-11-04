@@ -1,4 +1,4 @@
-"""Recorridos temporales del explorador, sin música del usuario."""
+"""Temporary scanner traversals, without user music."""
 
 from pathlib import Path
 
@@ -71,7 +71,7 @@ def test_subdirectory_failure_is_an_issue_but_root_failure_is_fatal(tmp_path, mo
         raise PermissionError("denied")
 
     monkeypatch.setattr(audio_scan.os, "scandir", fail_root)
-    with pytest.raises(AudioScanError, match="explorar"):
+    with pytest.raises(AudioScanError, match="scan"):
         scan(tmp_path)
 
 

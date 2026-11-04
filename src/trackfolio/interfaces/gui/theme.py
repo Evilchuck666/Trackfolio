@@ -79,7 +79,7 @@ def apply_theme(app: QApplication) -> None:
 def icon(name: str) -> QIcon:
     """Render packaged SVG artwork at several resolutions without filesystem paths."""
     if name not in ICON_NAMES:
-        raise ValueError(f"Icono desconocido: {name}.")
+        raise ValueError(f"Unknown icon: {name}.")
     data = files("trackfolio.resources").joinpath("icons", f"{name}.svg").read_bytes()
     renderer = QSvgRenderer(QByteArray(data))
     if not renderer.isValid():

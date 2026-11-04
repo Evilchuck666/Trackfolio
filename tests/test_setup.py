@@ -65,7 +65,7 @@ def test_package_installation_rejects_non_linux_before_checking_system(
     monkeypatch.setattr(
         setup, "linux_family", lambda: pytest.fail("Linux-only checks must not run")
     )
-    with pytest.raises(setup.SetupError, match="solo se admite en Linux"):
+    with pytest.raises(setup.SetupError, match="only supported on Linux"):
         setup.package_commands(["git"])
 
 
@@ -107,7 +107,7 @@ def test_missing_graphics_are_not_installed_without_consent(setup, monkeypatch):
     configure_graphics(setup, monkeypatch)
     monkeypatch.setattr(setup, "library_available", lambda name: name != "xcb-cursor")
     monkeypatch.setattr(setup, "run", lambda *_: pytest.fail("No system changes permitted"))
-    with pytest.raises(setup.SetupError, match="No se autorizaron"):
+    with pytest.raises(setup.SetupError, match="not authorized"):
         setup.prepare_graphics("xcb", options())
 
 
@@ -143,7 +143,7 @@ def test_missing_git_is_optional_when_installation_declined(setup, monkeypatch, 
     monkeypatch.setattr(setup, "package_commands", lambda packages: [["install", *packages]])
     monkeypatch.setattr(setup, "run", lambda *_: pytest.fail("No consent"))
     setup.prepare_git(options())
-    assert "Git no instalado" in capsys.readouterr().out
+    assert "Git not installed" in capsys.readouterr().out
 
 
 @pytest.mark.parametrize(
@@ -213,7 +213,7 @@ def test_unknown_editor_directory_is_never_overwritten(setup, monkeypatch, tmp_p
     monkeypatch.setattr(setup, "find_editor", lambda: None)
     args = options()
     args.yes = True
-    with pytest.raises(setup.SetupError, match="no se sobrescribe"):
+    with pytest.raises(setup.SetupError, match="not be overwritten"):
         setup.install_editor(args)
     assert marker.read_text() == "Keep this"
 
@@ -223,7 +223,7 @@ def test_zip_extraction_rejects_unsafe_paths(setup, tmp_path, name):
     archive = tmp_path / "unsafe.zip"
     with ZipFile(archive, "w") as output:
         output.writestr(name, b"unsafe")
-    with pytest.raises(setup.SetupError, match="no seguro"):
+    with pytest.raises(setup.SetupError, match="unsafe"):
         setup.extract_zip(archive, tmp_path / "extracted")
     assert not (tmp_path / "extracted").exists()
 
@@ -235,7 +235,7 @@ def test_zip_extraction_rejects_symlinks(setup, tmp_path):
         member.create_system = 3
         member.external_attr = (stat.S_IFLNK | 0o777) << 16
         output.writestr(member, "../outside")
-    with pytest.raises(setup.SetupError, match="no seguro"):
+    with pytest.raises(setup.SetupError, match="unsafe"):
         setup.extract_zip(archive, tmp_path / "extracted")
 
 
@@ -286,7 +286,7 @@ def test_unavailable_extension_warns_without_breaking_app_environment(
 
     monkeypatch.setattr(setup, "run", unavailable)
     assert setup.prepare_editor(options()) == Path("/code")
-    assert "AVISO: no se pudo instalar ms-python.vscode-pylance" in capsys.readouterr().out
+    assert "WARNING: Could not install ms-python.vscode-pylance" in capsys.readouterr().out
 
 
 @pytest.mark.parametrize("core", [True, False])

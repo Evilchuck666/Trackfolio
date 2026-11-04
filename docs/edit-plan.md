@@ -1,306 +1,166 @@
-# Plan de edición de canciones en la GUI
+# GUI song-editing plan
 
-Estado: implementado y validado localmente en Linux el 9 de octubre de 2026. Las
-comprobaciones y los límites de revisión multiplataforma se registran en
-[VALIDATION.md](../VALIDATION.md). El resto del documento conserva el diseño de la entrega.
+Status: implemented and locally validated on Linux on October 9, 2026. Checks and cross-platform review limits are recorded in [VALIDATION.md](../VALIDATION.md). The rest preserves the delivery design.
 
-## Resultado y alcance
+## Result and scope
 
-Seleccionar una canción, pulsar **Editar**, modificar sus campos y confirmar con
-**Guardar**. La lista y el detalle mostrarán los valores guardados; cerrar y volver a
-abrir el catálogo conservará la edición. **Cancelar** recuperará los valores anteriores.
+Select a song, click **Edit**, change fields and confirm with **Save**. List/details show saved values; closing and reopening retains edits. **Cancel** restores previous values.
 
-Este plan toma como primera entrega la **edición del catálogo SQLite**. Funcionará aunque
-la música original no esté disponible. La escritura de etiquetas en FLAC/MP3 requiere
-otro adaptador y un diseño de recuperación entre archivos y SQLite; queda fuera de esta
-entrega.
+The first delivery edits the **SQLite catalog**, working without original music. FLAC/MP3 tag writing needs another adapter and a file/SQLite recovery design and is outside this delivery. The subsequent [tag-writing delivery](tag-write-plan.md) adds independent **Write tags…** to publish modified FLAC/MP3 tags with internal preparation/backups. **Save** still confirms only SQLite; pending drafts are resolved through Save/Discard/Cancel before writing tags.
 
-La entrega de [escritura de etiquetas](tag-write-plan.md) añade la acción independiente
-**Escribir etiquetas…** para publicar todas las etiquetas modificadas en FLAC/MP3,
-con preparación interna y respaldos. **Guardar** sigue confirmando únicamente SQLite; antes de escribir
-etiquetas se resuelve cualquier borrador con Guardar/Descartar/Cancelar.
+The edit unit is the selected row's `file_id`. **Abbath → Accept** reassigns that song to existing Accept while preserving other song credits and both artist identities.
 
-La unidad de edición será la fila seleccionada, identificada por `file_id`. Por ejemplo,
-cambiar **Abbath → Accept** reasignará el artista de esa canción al Accept existente,
-conservando los créditos de las demás canciones y la identidad de ambos artistas.
-
-| Campo actual | Edición y representación |
+| Current field | Editing/representation |
 | --- | --- |
-| Canción | Texto; vacío se guarda como `NULL`. |
-| Artista(s) | Lista ordenada de nombres; selección de artistas existentes o creación de un nombre nuevo. |
-| Álbum | Texto; vacío elimina el título, conservando los demás datos de álbum. |
-| Año | Entero entre 1 y 9999, o vacío. |
-| Pista y total de pistas | Enteros positivos, o vacío, de forma independiente. |
-| Disco y total de discos | Enteros positivos, o vacío, de forma independiente. |
-| Género(s) | Lista ordenada de nombres, o lista vacía. |
-| Líricas | Texto plano, con sus saltos de línea; vacío se guarda como `NULL`. |
+| Song | Text; empty becomes `NULL` |
+| Artist(s) | Ordered names; existing-artist selection or new names |
+| Album | Text; empty removes title while retaining other album data |
+| Year | Integer 1–9999, or empty |
+| Track number/total | Independently positive integers or empty |
+| Disc number/total | Independently positive integers or empty |
+| Genre(s) | Ordered names or empty list |
+| Lyrics | Plain text preserving line breaks; empty becomes `NULL` |
 
-Son los diez campos del detalle de canción. La [vista de álbum](album-view.md),
-añadida posteriormente, permite editar también los artistas del álbum y publicarlos
-en las etiquetas. Fecha, portada, rutas y propiedades técnicas conservan sus valores
-al guardar el catálogo. El año se tratará como
-un dato explícito del catálogo: cambiarlo no reescribirá la fecha de álbum importada.
-La edición por lotes se añadió posteriormente: permite seleccionar varios `file_id` y
-aplicar álbum, artistas, año y géneros mediante `UpdateCatalogTracks`. La GUI muestra
-los valores comunes y distingue los diferentes; únicamente se aplican los campos
-marcados, incluidas las eliminaciones explícitas. Título, numeración y líricas quedan
-deshabilitados. El adaptador comprueba todas las instantáneas antes de escribir y guarda
-el grupo en una única transacción, preservando los archivos no seleccionados aunque
-compartan pista o álbum. La selección se mantiene al guardar y actualizar; los borradores
-se protegen al navegar, importar, abrir otro catálogo y cerrar.
-El renombrado global de artistas y la gestión de álbumes completos quedan para entregas
-posteriores.
+These are the ten song-detail fields. The later [album view](album-view.md) also edits album artists and publishes them to tags. Date, artwork, paths and technical properties remain unchanged when saving the catalog. Year is explicit catalog data: changing it does not rewrite imported album date.
 
-## 1. Reglas de edición y validación
+Batch editing was added later: select multiple `file_id` values and apply album, artists, year and genres through `UpdateCatalogTracks`. The GUI displays common/mixed values and applies only checked fields, including explicit clearing. Title, numbering and lyrics are disabled. The adapter checks all snapshots before writing and saves one transaction, preserving unselected files even with shared tracks/albums. Selection survives saving/refreshing; drafts are protected during navigation, import, catalog switching and close. Global artist renaming and whole-album management remain subsequent deliveries in this original design.
 
-- Guardar únicamente los campos modificados. Diferenciar un campo omitido de una
-  solicitud de vaciarlo: `None` para escalares y tupla vacía para colecciones.
-- Mantener el texto de los valores no vacíos, incluidos espacios, mayúsculas y Unicode.
-  Un título, álbum o nombre compuesto exclusivamente de espacios se considerará vacío.
-  Las líricas conservarán su contenido literal, sin interpretar HTML.
-- Validar los números en el núcleo, además de facilitar su entrada en la GUI. Rechazar
-  texto no numérico, fracciones, cero y negativos. Admitir número sin total y total sin
-  número. Si ambos están presentes, exigir que el número no supere su total al modificar
-  esa pareja; una inconsistencia previa no bloqueará una corrección de otro campo.
-- Deduplicar nombres exactos en artistas y géneros, conservando su primera posición.
-  No convertir mayúsculas ni añadir búsquedas aproximadas a la regla de identidad.
-- Representar artistas y géneros mediante un control de lista, con acciones para añadir,
-  quitar y ordenar. Cada elemento contendrá un nombre completo: no separar texto por
-  comas o punto y coma, porque esos caracteres pueden formar parte del nombre.
-- Preparar un borrador y cancelarlo no escribirá datos ni actualizará el esquema.
-  Guardar sin cambios tampoco abrirá un escritor.
+## 1. Editing and validation rules
 
-## 2. Contratos y casos de uso independientes de Qt
+- Save only changed fields. Distinguish omitted fields from clearing: `None` for scalars, empty tuples for collections.
+- Preserve nonempty text, including spaces, case and Unicode. Whitespace-only titles, albums or names are empty. Preserve literal lyrics without HTML interpretation.
+- Validate numbers in the core as well as aiding GUI input. Reject nonnumeric text, fractions, zero and negatives. Permit number-only or total-only values. When both exist, require number ≤ total when changing that pair; existing inconsistency does not block unrelated corrections.
+- Deduplicate exact artist/genre names, retaining first position. Do not normalize case or add fuzzy identity matching.
+- Use list controls for artists/genres with add/remove/reorder. Each entry is a full name; commas/semicolons can belong to names and are not separators.
+- Preparing/cancelling a draft does not write data or upgrade schema. Saving unchanged values does not open a writer.
 
-Crear `domain/catalog_edit.py` y `application/edit_catalog.py`. Mantener los contratos
-de importación y consulta existentes; no convertir `TrackMetadata` en un formulario ni
-utilizar `CatalogRepository.save()` para guardar el borrador.
+## 2. Qt-independent contracts and use cases
 
-| Contrato propuesto | Responsabilidad |
+Create `domain/catalog_edit.py` and `application/edit_catalog.py`. Retain existing import/query contracts; do not turn `TrackMetadata` into a form or save drafts with `CatalogRepository.save()`.
+
+| Proposed contract | Responsibility |
 | --- | --- |
-| `EditableTrack` | Instantánea del registro: `file_id`, valores editables y token de comparación. |
-| `TrackEditPatch` | Campos modificados y sus valores tipados, incluidas las eliminaciones explícitas. |
-| `ArtistChoice` | Nombre exacto y referencia opcional al artista existente. |
-| `CatalogEditRepository` | Leer la instantánea, buscar artistas/géneros y aplicar un cambio atómico. |
-| `CatalogEditSession` y su fábrica | Abrir y cerrar el acceso de edición a un catálogo existente. |
-| `GetEditableTrack` | Obtener los valores del borrador, diferenciando los roles de los créditos. |
-| `FindArtists` / `FindGenres` | Buscar sugerencias sin cargar detalles ni carátulas. |
-| `UpdateCatalogTrack` | Validar y persistir el cambio; devolver detalle y resumen confirmados. |
+| `EditableTrack` | Record snapshot: `file_id`, editable values and comparison token |
+| `TrackEditPatch` | Changed fields and typed values, including explicit clears |
+| `ArtistChoice` | Exact name and optional existing-artist reference |
+| `CatalogEditRepository` | Read snapshot, find artists/genres, apply atomic changes |
+| `CatalogEditSession` and factory | Open/close existing-catalog edit access |
+| `GetEditableTrack` | Load draft values, distinguishing credit roles |
+| `FindArtists` / `FindGenres` | Find suggestions without details/artwork |
+| `UpdateCatalogTrack` | Validate/persist changes; return confirmed detail/summary |
 
-Usar dataclasses inmutables, tuplas y errores de aplicación. El núcleo no importará Qt,
-SQLAlchemy ni Mutagen. La GUI traducirá texto y selecciones a esos contratos, y el punto
-de composición de `startup.py` inyectará los adaptadores.
+Use immutable dataclasses, tuples and application errors. The core imports no Qt, SQLAlchemy or Mutagen. The GUI translates text/selections into contracts; `startup.py` injects adapters.
 
-Separar en la fábrica la apertura de lectura de la apertura del escritor. Obtener el
-borrador o sugerencias usará conexiones de solo lectura; sólo un cambio válido y
-efectivo solicitará el acceso de escritura y, si corresponde, la migración.
+Separate reader/writer factory openings. Drafts/suggestions use read-only connections; only valid effective changes request writing and migration if applicable.
 
-El token de comparación representará los valores musicales y relaciones relevantes,
-sin incluir BLOBs ni objetos del ORM. Debe detectar cambios externos en el registro y
-en su álbum, y mantenerse válido ante la consolidación de IDs de artista de `001 → 002`:
-comparar nombres exactos, roles y posiciones, no los IDs redundantes que elimina esa
-migración. La fábrica resolverá los nombres a los IDs vigentes al guardar.
+Comparison tokens represent relevant musical values/relationships without BLOBs or ORM objects. Detect external record/album changes while remaining valid after artist-ID consolidation `001 → 002`: compare exact names, roles and positions, not removed duplicate IDs. Resolve names to current IDs on save.
 
-Definir errores recuperables para datos inválidos, registro eliminado, conflicto de
-edición y fallo de escritura. Los errores de validación identificarán el campo afectado.
+Define recoverable invalid-data, deleted-record, editing-conflict and write-failure errors. Validation errors identify affected fields.
 
-## 3. Persistencia de una edición
+## 3. Persisting an edit
 
-Implementar un adaptador dedicado, por ejemplo
-`infrastructure/catalog_edit.py`, reutilizando las tablas y helpers adecuados del
-repositorio. El método actual `SqliteCatalogRepository.write()` reemplaza también
-créditos, `raw_tags`, carátula y propiedades técnicas: no es la operación de edición.
+Implement a dedicated adapter such as `infrastructure/catalog_edit.py`, reusing appropriate repository tables/helpers. `SqliteCatalogRepository.write()` also replaces credits, `raw_tags`, artwork and technical properties; it is not the edit operation.
 
-Cada guardado se ejecutará en una única transacción:
+Each save uses one transaction:
 
-1. Abrir el catálogo existente mediante `writable_engine`, con URI `mode=rw`, sin crear
-   un archivo si desapareció. Reservar el escritor antes de releer y comparar el token.
-2. Comprobar esquema, existencia del archivo y correspondencia con la instantánea.
-   Ante un cambio externo, devolver conflicto antes de modificar datos.
-3. Si varios archivos comparten `track_id`, copiar la pista y todas sus relaciones para
-   el archivo seleccionado antes de editar. Su `file_id` se conserva; su `track_id`
-   podrá cambiar. Los demás archivos seguirán vinculados a la pista original.
-4. Aplicar los cambios escalares y resolver las relaciones afectadas.
-5. Confirmar y devolver detalle y resumen coherentes. Un fallo en cualquier paso
-   revertirá también las entidades o relaciones creadas dentro de la transacción.
+1. Open existing catalog with `writable_engine`, URI `mode=rw`, without recreating a disappeared file. Reserve the writer before rereading/comparing the token.
+2. Check schema, file existence and snapshot match. External changes cause conflicts before data modification.
+3. If files share `track_id`, copy the track and all relationships for the selected file before editing. Preserve `file_id`; `track_id` may change. Other files remain on the original track.
+4. Apply scalar changes and resolve affected relationships.
+5. Confirm and return consistent detail/summary. Any failure rolls back entities/relationships created in the transaction.
 
-### Artistas y géneros
+### Artists and genres
 
-Reutilizar la resolución de artistas por nombre exacto y el índice `uq_artists_name`.
-Si existe Accept, utilizar su ID. Si el usuario introduce un nombre nuevo, crearlo al
-guardar, con inserción protegida por el índice único. No modificar `artists.name` para
-corregir el artista de una canción ni borrar entidades que queden sin referencias.
+Reuse exact-name artist resolution and `uq_artists_name`. Existing Accept uses its ID; a new exact name is created on save with unique-index protection. Do not rename `artists.name` to correct one song or delete unreferenced entities.
 
-Cambiar **Artista(s)** sustituirá exclusivamente los créditos de rol `artist` de la
-pista editada, con posiciones consecutivas. Conservar otros roles, como `composer`,
-y todos los créditos de álbum. La consulta actual de detalle aplana los roles; el
-editor tendrá una lectura específica y la presentación de **Artista(s)** y sus
-resúmenes mostrará el rol `artist`, sin incluir compositores como intérpretes.
-Los demás créditos seguirán almacenados y consultables en `track_details`.
+Changing **Artist(s)** replaces only the edited track's `artist`-role credits with consecutive positions. Preserve roles such as `composer` and all album credits. Existing detail queries flatten roles; the editor has a dedicated read, while **Artist(s)** and summaries display only `artist`, excluding composers as performers. Other credits remain stored/queryable in `track_details`.
 
-Aplicar la misma reutilización exacta a géneros y conservar el orden de la lista.
-No reescribir ninguna de estas relaciones si el campo correspondiente no cambió.
+Use the same exact reuse for genres and preserve list order. Do not rewrite relationships whose field did not change.
 
-### Álbumes y total de discos
+### Albums and disc total
 
-Un álbum puede estar compartido por muchas canciones. Cambiar título o año desde
-una canción resolverá la agrupación resultante y reasignará únicamente su `album_id`.
-No actualizar directamente la fila compartida ni dejar su `import_key` desfasada.
+Many songs may share an album. Changing title/year from a song resolves the resulting group and reassigns only its `album_id`. Do not directly update the shared row or leave stale `import_key` values.
 
-Extraer y compartir el cálculo de identidad de álbum usado en `_album_id()`: biblioteca,
-directorio, título, fecha, año, total de discos y artistas de álbum. Si el álbum resultante
-existe, reutilizarlo sin sustituir sus créditos. Si se crea, conservar también los roles
-de álbum no editables. Si una agrupación existente tiene créditos adicionales
-incompatibles, devolver un conflicto de agrupación y conservar el borrador, sin fusionar
-los datos ni crear otra fila con el mismo `import_key`.
+Extract/share `_album_id()` identity calculation: library, directory, title, date, year, disc total and album artists. Reuse matching albums without replacing credits. New albums also preserve noneditable album roles. Incompatible additional credits in an existing group cause a grouping conflict and preserve the draft, without merging data or creating another identical `import_key`.
 
-El total de discos mostrado procede de `tracks.disc_total`. Editarlo cambiará ese valor
-en la pista seleccionada; no cambiará `albums.disc_total` ni completará otras pistas.
-Para título/año, conservar fecha, total y créditos del álbum anterior. Vaciar el título
-no elimina un álbum que aún tiene otros datos; si no queda ningún dato de álbum, usar
-`album_id = NULL`.
+Displayed disc total is `tracks.disc_total`; editing changes only that selected track value, not `albums.disc_total` or other tracks. Title/year changes retain prior album date, total and credits. Clearing title does not delete an album with other data; if no album data remains, use `album_id = NULL`.
 
-### Esquema y catálogos anteriores
+### Schema and older catalogs
 
-Esta entrega puede usar `002_unique_artists` sin añadir tablas: el token se obtiene de
-una instantánea, no de una nueva columna. Conservar las revisiones y exportaciones SQL
-actuales. Abrir catálogos `001_initial` para consultar o preparar un borrador seguirá
-sin migrarlos.
+Use `002_unique_artists` without new tables: tokens derive from snapshots, not new columns. Preserve revisions/SQL exports. Browsing/preparing drafts on `001_initial` still does not migrate.
 
-El primer guardado efectivo sobre `001` reutilizará la validación, respaldo consistente
-y actualización transaccional existentes. Revalidar el cambio después de migrar y
-mostrar la ruta del respaldo. Un error de edición no aplicará parcialmente el borrador;
-si la migración ya se confirmó, el catálogo podrá quedar actualizado a `002`, con la
-copia anterior disponible. El acceso de edición tendrá una fábrica propia y no dependerá
-del caso de uso ni del formulario de importación.
+First effective save on `001` reuses existing validation, consistent backup and transactional upgrade. Revalidate after migration and display the backup path. Edit failure never partially applies a draft; already committed migration may leave the catalog at `002` with its old backup available. Editing has its own factory independent of import use cases/forms.
 
-## 4. Interacción y estados de la GUI
+## 4. GUI interaction and states
 
-Añadir **Editar**, **Guardar** y **Cancelar** al panel de detalle y sus acciones de
-teclado: `Ctrl+E` en Linux/Windows y `Cmd+E` en macOS para Editar; el atajo estándar de
-Guardar (`Ctrl+S` / `Cmd+S`) mediante `QKeySequence.StandardKey.Save`; `Escape` para
-Cancelar. Mantener la tabla como selector; la edición se realizará en el detalle.
-Usar los mismos recursos, estilos Fusion y controles Qt en Linux, Windows y macOS.
+Add **Edit**, **Save**, **Cancel** to details with shortcuts: `Ctrl+E` on Linux/Windows, `Cmd+E` on macOS; standard Save (`Ctrl+S` / `Cmd+S`) through `QKeySequence.StandardKey.Save`; `Escape` to cancel. Keep the table as selector and edit in details. Use shared assets, Fusion styles and Qt controls across platforms.
 
-| Estado | Comportamiento |
+| State | Behavior |
 | --- | --- |
-| Sin selección o cargando | Edición deshabilitada. |
-| Consulta | Campos de lectura; Editar disponible con detalle cargado. |
-| Editando sin cambios | Campos habilitados, Guardar deshabilitado y Cancelar disponible. |
-| Editando con cambios | Indicador «Cambios sin guardar» y Guardar disponible si los datos son válidos. |
-| Guardando | Borrador y navegación bloqueados; estado «Guardando cambios…». |
-| Error o conflicto | Borrador conservado y explicación visible; permitir corregir, reintentar o cancelar. |
-| Guardado | Volver a consulta, actualizar resumen y detalle, conservar selección y confirmar el guardado. |
+| No selection/loading | Editing disabled |
+| Browsing | Read-only fields; Edit available after detail loads |
+| Editing, unchanged | Fields enabled, Save disabled, Cancel available |
+| Editing, changed | Unsaved-changes indicator; Save enabled for valid data |
+| Saving | Draft/navigation locked; “Saving changes…” |
+| Error/conflict | Draft preserved, explanation visible; correct/retry/cancel |
+| Saved | Return to browsing, refresh summary/detail, retain selection and confirm save |
 
-Guardar conservará el borrador hasta confirmar la transacción. Cancelar descartará el
-borrador y releerá el registro para mostrar también los cambios externos, si los hubo.
-Un conflicto ofrecerá recargar el registro o seguir revisando el borrador; no sobrescribirá
-automáticamente datos externos.
+Retain the draft until transaction confirmation. Cancel discards it and rereads the record, including external changes. Conflicts allow reloading or continuing draft review without automatically overwriting external data.
 
-Al cambiar de canción, abrir otro catálogo, actualizar la lista, importar o cerrar,
-resolver antes los cambios pendientes con **Guardar / Descartar / Cancelar**. Guardar
-continuará la acción solicitada sólo después de completarse con éxito; Descartar la
-continuará sin guardar; Cancelar mantendrá selección y borrador. Con un borrador sin
-cambios, salir del modo edición sin diálogo.
+Song/catalog changes, refresh, import and close first resolve pending changes with **Save / Discard / Cancel**. Save continues the requested action only after success; Discard continues without saving; Cancel retains selection/draft. An unchanged draft exits editing without prompting.
 
-Modificar `_selection_changed()`: actualmente limpia el detalle antes de avisar al
-controlador. La nueva navegación debe solicitar autorización al estado de edición
-antes de limpiar los campos; si se cancela, restaurar la selección con señales bloqueadas.
+Modify `_selection_changed()`, which currently clears details before notifying the controller. Navigation must consult editing state before clearing; cancellation restores selection with signals blocked.
 
-El controlador conservará instantánea y borrador por catálogo y `file_id`. Las respuestas
-de consultas anteriores, cambios programáticos de campos y búsquedas tardías de artistas
-no marcarán el formulario como modificado ni reemplazarán un borrador activo.
+The controller keeps snapshots/drafts by catalog and `file_id`. Earlier query responses, programmatic field changes and late artist searches must neither dirty the form nor replace active drafts.
 
-## 5. Trabajo asíncrono, cierre e importación
+## 5. Asynchronous work, close and import
 
-- Ejecutar lecturas de edición, sugerencias y escritura fuera del hilo gráfico.
-  Aplicar resultados sólo en el hilo Qt y comprobar sus identificadores de solicitud.
-- Mantener un único escritor por ventana. Antes de guardar, invalidar las consultas
-  incompatibles, esperar que terminen y liberar sus conexiones. Reutilizar el patrón de
-  importación que espera también a `activeThreadCount()`, sin bloquear el bucle Qt.
-- Liberar el escritor antes de volver a consultar. Distinguir «guardado confirmado»
-  de un fallo posterior al refrescar la vista: éste no debe presentarse como pérdida de
-  la edición ni provocar otra escritura automática.
-- Durante el guardado, diferir el cierre hasta conocer el resultado. No terminar el
-  trabajador a mitad de una transacción ni destruir sus objetos Qt mientras siga activo.
-  Ante un fallo, mantener la ventana y el borrador para que el usuario decida.
+- Run edit reads, suggestions and writes outside the GUI thread. Apply results only in Qt and verify request IDs.
+- Keep one writer per window. Before saving, invalidate incompatible queries, wait for completion and release connections. Reuse import's `activeThreadCount()` waiting pattern without blocking Qt.
+- Release the writer before querying again. Distinguish confirmed save from later refresh failure: do not report lost edits or automatically write again.
+- Defer close during save until its result is known. Never terminate mid-transaction or destroy active worker Qt objects. On failure keep window/draft for the user's decision.
 
-**Reimportación:** esta entrega mantiene la política actual: volver a importar una ruta
-relee sus etiquetas y reemplaza los valores del catálogo, incluidas las correcciones
-manuales. El formulario de actualización indicará: «Se volverán a leer los metadatos de
-los archivos y se sustituirán los valores del catálogo». El editor identificará el destino
-como «Cambios en el catálogo» para que la operación resulte clara.
+**Reimport:** retain current policy: reread file tags and replace catalog values, including manual corrections. The update form states that file metadata is reread and replaces catalog values. The editor identifies its destination as **Catalog changes**.
 
-Conservar correcciones automáticamente frente a una reimportación necesitaría un modelo
-de valores manuales por campo y una nueva migración; no se incorporará implícitamente a
-este incremento. Las etiquetas originales almacenadas en `raw_tags` se mantendrán
-intactas al editar y sólo se sustituirán cuando el importador relea el archivo.
+Automatically retaining corrections across reimport would need per-field manual-value modeling and a migration; do not implicitly add it here. Editing preserves `raw_tags`; only rereading import replaces them.
 
-Compartir la separación de pistas referenciadas por varios archivos con el escritor de
-importación para que una actualización por ruta tampoco modifique archivos hermanos.
-Se conservará `track_id` en el caso habitual de una pista por archivo; la excepción se
-documentará y probará junto a la edición.
+Share copy-on-write separation of tracks referenced by multiple files with the import writer so path-specific updates do not affect sibling files. Keep `track_id` in the usual one-track-per-file case; document/test the exception with editing.
 
-## 6. Comprobaciones y aceptación
+## 6. Checks and acceptance
 
-| Nivel | Casos necesarios |
+| Level | Required cases |
 | --- | --- |
-| Núcleo sin Qt | Patch parcial, borrado explícito, validación numérica, listas ordenadas, nombres exactos y edición sin cambios. |
-| SQLite temporal | Abbath → Accept reutiliza su ID sin afectar otras canciones; artistas nuevos, múltiples y créditos con otros roles. |
-| Relaciones | Álbum compartido, vaciado parcial de álbum, pista compartida y preservación de roles, géneros, portada, audio y `raw_tags`. |
-| Concurrencia y fallos | Dos editores sobre la misma canción, registro eliminado, catálogo bloqueado, permisos y rollback sin escrituras parciales. |
-| Compatibilidad | Edición sin música presente; lectura de `001` intacta, primer guardado con respaldo, repetición en `002` sin respaldo nuevo. |
-| GUI real | Editar/Guardar/Cancelar, errores junto al campo, navegación con cambios pendientes, cierre y respuestas asíncronas atrasadas. |
-| Integración | Guardar, cerrar y reabrir SQLite; lista y detalle coinciden; reimportar reemplaza la corrección según la política declarada. |
+| Qt-free core | Partial patches, explicit clears, numeric validation, ordered exact names, unchanged edits |
+| Temporary SQLite | Abbath → Accept reuses ID without affecting other songs; new/multiple artists and other-role credits |
+| Relationships | Shared albums, partial album clearing, shared tracks; preserve roles, genres, artwork, audio and `raw_tags` |
+| Concurrency/failures | Two editors on one song, deleted records, locked catalogs, permissions, rollback without partial writes |
+| Compatibility | No music present; unchanged `001` reads; first save with backup; repeated `002` without new backup |
+| Real GUI | Edit/Save/Cancel, field errors, pending-change navigation, close and delayed responses |
+| Integration | Save/close/reopen SQLite; list/detail agreement; declared reimport replacement |
 
-Añadir `tests/test_catalog_edit.py`, `tests/test_edit_gui.py` y
-`tests/test_edit_gui_integration.py`; ampliar las pruebas existentes de consulta,
-persistencia e importación donde cambie su comportamiento. Usar `Path` para rutas,
-cerrar conexiones SQLite explícitamente y emplear un bucle Qt nativo para las esperas
-asíncronas, conservando las correcciones recientes de Windows y macOS.
+Add `tests/test_catalog_edit.py`, `tests/test_edit_gui.py`, `tests/test_edit_gui_integration.py`; expand query/persistence/import tests where behavior changes. Use `Path`, explicitly close SQLite connections and wait asynchronously through a native Qt loop, retaining recent Windows/macOS fixes.
 
-Ejecutar Ruff, formato, mypy y las suites pertinentes con `uv run --locked`. Comprobar
-el núcleo sin PySide6, GUI con `offscreen`, wheel instalado fuera del checkout y la matriz
-existente de Linux, Windows, macOS Intel y Apple Silicon. Si se añaden recursos visuales,
-actualizar su manifiesto y la comprobación del paquete.
+Run Ruff, formatting, mypy and relevant suites with `uv run --locked`. Check Qt-free core, `offscreen` GUI, installed wheel outside checkout and existing Linux/Windows/macOS Intel/Apple Silicon matrix. Update resource manifest/package checks if adding visual assets.
 
-Revisar manualmente la ventana real con una copia del catálogo y un álbum compartido:
-corregir una canción, vaciar valores, usar artistas múltiples, comprobar el teclado y
-cancelar cambios. Registrar en `VALIDATION.md` qué plataformas y revisiones visuales se
-ejecutaron, distinguiéndolas de las pruebas automatizadas. No usar la base personal para
-pruebas que cambian o reimportan metadatos.
+Manually review the real window with a catalog copy/shared album: correct one song, clear values, use multiple artists, check keyboard and cancel changes. Record actual platforms/visual reviews in `VALIDATION.md`, separately from automation. Do not use personal databases for metadata-changing/reimport tests.
 
-## 7. Orden de implementación
+## 7. Implementation order
 
-| Paso | Entrega | Criterio de cierre |
+| Step | Delivery | Completion criterion |
 | --- | --- | --- |
-| 1 | Valores, patch, contratos y validación del núcleo. | Casos de uso comprobados sin Qt. |
-| 2 | Lectura específica, resolución de identidades y escritura transaccional. | Corrección por canción, aislamiento de relaciones y conflictos probados con SQLite. |
-| 3 | Fábrica de edición, compatibilidad `001/002` y composición. | Guardar funciona sin audio y actualiza catálogos antiguos con respaldo. |
-| 4 | Controles, listas de artistas/géneros y estado del borrador. | Editar, Guardar y Cancelar funcionan en los widgets reales. |
-| 5 | Coordinación asíncrona, navegación, cierre e importación. | No se pierden borradores ni se aplican respuestas atrasadas; reimportación explícita y aislada por archivo. |
-| 6 | Integración, paquete, matriz multiplataforma y documentación. | Comprobaciones superadas y evidencia registrada, con límites de revisión visual indicados. |
+| 1 | Core values, patch, contracts, validation | Use cases tested without Qt |
+| 2 | Dedicated reads, identity resolution, transactional writes | Per-song corrections, relationship isolation and SQLite conflicts tested |
+| 3 | Edit factory, `001/002` compatibility, composition | Save without audio; backed-up older-catalog upgrade |
+| 4 | Controls, artist/genre lists, draft state | Real-widget Edit/Save/Cancel work |
+| 5 | Async coordination, navigation, close, import | No lost drafts/stale responses; explicit per-file reimport |
+| 6 | Integration, package, cross-platform matrix, docs | Checks pass with recorded evidence/visual limits |
 
-Al terminar, actualizar README, arquitectura y guía de base de datos para explicar
-la edición de catálogo, su alcance por canción y el comportamiento al reimportar.
-Marcar este plan como implementado únicamente después de completar esas comprobaciones.
+Update README, architecture and database guide with catalog editing, per-song scope and reimport behavior. Mark implemented only after completing checks.
 
-## Entrega implementada
+## Implemented delivery
 
-Los seis pasos tienen implementación y pruebas locales. Se añadieron los módulos de
-dominio, aplicación y persistencia previstos, el control de listas `ordered_labels.py`,
-la composición y la coordinación gráfica. Las pruebas de núcleo y SQLite están en
-`test_catalog_edit.py` y `test_edit_catalog_use_case.py`; las de widgets y coordinación
-están en `test_edit_gui.py` y `test_edit_gui_integration.py`.
+All six steps have local implementation/tests. Planned domain/application/persistence modules, `ordered_labels.py`, composition and GUI coordination were added. Core/SQLite tests are in `test_catalog_edit.py`/`test_edit_catalog_use_case.py`; widget/coordination tests in `test_edit_gui.py`/`test_edit_gui_integration.py`.
 
-La importación comparte la copia de pistas referenciadas por varios archivos y conserva
-roles adicionales de pista y álbum. Las consultas de GUI muestran intérpretes; la vista
-SQL mantiene todos los créditos. Si falla la liberación del adaptador después de un
-commit, el resultado sigue identificándose como guardado y muestra la incidencia.
+Import shares track copy-on-write and preserves additional track/album roles. GUI queries show performers; SQL views retain all credits. Adapter cleanup failure after commit still reports a saved result with the issue.
 
-El diagnóstico gráfico y la validación del wheel comprueban también la edición sobre
-SQLite temporal. La [ejecución 37939283014](https://github.com/Evilchuck666/Trackfolio/actions/runs/37939283014)
-pasó en las ocho combinaciones de Linux, Windows, macOS Intel y Apple Silicon, con
-uv 0.12.10 y 0.12.23. La revisión visual manual de Windows/macOS sigue pendiente;
-los resultados y las correcciones de portabilidad de las pruebas están en
-[VALIDATION.md](../VALIDATION.md).
+GUI diagnostics and wheel validation also test temporary-SQLite editing. [Run 37939283014](https://github.com/Evilchuck666/Trackfolio/actions/runs/37939283014) passed eight Linux/Windows/macOS Intel/Apple Silicon combinations with uv 0.12.10 and 0.12.23. Manual Windows/macOS visual review remains pending; results and test-portability fixes are in [VALIDATION.md](../VALIDATION.md).

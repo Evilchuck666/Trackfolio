@@ -1,4 +1,4 @@
-"""Importación real con SQLite y contenedores de audio sintéticos temporales."""
+"""Real imports with SQLite and temporary synthetic audio containers."""
 
 import sqlite3
 from dataclasses import replace
@@ -36,7 +36,7 @@ def test_validate_create_does_not_create_parent_and_rejects_existing_paths(facto
     assert not destination.parent.exists()
     existing = tmp_path / "already.tfo"
     existing.write_bytes(b"preserved")
-    with pytest.raises(ImportTargetError, match="ya existe"):
+    with pytest.raises(ImportTargetError, match="already exists"):
         factory.validate(existing, "create")
     assert existing.read_bytes() == b"preserved"
     existing_directory = tmp_path / "directory"
@@ -45,7 +45,7 @@ def test_validate_create_does_not_create_parent_and_rejects_existing_paths(facto
         factory.validate(existing_directory / "missing-parent" / "dest.tfo", "bogus")
     existing_file = tmp_path / "parent-file"
     existing_file.touch()
-    with pytest.raises(ImportTargetError, match="directorio"):
+    with pytest.raises(ImportTargetError, match="directory"):
         factory.validate(existing_file / "dest.tfo", "create")
 
 
@@ -55,7 +55,7 @@ def test_creation_rejects_dangling_symlink(factory, tmp_path):
         destination.symlink_to(tmp_path / "missing.tfo")
     except OSError:
         pytest.skip("Symbolic links require privileges on this platform")
-    with pytest.raises(ImportTargetError, match="ya existe"):
+    with pytest.raises(ImportTargetError, match="already exists"):
         factory.open(destination, "create")
     assert destination.is_symlink()
     assert not (tmp_path / "missing.tfo").exists()
@@ -127,7 +127,7 @@ def test_update_backup_failure_preserves_legacy_and_reports_target_error(
         raise OSError("simulated backup failure")
 
     monkeypatch.setattr(db, "_backup_database", fail_backup)
-    with pytest.raises(ImportTargetError, match="preparar") as captured:
+    with pytest.raises(ImportTargetError, match="prepare") as captured:
         factory.open(destination, "update")
     assert captured.value.cleanup_issue is None
     assert destination.read_bytes() == before
@@ -182,7 +182,7 @@ def test_failed_file_rolls_back_and_preserves_previous_commit(factory, tmp_path)
     target = factory.open(destination, "create")
     before = TrackMetadata(title="Before", artists=("Keep",), audio_format="mp3")
     first = target.write(before, tmp_path, "song.mp3")
-    with pytest.raises(ImportTargetError, match="guardar"):
+    with pytest.raises(ImportTargetError, match="save"):
         target.write(
             replace(before, title="After", album="rollback", track_number=0), tmp_path, "song.mp3"
         )
@@ -215,7 +215,7 @@ def test_discard_does_not_remove_replacement_at_owned_path(factory, tmp_path):
     target.close()
     destination.rename(tmp_path / "original.tfo")
     destination.write_bytes(b"external replacement")
-    with pytest.raises(ImportTargetError, match="cambió"):
+    with pytest.raises(ImportTargetError, match="changed"):
         target.discard()
     assert destination.read_bytes() == b"external replacement"
 
@@ -288,7 +288,7 @@ def test_prevalidation_rejects_readonly_existing_catalog(factory, tmp_path):
     migrate_database(destination)
     destination.chmod(0o444)
     try:
-        with pytest.raises(ImportTargetError, match="permiso"):
+        with pytest.raises(ImportTargetError, match="ermission"):
             factory.validate(destination, "update")
     finally:
         destination.chmod(0o600)
@@ -301,7 +301,7 @@ def test_storage_lock_is_bounded_and_translated(factory, tmp_path):
     connection = sqlite3.connect(destination)
     try:
         connection.execute("BEGIN IMMEDIATE")
-        with pytest.raises(ImportTargetError, match="ocupado"):
+        with pytest.raises(ImportTargetError, match="busy"):
             target.write(TrackMetadata(audio_format="mp3"), tmp_path, "song.mp3")
     finally:
         connection.rollback()
@@ -321,7 +321,7 @@ def test_readonly_sqlite_writer_error_is_translated_and_rolls_back(factory, tmp_
     monkeypatch.setattr(import_target, "_writable_engine", lambda _: session._engine)
     target = factory.open(destination, "update")
     try:
-        with pytest.raises(ImportTargetError, match="permiso"):
+        with pytest.raises(ImportTargetError, match="ermission"):
             target.write(TrackMetadata(audio_format="flac"), tmp_path, "track.flac")
         assert session.list_summaries() == ()
     finally:
@@ -407,7 +407,7 @@ def test_legacy_script_rejects_outside_root_before_migration(tmp_path, capsys):
         script.main([str(outside), "--library-root", str(library), "--database", str(destination)])
         == 1
     )
-    assert "dentro" in capsys.readouterr().out
+    assert "inside" in capsys.readouterr().out
     assert not destination.exists() and not destination.parent.exists()
 
 
@@ -439,5 +439,5 @@ def test_legacy_script_uses_shared_link_validation_before_creating_catalog(tmp_p
         pytest.skip("Symbolic links require privileges on this platform")
     destination = tmp_path / "not-created.tfo"
     assert script.main([str(link), "--database", str(destination)]) == 1
-    assert "enlaces" in capsys.readouterr().out
+    assert "links" in capsys.readouterr().out
     assert not destination.exists()

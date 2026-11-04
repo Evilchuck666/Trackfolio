@@ -184,7 +184,7 @@ class SqliteTagCatalog:
                         return  # The transaction committed before its acknowledgement was lost.
                     raise TagWriteConflict(
                         "The tags were written, but the catalog changed. "
-                        "Sus nuevas correcciones se han conservado."
+                        "Your new corrections have been preserved."
                     )
                 if date_written and snapshot.album_date != observed.album_date:
                     original = _read_snapshot(connection, snapshot.file_id)

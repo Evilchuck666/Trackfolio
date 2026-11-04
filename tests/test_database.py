@@ -446,7 +446,7 @@ def test_unknown_database_is_not_adopted_or_changed(tmp_path):
     with closing(sqlite3.connect(path)) as connection, connection:
         connection.execute("CREATE TABLE other_application (value TEXT)")
         connection.execute("INSERT INTO other_application VALUES ('keep me')")
-    with pytest.raises(db.UnknownDatabaseError, match="no se adoptan"):
+    with pytest.raises(db.UnknownDatabaseError, match="not adopted"):
         db.migrate_database(path)
     with closing(sqlite3.connect(path)) as connection, connection:
         assert connection.execute("SELECT value FROM other_application").fetchone() == ("keep me",)

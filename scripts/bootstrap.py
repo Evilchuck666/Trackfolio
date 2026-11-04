@@ -13,7 +13,7 @@ try:
     import tomllib
 except ModuleNotFoundError:
     sys.exit(
-        "Esta herramienta necesita Python 3.11 o posterior. Usa: "
+        "This tool requires Python 3.11 or later. Use: "
         "uv run --no-project --python 3.13.15 python scripts/bootstrap.py"
     )
 
@@ -37,7 +37,7 @@ def uv_version_range(requirement: str) -> tuple[str, str]:
         requirement.strip(),
     )
     if match is None:
-        raise BootstrapError("tool.uv.required-version debe definir un rango como >=0.13.4,<0.14.")
+        raise BootstrapError("tool.uv.required-version must define a range such as >=0.13.4,<0.14.")
     minimum, maximum = match.groups()
     if version_tuple(minimum) >= version_tuple(maximum):
         raise BootstrapError(
@@ -61,7 +61,7 @@ def configuration(root: Path) -> tuple[str, str]:
     uv_settings = tool.get("uv", {}) if isinstance(tool, dict) else {}
     required_uv = uv_settings.get("required-version", "") if isinstance(uv_settings, dict) else ""
     if not isinstance(required_uv, str):
-        raise BootstrapError("tool.uv.required-version debe definir un rango como >=0.13.4,<0.14.")
+        raise BootstrapError("tool.uv.required-version must define a range such as >=0.13.4,<0.14.")
     uv_version_range(required_uv)
     if not re.fullmatch(r"\d+\.\d+\.\d+", python_version):
         raise BootstrapError(".python-version must pin an exact CPython version (X.Y.Z).")
@@ -75,7 +75,7 @@ def configuration(root: Path) -> tuple[str, str]:
 def uv_install_help(version: str) -> str:
     """Suggest the minimum supported version without executing a remote installer."""
     return (
-        f"Instala uv {version} (minimum supported version) or a compatible version "
+        f"Install uv {version} (minimum supported version) or a compatible version "
         "and reopen your terminal.\n"
         f"Linux/macOS: curl -LsSf https://astral.sh/uv/{version}/install.sh | sh\n"
         "Windows PowerShell: powershell -ExecutionPolicy ByPass -c "
@@ -135,7 +135,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--qt-timeout", type=positive_timeout, default=15.0, metavar="SECONDS")
     args = parser.parse_args(argv)
     if args.platform and not args.gui:
-        parser.error("--platform necesita --gui.")
+        parser.error("--platform requires --gui.")
     return args
 
 
@@ -166,7 +166,7 @@ def main(argv: list[str] | None = None, *, executable: str | None = None) -> int
         [executable, "run", *common, "python", "scripts/doctor.py", *doctor_args],
     ]
     for command in commands:
-        print(f"Ejecutando: {' '.join(command)}", flush=True)
+        print(f"Running: {' '.join(command)}", flush=True)
         try:
             result = subprocess.run(command, cwd=PROJECT_ROOT, check=False)
         except OSError as exc:

@@ -99,7 +99,7 @@ class CoverChoiceDialog(QDialog):
             body.addLayout(images, 1)
             display = QVBoxLayout()
             display.setSpacing(8)
-            label = QLabel("VISTA PREVIA", card)
+            label = QLabel("PREVIEW", card)
             label.setObjectName("SectionTitle")
             display.addWidget(label)
             preview = QLabel("Select an image\nto preview the cover", card)

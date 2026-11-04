@@ -62,7 +62,7 @@ def command_text(command: list[str]) -> str:
 
 
 def run(command: list[str], *, env: dict[str, str] | None = None) -> None:
-    print(f"Ejecutando: {command_text(command)}", flush=True)
+    print(f"Running: {command_text(command)}", flush=True)
     try:
         result = subprocess.run(command, cwd=PROJECT_ROOT, env=env, check=False)
     except OSError as exc:
@@ -73,7 +73,7 @@ def run(command: list[str], *, env: dict[str, str] | None = None) -> None:
 
 def confirm(message: str, args: argparse.Namespace) -> bool:
     if args.yes:
-        print(f"Autorizado mediante --yes: {message}")
+        print(f"Authorized through --yes: {message}")
         return True
     if args.non_interactive or not sys.stdin.isatty():
         return False
@@ -180,14 +180,14 @@ def prepare_graphics(qt_platform: str | None, args: argparse.Namespace) -> None:
     remaining = [item[0] for item in missing if not library_available(item[0])]
     if remaining:
         raise SetupError(
-            f"Siguen faltando bibliotecas: {', '.join(remaining)}. Consulta docs/environment.md."
+            f"Libraries still missing: {', '.join(remaining)}. See docs/environment.md."
         )
 
 
 def prepare_git(args: argparse.Namespace) -> None:
     executable = shutil.which("git")
     if executable:
-        print(f"Git disponible: {executable}")
+        print(f"Git available: {executable}")
         return
     system = platform.system()
     if system == "Linux":
@@ -214,7 +214,7 @@ def prepare_git(args: argparse.Namespace) -> None:
         ]
     else:
         print(
-            "AVISO: instala Git desde https://git-scm.com/install/ "
+            "WARNING: Install Git from https://git-scm.com/install/ "
             "for version control; the app does not need it."
         )
         return
@@ -275,7 +275,7 @@ def editor_download() -> tuple[str, str]:
 
 
 def download(url: str, target: Path) -> None:
-    print(f"Descargando: {url}", flush=True)
+    print(f"Downloading: {url}", flush=True)
     with urlopen(url, timeout=120) as response, target.open("wb") as output:
         if not response.geturl().startswith("https://"):
             raise SetupError("The download was redirected outside HTTPS.")
@@ -431,9 +431,9 @@ def main(argv: list[str] | None = None) -> int:
         )
         print("\nEnvironment ready. No need to activate .venv or modify the system PATH.")
         if editor:
-            print(f"VS Code disponible: {launcher} --open-code")
+            print(f"VS Code available: {launcher} --open-code")
         else:
-            print("Si tienes VS Code: code Trackfolio.code-workspace")
+            print("If you have VS Code: code Trackfolio.code-workspace")
         if not args.core:
             print(
                 f"Launch the application: {launcher} --run-uv run --locked --extra gui trackfolio"

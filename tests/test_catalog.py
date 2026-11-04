@@ -47,10 +47,10 @@ def test_import_roundtrip_uses_database_after_source_is_removed(repository, tmp_
         track_total=9,
         disc_number=2,
         disc_total=3,
-        artists=("Artista B", "Artista A"),
-        album_artists=("Artista A",),
+        artists=("Artist B", "Artist A"),
+        album_artists=("Artist A",),
         genres=("Rock", "Jazz"),
-        lyrics="Texto inventado\nSegunda línea\n",
+        lyrics="Invented text\nSecond line Ω\n",
         artwork=Artwork(b"synthetic image", "image/png", 1, 1),
         raw_tags=(RawTagValue("CUSTOM", "  original  ", 0),),
         audio_format="flac",
@@ -71,8 +71,8 @@ def test_import_roundtrip_uses_database_after_source_is_removed(repository, tmp_
     assert count(repository, db.artists) == 2
     with repository.engine.connect() as connection:
         row = connection.exec_driver_sql("SELECT * FROM track_details").mappings().one()
-        assert row["artists"] == "Artista B; Artista A"
-        assert row["album_artists"] == "Artista A"
+        assert row["artists"] == "Artist B; Artist A"
+        assert row["album_artists"] == "Artist A"
         assert row["genres"] == "Rock; Jazz"
         assert row["lyrics"] == metadata.lyrics
         assert row["cover_bytes"] == len(metadata.artwork.data)
@@ -428,7 +428,7 @@ def test_application_rejects_file_outside_library_before_reading(repository, tmp
     def reader(_):
         pytest.fail("Reader should not be called for a file outside the library")
 
-    with pytest.raises(ValueError, match="dentro"):
+    with pytest.raises(ValueError, match="inside"):
         ImportAudio(reader, repository).execute(source, library)
     assert count(repository, db.audio_files) == count(repository, db.libraries) == 0
 

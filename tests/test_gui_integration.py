@@ -34,7 +34,7 @@ def wait_until(app, predicate, timeout=4):
 
 @pytest.fixture
 def catalog(tmp_path):
-    database = tmp_path / "DB con espacios % #.tfo"
+    database = tmp_path / "DB with spaces % #.tfo"
     migrate_database(database)
     engine = create_engine(database)
     try:
@@ -42,7 +42,7 @@ def catalog(tmp_path):
         full = repository.save(
             TrackMetadata(
                 title="Song",
-                artists=("Artista B", "Artista A"),
+                artists=("Artist B", "Artist A"),
                 album="Album",
                 album_year=1981,
                 track_number=3,
@@ -50,7 +50,7 @@ def catalog(tmp_path):
                 disc_number=1,
                 disc_total=2,
                 genres=("Rock", "Jazz"),
-                lyrics="<b>Texto literal</b>\nOtra línea",
+                lyrics="<b>Literal text</b>\nAnother line Ω",
                 artwork=Artwork(_image(), "image/bmp", 1, 1),
                 audio_format="flac",
             ),
@@ -78,7 +78,7 @@ def test_gui_reads_sqlite_with_no_music_then_clears_every_missing_field(qt_app, 
         wait_until(qt_app, lambda: completed == [full.file_id])
         assert window.model.rowCount() == 2
         assert window.fields["title"].text() == "Song"
-        assert window.fields["artists"].text() == "Artista B; Artista A"
+        assert window.fields["artists"].text() == "Artist B; Artist A"
         assert window.fields["album"].text() == "Album"
         assert window.fields["album_year"].text() == "1981"
         assert window.fields["track_number"].text() == "3"
@@ -86,7 +86,7 @@ def test_gui_reads_sqlite_with_no_music_then_clears_every_missing_field(qt_app, 
         assert window.fields["disc_number"].text() == "1"
         assert window.fields["disc_total"].text() == "2"
         assert window.fields["genres"].text() == "Rock; Jazz"
-        assert window.lyrics.toPlainText() == "<b>Texto literal</b>\nOtra línea"
+        assert window.lyrics.toPlainText() == "<b>Literal text</b>\nAnother line Ω"
         assert not window.cover.pixmap().isNull()
         window.table.selectRow(1)
         wait_until(qt_app, lambda: completed == [full.file_id, empty.file_id])
@@ -353,7 +353,7 @@ def test_detail_query_failure_is_recoverable_on_refresh(qt_app, tmp_path):
 
         def get(self, file_id):
             if self.failing:
-                raise RuntimeError("El catálogo está bloqueado temporalmente.")
+                raise RuntimeError("The catalog is temporarily locked.")
             return super().get(file_id)
 
     session = UnavailableSession(tmp_path / "fake.db")

@@ -246,7 +246,7 @@ def test_batch_conflict_keeps_whole_draft_without_partial_save(qt_app, edit_cata
         assert window.fields["album_year"].text() == "1981"
         assert read_entry(database, first.file_id) == first
         assert read_entry(database, second.file_id).metadata.album_year == 2020
-        assert "cambiaron" in window.error_label.text()
+        assert "changed" in window.error_label.text()
         controller.cancel_edit()
     finally:
         teardown(window, controller)
@@ -426,7 +426,7 @@ def test_conflict_keeps_draft_and_cancel_recovers_latest_record(qt_app, edit_cat
         assert results == [None]
         assert window.fields["title"].text() == "Stale draft"
         assert window.edit_dirty() and window.save_button.isEnabled()
-        assert "cambiaron" in window.error_label.text()
+        assert "changed" in window.error_label.text()
         assert read_entry(database, first.file_id).metadata.title == "New external value"
         QTest.mouseClick(window.cancel_edit_button, Qt.MouseButton.LeftButton)
         wait_until(

@@ -149,7 +149,7 @@ def test_catalogue_action_writes_every_saved_song_including_new_unlisted_entries
         dialog = controller._tag_dialog
         assert set(dialog.file_ids) == {entry.file_id for entry in entries}
         assert dialog.table.rowCount() == 3
-        assert "todo el catálogo" in dialog.windowTitle()
+        assert "entire catalog" in dialog.windowTitle()
         assert not window.write_all_tags_button.isEnabled()
         assert not files.journal_root.exists()
         reports = []
@@ -295,7 +295,7 @@ def test_gui_updates_only_nfo_and_completes(qt_app, setup_tags, tmp_path):
         assert ElementTree.parse(nfo).findtext("track/title") == "Original"
         assert ElementTree.parse(nfo).findtext("track/duration") == "5:35"
         assert "NFO updated" in dialog.output.toPlainText()
-        assert "0 archivos escritos. 1 NFO actualizados." in dialog.summary.text()
+        assert "0 files written. 1 NFO files updated." in dialog.summary.text()
         assert dialog._error_popup is None and not dialog.write_button.isEnabled()
     finally:
         teardown(window, controller)

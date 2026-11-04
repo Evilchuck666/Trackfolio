@@ -416,7 +416,7 @@ def test_date_precision_requires_explicit_choice(setup_tags, tmp_path):
     database, _, catalog, codec, files = setup_tags
     request = TagWriteRequest(database, (entry.file_id,), ("album_year",))
     preview = PreviewTagWrites(catalog, codec, files).execute(request)
-    assert preview.items[0].state == "blocked" and "fecha" in preview.items[0].message
+    assert preview.items[0].state == "blocked" and "date" in preview.items[0].message
     accepted = PreviewTagWrites(catalog, codec, files).execute(
         replace(request, allow_date_loss=True)
     )
@@ -626,10 +626,10 @@ def test_multiple_lyrics_require_selection_and_other_languages_survive(setup_tag
     database, repository, catalog, codec, files = setup_tags
     source = make_source(tmp_path, "mp3")
     tags = ID3(source)
-    tags.add(USLT(encoding=3, lang="spa", desc="Traducción", text="Texto anterior"))
+    tags.add(USLT(encoding=3, lang="spa", desc="Traducción", text="Previous text"))
     tags.save(source)
     entry = repository.save(read_metadata(source), source.parent, source.name)
-    edit(database, entry.file_id, lyrics="Texto corregido")
+    edit(database, entry.file_id, lyrics="Corrected text")
     request = TagWriteRequest(database, (entry.file_id,), ("lyrics",))
     blocked = PreviewTagWrites(catalog, codec, files).execute(request)
     assert blocked.items[0].state == "blocked" and len(blocked.items[0].tags.lyrics_keys) == 2
@@ -640,7 +640,7 @@ def test_multiple_lyrics_require_selection_and_other_languages_survive(setup_tag
     report = WriteTagWrites(catalog, codec, files).execute(preview, (entry.file_id,))
     assert report.results[0].state == "confirmed", report.results[0].message
     actual = ID3(source)
-    assert actual[selected].text == "Texto corregido"
+    assert actual[selected].text == "Corrected text"
     assert actual["USLT:Original:eng"].text == "Old lyrics"
 
 

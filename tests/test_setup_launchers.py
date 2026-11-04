@@ -198,7 +198,7 @@ def test_run_uv_without_compatible_uv_does_not_download(launcher, tmp_path):
     fake_downloader(launcher, tmp_path)
     result = launch(launcher, "--run-uv", "--version")
     assert result.returncode == 1
-    assert "Ejecuta primero" in result.stderr
+    assert "First run" in result.stderr
     assert not (root / ".tools").exists()
     assert not Path(environment["TEST_INSTALL_LOG"]).exists()
 

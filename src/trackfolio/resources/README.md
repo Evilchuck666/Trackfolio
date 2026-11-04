@@ -1,16 +1,16 @@
-# Recursos de Trackfolio
+# Trackfolio resources
 
-La GUI carga estos archivos mediante `importlib.resources`, sin depender del
-directorio de ejecución, de fuentes instaladas o del tema del escritorio:
+The GUI loads these files through `importlib.resources`, independently of the
+working directory, installed fonts or desktop theme:
 
-- `stylesheet.qss`: colores, espaciado, estados de foco y tamaños compartidos.
-- `icons/*.svg`: ilustraciones originales de Trackfolio para la aplicación y sus
-  acciones. Se renderizan a varios tamaños para admitir pantallas con escalado.
-- `fonts/Inter-Regular.ttf` y `fonts/Inter-SemiBold.ttf`: Inter 4.1, sin modificar,
-  distribuida bajo SIL Open Font License 1.1. Véase [licencia](fonts/LICENSE.txt)
-  y [procedencia](fonts/README.md).
-- `manifest.json`: SHA-256 de los recursos de ejecución. `scripts/doctor.py`
-  comprueba que se distribuyen completos y que coinciden con el manifiesto.
+- `stylesheet.qss`: shared colors, spacing, focus states and sizes.
+- `icons/*.svg`: original Trackfolio illustrations for the application and its
+  actions. Rendered at several sizes to support scaled displays.
+- `fonts/Inter-Regular.ttf` and `fonts/Inter-SemiBold.ttf`: unmodified Inter 4.1,
+  distributed under the SIL Open Font License 1.1. See the [license](fonts/LICENSE.txt)
+  and [provenance](fonts/README.md).
+- `manifest.json`: SHA-256 hashes of runtime resources. `scripts/doctor.py`
+  checks that they are distributed in full and match the manifest.
 
-Se incluyen en el wheel y la distribución de fuentes. La aplicación no descarga
-recursos durante su ejecución.
+These files are included in the wheel and source distribution. The application
+does not download resources at runtime.

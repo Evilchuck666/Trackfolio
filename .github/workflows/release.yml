@@ -521,7 +521,7 @@ jobs:
           assert report["cover_written"] is True, report
           assert report["albums_viewed"] is True, report
           assert report["artists_viewed"] is True, report
-          print("Wheel GUI instalado fuera del checkout:", report)
+          print("GUI wheel installed outside the checkout:", report)
           """
               subprocess.run(
                   [str(gui_executable), "-c", gui_verification, str(gui_environment)],

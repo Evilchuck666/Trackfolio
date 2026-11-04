@@ -89,8 +89,8 @@ class TitleBar(QWidget):
         title.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         layout.addWidget(title)
         layout.addStretch()
-        self.minimize_button = self._button("minimize", "Minimizar", window.showMinimized)
-        self.maximize_button = self._button("maximize", "Maximizar", window.toggle_maximized)
+        self.minimize_button = self._button("minimize", "Minimize", window.showMinimized)
+        self.maximize_button = self._button("maximize", "Maximize", window.toggle_maximized)
         self.close_button = self._button("close", "Close", window.close)
         self.close_button.setObjectName("CloseButton")
         for button in (self.minimize_button, self.maximize_button, self.close_button):
@@ -109,7 +109,7 @@ class TitleBar(QWidget):
     def sync_window_state(self) -> None:
         maximized = self._window.isMaximized()
         self.maximize_button.setIcon(icon("restore" if maximized else "maximize"))
-        label = "Restaurar" if maximized else "Maximizar"
+        label = "Restore" if maximized else "Maximize"
         self.maximize_button.setToolTip(label)
         self.maximize_button.setAccessibleName(label)
 
@@ -445,7 +445,7 @@ class MainWindow(QMainWindow):
         caption.setBuddy(value)
         layout.addWidget(caption)
         if key in BATCH_EDIT_FIELDS:
-            apply_field = QCheckBox("Aplicar", container)
+            apply_field = QCheckBox("Apply", container)
             apply_field.hide()
             apply_field.toggled.connect(
                 lambda _checked, field=key: self._batch_field_changed(field)
@@ -845,14 +845,14 @@ class MainWindow(QMainWindow):
             blocker = QSignalBlocker(checkbox)
             checkbox.setChecked(False)
             checkbox.setToolTip(
-                ("Valores distintos. " if key in mixed else "")
+                ("Mixed values. " if key in mixed else "")
                 + "Replace this field in all selected songs. "
                 "An empty field clears its values."
             )
             del blocker
-            self.fields[key].setPlaceholderText("Valores distintos" if key in mixed else "")
+            self.fields[key].setPlaceholderText("Mixed values" if key in mixed else "")
             if key in self.ordered_labels and key in mixed:
-                self.ordered_labels[key].name_edit.setPlaceholderText("Valores distintos")
+                self.ordered_labels[key].name_edit.setPlaceholderText("Mixed values")
         self.cover.set_cover(None)
         self._update_actions()
         self.batch_fields["artists"].setFocus()

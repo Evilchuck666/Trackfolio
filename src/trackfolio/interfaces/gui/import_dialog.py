@@ -80,7 +80,7 @@ class ImportDialog(QDialog):
         root_layout.addWidget(_label("Includes subfolders and FLAC and MP3 files.", self))
         layout.addWidget(root_group)
 
-        destination_group = QGroupBox("Destino", self)
+        destination_group = QGroupBox("Destination", self)
         destination_layout = QVBoxLayout(destination_group)
         destination_layout.setSpacing(12)
         self.update_radio = QRadioButton("Use the open catalog", destination_group)
@@ -260,7 +260,7 @@ class ImportProgressDialog(QDialog):
         self.error_label = _label("", self, name="ErrorMessage")
         self.error_label.hide()
         layout.addWidget(self.error_label)
-        self.issues_label = _label("Incidencias", self, name="SectionTitle")
+        self.issues_label = _label("Issues", self, name="SectionTitle")
         self.issues_label.hide()
         layout.addWidget(self.issues_label)
         self.issues = QPlainTextEdit(self)
@@ -348,9 +348,9 @@ class ImportProgressDialog(QDialog):
         self.error_label.setVisible(bool(report.fatal_error))
         stages = {
             "scan": "Scan",
-            "read": "Lectura",
-            "write": "Guardado",
-            "cleanup": "Limpieza",
+            "read": "Reading",
+            "write": "Saving",
+            "cleanup": "Cleanup",
         }
         self.issues.setPlainText(
             "\n\n".join(

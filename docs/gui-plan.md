@@ -1,187 +1,96 @@
-# Plan de la primera GUI de Trackfolio
+# Plan for Trackfolio's first GUI
 
-Estado: GUI implementada y validada localmente el 7 de octubre de 2026. La base y su muestra
-están preparadas. La ventana permite abrir un catálogo SQLite y
-mostrar sus canciones mediante Qt 6, con la GUI como interfaz prioritaria.
+Status: GUI implemented and locally validated on October 7, 2026. The database and sample are ready. The window opens a SQLite catalog and displays songs through Qt 6, with the GUI as the priority interface.
 
-## Resultado esperado
+## Expected result
 
-Una ventana permite abrir un catálogo, consultar su lista de canciones y seleccionar
-un registro para ver sus metadatos y portada. Los datos proceden de SQLite. El visor
-funciona aunque la música original no esté disponible en ese equipo: la portada ya
-está almacenada en la base de datos.
+A window opens a catalog, lists songs and selects a record to display metadata/artwork from SQLite. The viewer works even when original music is unavailable on that machine: artwork is stored in the database.
 
-Este incremento ofrece apertura de catálogo, actualización de la lista, selección
-y consulta de todos los campos solicitados. Los campos son de lectura y permiten
-copiar texto. La edición de canciones tiene un [plan propio](edit-plan.md), implementado
-y validado localmente el 9 de octubre de 2026. La importación gráfica y la generación
-del catálogo tienen su
-[plan de implementación](import-plan.md), ejecutado y comprobado localmente el 9 de octubre
-de 2026; TUI y API siguen siendo posibilidades futuras.
+This increment provides catalog opening, list refresh, selection and all requested fields. Fields are read-only and support copying. Song editing has its [own plan](edit-plan.md), implemented and locally validated on October 9, 2026. Graphical import and catalog generation have an [implementation plan](import-plan.md), executed and locally checked on October 9, 2026; TUI and API remain future possibilities.
 
-## 1. Contratos y arranque
+## 1. Contracts and startup
 
-- [x] Mantener `GetTrack` para recuperar el detalle del archivo seleccionado.
-- [x] Añadir el DTO inmutable `CatalogSummary`, la operación de repositorio
-  `list_summaries()` y el caso de uso `ListTrackSummaries`. Conservar el contrato
-  existente de `ListTracks`.
-- [x] Devolver en el resumen identificadores, título, artistas, álbum, año y ruta.
-  Consultar columnas concretas sin cargar BLOBs, líricas ni etiquetas originales
-  para todas las canciones. Este cambio no requiere una migración.
-- [x] Construir motor, repositorio y casos de uso en un punto de composición. Los
-  widgets, modelo de tabla y presentador reciben casos de uso; no importan
-  SQLAlchemy, Alembic o Mutagen ni ejecutan SQL.
-- [x] Encapsular en infraestructura la apertura y validación del catálogo existente
-  y el cierre de sus recursos. Una ruta inexistente, una BD ajena o una revisión
-  incompatible generan un mensaje recuperable. Abrir un archivo no crea
-  silenciosamente otro catálogo ni modifica su esquema.
-- [x] Añadir el punto de entrada del paquete GUI y un lanzador `trackfolio` mediante
-  `project.gui-scripts`, para iniciar sin consola adicional en Windows.
-  La carga de Qt se limita al arranque gráfico; el núcleo conserva
-  su instalación y sus pruebas sin PySide6.
-- [x] Admitir `--database` y la acción **Abrir catálogo…**. Sin argumento, abrir el
-  último catálogo válido o mostrar la ventana sin catálogo. Guardar configuración
-  local mediante `platformdirs`, fuera del repositorio.
+- [x] Keep `GetTrack` for selected-file details.
+- [x] Add immutable `CatalogSummary`, repository `list_summaries()` and `ListTrackSummaries`, preserving `ListTracks`.
+- [x] Summaries return identifiers, title, artists, album, year and path. Query specific columns without loading every song's BLOBs, lyrics or original tags. No migration is required.
+- [x] Construct engine, repository and use cases at a composition point. Widgets, table model and presenter receive use cases; they do not import SQLAlchemy, Alembic or Mutagen or execute SQL.
+- [x] Encapsulate existing-catalog opening/validation and resource closure in infrastructure. Missing paths, unrelated databases and incompatible revisions produce recoverable messages. Opening never silently creates another catalog or changes its schema.
+- [x] Add the GUI package entry point and `trackfolio` launcher through `project.gui-scripts`, avoiding an extra Windows console. Qt loads only at graphical startup; core installation/tests remain PySide6-free.
+- [x] Support `--database` and **Open catalog…**. Without an argument, open the last valid catalog or show an empty window. Store local configuration through `platformdirs`, outside the repository.
 
-Comando para abrir la muestra desde la raíz:
+Open the sample from the root:
 
 ```sh
 uv run --locked --extra gui python -m trackfolio.interfaces.gui --database data/database.tfo
 ```
 
-Las rutas se pasan como argumentos, con comillas cuando contienen espacios. El
-paquete instalado debe funcionar desde cualquier directorio de trabajo y con una
-base ubicada fuera del proyecto.
+Pass paths as arguments, quoting spaces. The installed package must work from any working directory with a database outside the project.
 
-## 2. Ventana y distribución de datos
+## 2. Window and data layout
 
-- [x] Ventana redimensionable con un splitter: lista de canciones y detalle.
-- [x] Tabla con columnas **Canción**, **Artista(s)**, **Álbum**, **Año** y **Archivo**.
-  Archivo distingue registros sin título sin inventar un metadato musical.
-- [x] Seleccionar el primer registro al abrir una BD con datos. Al actualizar,
-  conservar la selección por `file_id` cuando siga disponible.
-- [x] Acciones **Abrir catálogo…**, **Actualizar** y **Salir**, atajos de teclado,
-  foco visible y navegación entre lista y campos.
-- [x] Barra de estado con catálogo abierto, número de registros y estado de carga.
-  Detalle vacío cuando no hay selección.
+- [x] Resizable window with a song-list/detail splitter.
+- [x] Table columns **Song**, **Artist(s)**, **Album**, **Year** and **File**. File distinguishes untitled records without inventing musical metadata.
+- [x] Select the first record when opening a populated database. Refresh retains selection by `file_id` if available.
+- [x] **Open catalog…**, **Refresh** and **Exit**, keyboard shortcuts, visible focus and navigation between list/fields.
+- [x] Status bar with catalog, record count and loading status; empty detail without selection.
 
-| Grupo del detalle | Campos |
+| Detail group | Fields |
 | --- | --- |
-| Identificación | Miniatura de portada, canción y artista(s). |
-| Álbum | Nombre y año. |
-| Numeración | Número de pista, total de pistas, número de disco y total de discos. |
-| Clasificación | Género(s), conservando nombres y orden. |
-| Líricas | Texto plano seleccionable, con saltos de línea y scroll. |
+| Identification | Cover thumbnail, song and artist(s) |
+| Album | Name and year |
+| Numbering | Track number/total and disc number/total |
+| Classification | Genre(s), preserving names and order |
+| Lyrics | Selectable plain text with line breaks and scrolling |
 
-La numeración tendrá campos separados y próximos entre sí. Si sólo existe el
-número de pista, su total queda vacío. Los valores `None` y las colecciones vacías
-se presentan como texto vacío, sin ceros ni valores supuestos. Las líricas se
-cargan como texto plano para conservar su contenido sin interpretarlo como HTML.
+Numbering uses separate nearby fields. A track number without a total leaves the total blank. `None` and empty collections display as empty text, without zeros or assumed values. Lyrics remain plain text rather than interpreted HTML.
 
-La miniatura usa los bytes de `GetTrack` y mantiene la proporción. La decisión
-entre portada incrustada y `album.jpg` ya se resuelve durante la importación. Si no
-hay imagen o Qt no decodifica sus bytes, el área queda vacía y el resto del detalle
-sigue disponible. La GUI no vuelve a leer el archivo musical.
+The thumbnail uses `GetTrack` bytes and preserves aspect ratio. Embedded artwork versus `album.jpg` is already resolved during import. Missing or undecodable images leave the area blank while other details remain available. The GUI does not reread music files.
 
-## 3. Apariencia compartida y recursos
+## 3. Shared appearance and resources
 
-- [x] Qt Widgets con **Fusion** explícito, una paleta y estilos de Trackfolio, con
-  espaciado, bordes y tamaños compartidos.
-- [x] Fuente, variantes necesarias, licencia, estilos e iconos propios en
-  `trackfolio.resources`. Cargar la fuente con `QFontDatabase` y los archivos con
-  `importlib.resources`, independientemente del directorio de ejecución y del
-  tema de iconos del escritorio.
-- [x] Diálogos Qt con modo nativo desactivado y menús dentro de la ventana.
-- [x] Barra de título y controles de ventana dibujados por Qt para cubrir también
-  la apariencia del marco. Validar movimiento, redimensionado, minimizar,
-  maximizar/restaurar, cierre, foco y accesibilidad. Utilizar las operaciones del
-  sistema expuestas por Qt para mover y redimensionar, especialmente en Wayland.
-  Comprobar sus resultados y manejar las capacidades del backend elegido.
-- [x] Layouts y tamaños lógicos que admitan el escalado de pantalla. Revisar al
-  100 %, 150 % y 200 %, incluida la miniatura y la legibilidad del texto.
+- [x] Qt Widgets with explicit **Fusion**, Trackfolio palette/styles and shared spacing, borders and sizes.
+- [x] Font variants, license, styles and original icons in `trackfolio.resources`. Load fonts with `QFontDatabase` and files with `importlib.resources`, independent of working directory and desktop icon theme.
+- [x] Non-native Qt dialogs and menus inside the window.
+- [x] Qt-drawn title bar/window controls covering frame appearance. Validate move, resize, minimize, maximize/restore, close, focus and accessibility. Use Qt-exposed system move/resize operations, especially on Wayland; check results and backend capabilities.
+- [x] Logical layouts/sizes supporting display scaling. Review at 100%, 150% and 200%, including thumbnail and text readability.
 
-Se compartirán diseño, recursos, controles y distribución. El rasterizado y los
-píxeles físicos pueden variar con el sistema y la pantalla. Fusion por sí solo
-no controla el marco del sistema; por eso su implementación propia forma parte
-del plan. Referencias: [Fusion](https://doc.qt.io/qt-6.11/qstylefactory.html),
-[fuentes](https://doc.qt.io/qt-6.11/qfontdatabase.html#addApplicationFontFromData),
-[DPI](https://doc.qt.io/qt-6.11/highdpi.html) y
-[movimiento de ventana](https://doc.qt.io/qt-6.11/qwindow.html#startSystemMove).
+Design, assets, controls and layout are shared. Rasterization and physical pixels can vary by system/display. Fusion alone does not control the system frame, hence the custom frame is part of the plan. References: [Fusion](https://doc.qt.io/qt-6.11/qstylefactory.html), [fonts](https://doc.qt.io/qt-6.11/qfontdatabase.html#addApplicationFontFromData), [DPI](https://doc.qt.io/qt-6.11/highdpi.html) and [window movement](https://doc.qt.io/qt-6.11/qwindow.html#startSystemMove).
 
-## 4. Carga y estados de la interfaz
+## 4. Loading and interface states
 
-- [x] Consultas de lista y detalle en tareas de trabajo para mantener receptiva
-  la ventana. Cada operación obtiene y cierra su conexión; no se comparte una
-  conexión SQLite entre hilos.
-- [x] Widgets e imágenes de presentación se crean y modifican en el hilo gráfico.
-  Los trabajadores devuelven dataclasses o errores de aplicación.
-- [x] Identificar solicitudes para descartar respuestas antiguas al cambiar
-  rápidamente de canción o de catálogo.
-- [x] Limpiar todos los campos al cambiar de selección, sin conservar portada,
-  líricas o numeración del registro anterior.
-- [x] Resolver ausencia de catálogo, BD vacía, selección eliminada, catálogo
-  inaccesible/bloqueado y errores de consulta. Un metadato ausente es válido y no
-  genera un aviso de error.
-- [x] Cerrar la ventana y cambiar de catálogo sin dejar trabajadores/conexiones
-  abiertos ni enviar resultados a una ventana destruida.
+- [x] List/detail queries in workers keep the window responsive. Each operation obtains/closes its connection; SQLite connections are not shared between threads.
+- [x] Widgets/presentation images are created and changed on the GUI thread. Workers return dataclasses or application errors.
+- [x] Identify requests to discard stale responses during rapid song/catalog switching.
+- [x] Clear every field on selection changes, including prior artwork, lyrics and numbering.
+- [x] Handle absent catalogs, empty databases, removed selections, inaccessible/locked catalogs and query failures. Missing metadata is valid and does not generate warnings.
+- [x] Close/change catalogs without leaked workers/connections or results delivered to destroyed windows.
 
-## 5. Comprobaciones funcionales
+## 5. Functional checks
 
-- [x] Verificar que listar resúmenes no recupera BLOBs, líricas ni `raw_tags`.
-- [x] Probar widgets y selección con QtTest, incluido en PySide6, y pytest.
-  Mantener datos sintéticos y bases temporales.
-- [x] Comprobar registros completos, parciales y sin metadatos; varias canciones
-  y géneros; Unicode; líricas con saltos de línea; portada válida, ausente y no
-  decodificable; BD vacía y errores de lectura recuperables.
-- [x] Comprobar selección rápida y respuestas fuera de orden.
-- [x] Probar GUI → casos de uso → SQLite cuando el archivo musical ya no existe.
-- [x] Validar manualmente la muestra real: **Run If You Can**, **Accept**,
-  **Breaker**, **1981**, **3/10**, **1/1**, **Heavy Metal**, JPEG de **500 × 500**
-  y líricas vacías. Comparar con `track_details` en SQLiteBrowser.
-- [x] Mantener Ruff, formato, mypy y la suite del núcleo.
+- [x] Listing summaries does not retrieve BLOBs, lyrics or `raw_tags`.
+- [x] Test widgets/selection with PySide6 QtTest and pytest, using synthetic data and temporary databases.
+- [x] Complete, partial and metadata-free records; multiple songs/genres; Unicode; multiline lyrics; valid, absent and undecodable artwork; empty databases and recoverable read errors.
+- [x] Rapid selection and out-of-order responses.
+- [x] GUI → use cases → SQLite when music no longer exists.
+- [x] Manually validate the real sample: **Run If You Can**, **Accept**, **Breaker**, **1981**, **3/10**, **1/1**, **Heavy Metal**, **500 × 500** JPEG and empty lyrics. Compare with SQLiteBrowser `track_details`.
+- [x] Maintain Ruff, formatting, mypy and core tests.
 
-## 6. Entrega reproducible y validación multiplataforma
+## 6. Reproducible delivery and cross-platform validation
 
-- [x] Mantener CPython 3.13.15 administrado por uv, uv dentro de `>=0.13.4,<0.14` y PySide6 6.11.2.
-  Versionar en `pyproject.toml` y `uv.lock` las dependencias nuevas necesarias.
-  Esta GUI utiliza inicialmente los módulos ya instalados.
-- [x] Ampliar `doctor.py` para verificar recursos reales y arranque de la ventana
-  del producto, conservando el diagnóstico aislado en un subproceso.
-- [x] Añadir tareas y depuración de VS Code para iniciar la GUI con la muestra,
-  usando rutas de workspace y argumentos separados.
-- [x] Construir wheel y distribución de fuentes con todos los recursos. Instalar
-  el wheel y sus dependencias desde el lock en un entorno limpio y verificar
-  la GUI desde otra carpeta, sin el checkout ni la música de ejemplo.
-- [x] Ampliar GitHub Actions a la GUI del producto en Windows x86-64, GNU/Linux
-  x86-64 y macOS Intel/Apple Silicon. Mantener núcleo sin Qt, GUI `offscreen` y
-  comprobaciones disponibles de escritorio nativo/X11.
-- [ ] Registrar revisión visual e interacción en escritorios reales, incluido
-  Wayland local. Separar resultados medidos y pendientes: `offscreen` no acredita
-  apariencia ni comportamiento del marco en un escritorio.
-  Completado el arranque real local Wayland/X11 y las capturas a 100/150/200 %;
-  pendiente la comparación visual manual en Windows y macOS. La matriz automática
-  de las cuatro plataformas pasa en la ejecución 37659500266 de GitHub Actions.
-- [x] Actualizar README, entorno y VALIDATION con comandos de arranque,
-  preparación de otro PC y resultados observados.
+- [x] Retain uv-managed CPython 3.13.15, uv `>=0.13.4,<0.14` and PySide6 6.11.2. Version any required dependencies in `pyproject.toml`/`uv.lock`. Initially use installed modules.
+- [x] Extend `doctor.py` to verify real resources and product-window startup, keeping subprocess isolation.
+- [x] Add VS Code tasks/debugging for the sample GUI with workspace paths and separate arguments.
+- [x] Build wheel/source distribution containing all resources. Install wheel and locked dependencies into a clean environment; verify the GUI from another directory without checkout or sample music.
+- [x] Extend GitHub Actions to the product GUI on Windows x86-64, GNU/Linux x86-64 and macOS Intel/Apple Silicon. Retain Qt-free core, `offscreen` GUI and available native/X11 checks.
+- [ ] Record visual/interaction review on real desktops, including local Wayland. Separate measured/pending results: `offscreen` proves neither desktop appearance nor frame behavior. Local Wayland/X11 startup and 100/150/200% screenshots are complete; manual Windows/macOS comparison remains pending. The four-platform automatic matrix passes GitHub Actions run 37659500266.
+- [x] Update README, environment and VALIDATION with launch commands, new-PC setup and observed results.
 
-La entrega de esta fase es el proyecto instalable y reproducible con Python/uv,
-con Qt, recursos y dependencias Python resueltos para cada plataforma. Los
-ejecutables autónomos con intérprete incluido se diseñarán en una entrega posterior.
+This phase delivers an installable, reproducible Python/uv project with Qt, assets and Python dependencies resolved for each platform. Standalone executables bundling the interpreter will be designed in a later delivery.
 
-La matriz inicial se mantiene: Windows 10 1809+/11 x86-64, macOS 13+ Intel/Apple
-Silicon y GNU/Linux x86-64 con glibc 2.34+ y backend gráfico compatible. uv
-reconstruye el entorno; no se traslada `.venv` entre PCs. Las bibliotecas gráficas
-nativas y la sesión de escritorio siguen siendo requisitos del sistema, con
-diagnóstico e instrucciones en [environment.md](environment.md). La compatibilidad
-se verifica contra esta matriz y sus requisitos.
+The initial matrix remains Windows 10 1809+/11 x86-64, macOS 13+ Intel/Apple Silicon and GNU/Linux x86-64 with glibc 2.34+ and a supported graphical backend. uv rebuilds the environment; `.venv` is not moved between PCs. Native graphical libraries and desktop sessions remain system requirements, with diagnostics/instructions in [environment.md](environment.md). Compatibility is verified against this matrix and its requirements.
 
-## Orden y cierre de la fase
+## Order and phase completion
 
-Implementar las etapas 1 y 2 para obtener una ventana que consulte la muestra;
-completar apariencia y carga en las etapas 3 y 4; cerrar con pruebas, empaquetado
-y comprobaciones multiplataforma en las etapas 5 y 6.
+Implement stages 1–2 for a sample-browsing window, complete appearance/loading in stages 3–4, then tests, packaging and cross-platform checks in stages 5–6.
 
-La fase termina cuando muestra todos los campos de la muestra, conserva en blanco
-los ausentes, funciona desde el paquete instalado y tiene comprobaciones funcionales
-en la matriz de CI. Los resultados visuales y de interacción real se registran
-por separado, sin dar por confirmada una plataforma antes de comprobarla.
+The phase ends when all sample fields display, absent values remain blank, the installed package works and functional checks cover the CI matrix. Real visual/interaction results are recorded separately; no platform is confirmed before verification.

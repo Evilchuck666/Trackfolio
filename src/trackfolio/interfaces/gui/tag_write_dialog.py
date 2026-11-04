@@ -140,7 +140,7 @@ class TagWriteDialog(QDialog):
         layout.addWidget(self.table, 3)
         self.output = QPlainTextEdit(self)
         self.output.setReadOnly(True)
-        self.output.setAccessibleName("Progreso de escritura de etiquetas")
+        self.output.setAccessibleName("Tag writing progress")
         layout.addWidget(self.output, 2)
         self.summary = QLabel(f"{len(songs)} songs to write.", self)
         self.summary.setWordWrap(True)
@@ -295,9 +295,7 @@ class TagWriteDialog(QDialog):
         popup.open()
 
     def _export_report(self) -> None:
-        dialog = QFileDialog(
-            self, "Save write report", str(Path.home() / "escritura-etiquetas.json")
-        )
+        dialog = QFileDialog(self, "Save write report", str(Path.home() / "tag-writing.json"))
         dialog.setOption(QFileDialog.Option.DontUseNativeDialog, True)
         dialog.setAcceptMode(QFileDialog.AcceptMode.AcceptSave)
         dialog.setDefaultSuffix("json")

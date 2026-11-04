@@ -1,200 +1,123 @@
-# Plan de artistas únicos por nombre en el catálogo
+# Plan for catalog-wide unique artist names
 
-Estado: implementado el 9 de octubre de 2026. Este documento conserva el diseño de la
-entrega; las comprobaciones ejecutadas se registran en [VALIDATION.md](../VALIDATION.md).
+Status: implemented October 9, 2026. This document preserves the delivery design; executed checks are recorded in [VALIDATION.md](../VALIDATION.md).
 
-## Regla acordada y resultado
+## Agreed rule and result
 
-Cada nombre de artista identifica una única entidad en todo el catálogo. Todas sus
-canciones y álbumes comparten el mismo `artist_id`, también cuando proceden de distintas
-carpetas o bibliotecas. Esta regla sustituye la reutilización limitada al álbum actual.
+Each artist name identifies one entity across the catalog. All its songs/albums share `artist_id`, including across folders/libraries. This replaces reuse limited to the current album.
 
-La comparación será por nombre exacto, igual que la reutilización actual de géneros.
-Se conserva el texto leído: esta entrega no añade conversión de mayúsculas, eliminación
-de espacios, búsqueda aproximada ni alias. `Accept` y `ACCEPT` seguirán siendo textos
-distintos. La identidad se determina por `name`; `external_id` permanece como dato opcional.
+Names are compared exactly, like current genre reuse. Preserve read text: no case conversion, whitespace removal, fuzzy search or aliases. `Accept` and `ACCEPT` remain distinct. Identity is determined by `name`; `external_id` stays optional.
 
-Para corregir una canción de **Abbath** a **Accept**, se resolverá el identificador único
-de Accept y se sustituirá el crédito de esa canción. La identidad y el nombre de Abbath
-se conservarán para sus otros créditos. La [edición de canciones en la GUI](edit-plan.md)
-ya permite realizar esa operación, como entrega posterior implementada el 9 de octubre.
+Correcting a song from **Abbath** to **Accept** resolves Accept's unique ID and replaces that song's credit. Abbath's identity/name remain for other credits. [GUI song editing](edit-plan.md), implemented as a subsequent delivery on October 9, already supports this.
 
-## Estado comprobado del catálogo de trabajo
+## Verified working-catalog state
 
-La revisión de `data/database.tfo` se hizo exclusivamente en modo de lectura:
+`data/database.tfo` was inspected read-only:
 
-| Dato | Antes de la migración | Tras `002`, verificado |
+| Data | Before migration | After `002`, verified |
 | --- | --- | --- |
-| Revisión | `001_initial` | `002_unique_artists` |
-| Artistas | 13 filas | 2 filas |
-| Abbath | 2 filas, IDs 1 y 2 | Una fila, ID 1 |
-| Accept | 11 filas, IDs 3 a 13 | Una fila, ID 3 |
-| Álbumes | 13 | 13, mismos IDs |
-| Canciones y archivos | 139 y 139 | 139 y 139, mismos IDs |
-| Créditos de pista y álbum | 139 y 0 | Mismo número, roles y posiciones |
+| Revision | `001_initial` | `002_unique_artists` |
+| Artists | 13 rows | 2 rows |
+| Abbath | 2 rows, IDs 1 and 2 | One row, ID 1 |
+| Accept | 11 rows, IDs 3–13 | One row, ID 3 |
+| Albums | 13 | 13, same IDs |
+| Songs and files | 139 and 139 | 139 and 139, same IDs |
+| Track and album credits | 139 and 0 | Same counts, roles and positions |
 
-Todos los `external_id` de esta muestra eran `NULL`. La tabla registra el punto de partida
-del diseño; la comprobación de la migración figura en `VALIDATION.md`. La migración no
-modifica archivos musicales.
+All sample `external_id` values were `NULL`. This table records the design baseline; migration verification is in `VALIDATION.md`. Migration does not modify music files.
 
-## 1. Esquema vigente y unicidad
+## 1. Current schema and uniqueness
 
-Añadir la revisión Alembic `002_unique_artists`, posterior a `001_initial`, y un índice
-único global `uq_artists_name` sobre `artists.name`. Este índice proporciona la garantía
-de unicidad sin reconstruir la tabla `artists` ni sus relaciones en SQLite.
+Add Alembic revision `002_unique_artists` after `001_initial` and global unique index `uq_artists_name` on `artists.name`. The index guarantees uniqueness without rebuilding `artists` or its SQLite relationships.
 
-Crear `src/trackfolio/infrastructure/schema.py` para el esquema vigente y su revisión.
-Puede derivar las tablas del snapshot inicial mediante copias de su metadata y añadir
-el índice nuevo. Los módulos de ejecución utilizarán este esquema vigente.
+Create `src/trackfolio/infrastructure/schema.py` for the current schema/revision. Derive tables by copying initial snapshot metadata and adding the index. Runtime modules use this current schema.
 
-Conservar intactos el snapshot `migrations/initial_schema.py`, la revisión
-`versions/001_initial.py` y `migrations/001_initial.sql`. Una instalación nueva ejecuta
-`001` y después `002`; un catálogo existente se actualiza mediante la revisión nueva.
+Keep `migrations/initial_schema.py`, `versions/001_initial.py` and `migrations/001_initial.sql` intact. New installations execute `001` then `002`; existing catalogs use the new revision.
 
-Adaptar la validación compartida del esquema para comprobar la revisión, estructura,
-vista e índice único esperado: global, sin condición `WHERE`, sobre `name` con igualdad
-exacta (`BINARY`). Un archivo marcado como `002` sin la garantía de unicidad
-se rechazará como incompatible. Revisiones futuras desconocidas y bases ajenas seguirán
-siendo rechazadas.
+Shared schema validation checks revision, structure, view and the expected unique index: global, without `WHERE`, on `name` with exact (`BINARY`) equality. A file marked `002` without this guarantee is incompatible. Unknown future revisions/unrelated databases remain rejected.
 
-## 2. Consolidación de los datos existentes
+## 2. Consolidating existing data
 
-La migración completa se ejecuta dentro de una transacción:
+Run the entire migration in one transaction:
 
-1. Agrupar las filas de `artists` por nombre exacto y elegir `MIN(id)` como ID canónico.
-2. Conservar el `external_id` del canónico. Si es `NULL`, tomar el primer valor no nulo
-   del grupo por orden de ID, cuando exista.
-3. Redirigir `track_artists.artist_id` y `album_artists.artist_id` de cada duplicado al
-   ID canónico correspondiente.
-4. Eliminar exclusivamente las filas de artista redundantes, incluidas las que no
-   tienen créditos. Conservar cualquier artista cuyo nombre sea único.
-5. Crear el índice único y registrar la revisión `002_unique_artists`.
+1. Group `artists` by exact name; choose `MIN(id)` as canonical ID.
+2. Keep canonical `external_id`; if `NULL`, use the group's first non-null value by ID, if any.
+3. Redirect duplicate `track_artists.artist_id` and `album_artists.artist_id` to the canonical ID.
+4. Delete only redundant artist rows, including uncredited ones. Retain uniquely named artists.
+5. Create the unique index and record `002_unique_artists`.
 
-Las claves primarias de los créditos son propietario, rol y posición. Cambiar el
-`artist_id` mantiene sus filas, roles y orden. No se borran créditos ni se renumeran sus
-posiciones durante esta migración. Tampoco se cambian álbumes, pistas, archivos,
-carátulas, géneros, líricas o `raw_tags`.
+Credit primary keys are owner, role and position. Changing `artist_id` preserves rows, roles and order. Do not delete credits or renumber positions, or change albums, tracks, files, artwork, genres, lyrics or `raw_tags`.
 
-Usar operaciones SQL reproducibles para que la revisión también pueda generar SQL
-offline. No basar el merge en filas recorridas por la GUI ni en la lectura de música.
-La elección del canónico será determinista a partir de los IDs existentes; repetir la
-actualización no cambiará ese resultado.
+Use reproducible SQL so the revision can also generate offline SQL. Do not merge through GUI row iteration or music reads. Canonical choice is deterministic from existing IDs; repeating the upgrade does not change it.
 
-Antes de actualizar un catálogo existente, crear una copia de respaldo consistente
-mediante la API de backup de SQLite, con nombre independiente y sin sobrescribir otra
-copia. Si falla el respaldo, no iniciar la migración. Si falla la consolidación o el
-índice, revertir toda la transacción, incluida la revisión de Alembic.
+Before upgrading an existing catalog, create a consistent SQLite API backup with an independent filename without overwriting another copy. Backup failure prevents migration. Consolidation/index failure rolls back the entire transaction, including Alembic revision.
 
-Repetir la actualización sobre `002` no crea otra copia ni altera datos. El downgrade
-retira el índice y permite el esquema anterior; recuperar las filas duplicadas originales
-requiere restaurar el respaldo, porque la consolidación no se deshace reconstruyendo IDs.
+Repeating on `002` neither creates a copy nor changes data. Downgrade removes the index and permits the old schema; restoring original duplicates requires the backup, since consolidation cannot be reversed by reconstructing IDs.
 
-## 3. Reutilización en el importador
+## 3. Importer reuse
 
-Simplificar [`_artist_id`](../src/trackfolio/infrastructure/catalog.py):
+Simplify [`_artist_id`](../src/trackfolio/infrastructure/catalog.py):
 
-- Recibir únicamente conexión y nombre.
-- Buscar en todo `artists` por igualdad exacta de nombre.
-- Reutilizar el ID existente o crear el artista si todavía no existe.
-- Quitar el contexto de álbum, biblioteca y directorio de esta búsqueda y sus llamadas.
-- Mantener la caché por archivo y la deduplicación exacta de créditos de `_unique_labels`.
-- Resolver inserciones mediante el índice único, evitando que escritores concurrentes
-  creen dos filas para el mismo nombre: insertar con `ON CONFLICT(name) DO NOTHING`
-  y recuperar el ID por nombre dentro de la transacción. Mantener las esperas acotadas.
+- Accept only connection and name.
+- Search all `artists` by exact name equality.
+- Reuse the ID or create the artist if absent.
+- Remove album, library and directory context from the search/calls.
+- Keep per-file caching and `_unique_labels` exact credit deduplication.
+- Use the unique index for concurrent insertions: `ON CONFLICT(name) DO NOTHING`, then retrieve ID by name within the transaction. Keep bounded waits.
 
-El artista de una pista y el artista de un álbum compartirán ID cuando tengan el mismo
-nombre; sus relaciones, roles y posiciones seguirán separados. El criterio de agrupación
-de álbumes se mantiene: dos ediciones o carpetas distintas pueden contener álbumes
-distintos y compartir artistas.
+Track and album artists share IDs when names match; relationships, roles and positions remain separate. Album grouping is unchanged: distinct editions/folders can hold different albums sharing artists.
 
-Reimportar conservará `file_id` y `track_id`. En la prueba **Abbath → Accept**, se
-reimportará la misma canción con el crédito corregido y se comprobará que reutiliza
-Accept, sin crear otro artista ni cambiar el nombre de Abbath o los créditos de otras
-canciones. La prueba mantendrá los metadatos de álbum y `album_artists` sin cambios para
-aislar la corrección del crédito de pista. Las etiquetas originales almacenadas se
-actualizarán según el archivo leído,
-con el comportamiento habitual de reimportación.
+Reimport preserves `file_id` and `track_id`. The **Abbath → Accept** test reimports the same song with corrected credit and verifies Accept reuse without creating another artist, renaming Abbath or changing other songs' credits. Keep album metadata/`album_artists` unchanged to isolate track-credit correction. Stored original tags update from the read file under normal reimport behavior.
 
-## 4. Compatibilidad y ejecución de la actualización
+## 4. Compatibility and upgrade execution
 
-Antes de esta entrega, `database.py`, `session.py` y `migrations/env.py` importaban la
-revisión y metadata de `001`, e `import_target.py` sólo migraba catálogos nuevos. Los
-puntos de entrada se adaptan conjuntamente:
+Before this delivery, `database.py`, `session.py` and `migrations/env.py` imported `001` revision/metadata; `import_target.py` migrated only new catalogs. Adapt entry points together:
 
-| Punto de entrada | Comportamiento previsto |
+| Entry point | Intended behavior |
 | --- | --- |
-| `open_catalog` | Admitir catálogos reconocidos `001` y `002` en modo de lectura. Abrir no modifica el archivo ni lo migra. |
-| `SqliteImportTargetFactory.validate` | Validar ambos esquemas sin escribir, crear copias o migrar. |
-| `SqliteImportTargetFactory.open(update)` | Tras cerrar las consultas GUI, respaldar y migrar `001` antes de escribir; comprobar después el esquema vigente. |
-| `open(create)` / `migrate_database` | Crear hasta la revisión vigente usando Alembic. Aplicar la actualización cuando la base existente sea reconocida. |
-| Script de importación individual | Mantener sus argumentos; su llamada a `migrate_database` utilizará la misma actualización. |
-| Actualización sin importar música | Ampliar `python -m trackfolio.infrastructure.database` con `--upgrade <catálogo>` para respaldar y migrar explícitamente. |
+| `open_catalog` | Read recognized `001`/`002` catalogs without modifying/migrating them |
+| `SqliteImportTargetFactory.validate` | Validate both schemas without writes, backups or migration |
+| `SqliteImportTargetFactory.open(update)` | After GUI queries close, back up/migrate `001` before writing; then check current schema |
+| `open(create)` / `migrate_database` | Create through current Alembic revision; upgrade recognized existing databases |
+| Individual import script | Keep arguments; `migrate_database` uses the same upgrade |
+| Upgrade without importing music | Extend `python -m trackfolio.infrastructure.database` with `--upgrade <catalog>` for explicit backup/migration |
 
-La escritura exige `002` y su índice único. Evitar caminos alternativos que sigan
-guardando artistas sobre el esquema viejo. Compartir validación, respaldo y migración
-entre los puntos de entrada; conservar el modo `rw` al actualizar un archivo existente
-para que una desaparición del destino no cree un catálogo vacío de reemplazo.
+Writing requires `002` and its unique index. Avoid alternate paths writing artists under the old schema. Share validation, backup and migration across entry points; preserve `rw` when updating existing files so disappearance cannot create an empty replacement.
 
-La importación mantendrá la apertura diferida del escritor: si no hay audio válido o se
-cancela antes de abrirlo, el catálogo viejo permanece en `001`. El comando explícito
-permite consolidarlo sin releer los 139 archivos de música. Al terminar una importación
-se reabre el lector mediante el ciclo de vida existente.
+Import retains lazy writer opening: no valid audio or cancellation before opening leaves old catalogs at `001`. The explicit command consolidates without rereading 139 music files. Import completion reopens the reader through the existing lifecycle.
 
-Conservar `initial_schema_sql()` y su exportación histórica a `001`. Añadir la exportación
-del esquema completo vigente a un artefacto separado, por ejemplo
-`migrations/002_current.sql`, usando la misma cadena de Alembic. Documentar que ese SQL
-completo crea una base nueva; un catálogo poblado se actualiza con la migración en línea.
+Keep `initial_schema_sql()` and historical `001` export. Add a separate full-current-schema export, such as `migrations/002_current.sql`, through the same Alembic chain. Document that full SQL creates a new database; populated catalogs use online migration.
 
-## 5. Pruebas y criterios de aceptación
+## 5. Tests and acceptance criteria
 
-- El mismo nombre comparte ID entre álbumes, directorios, raíces/bibliotecas y canciones
-  sin álbum; un nombre nuevo crea una única fila.
-- Créditos de pista y de álbum comparten identidad cuando corresponde, conservando
-  roles, artistas múltiples y orden. Los nombres distintos conservan entidades distintas.
-- El test contextual actual de catálogo pasa a esperar **2 álbumes y 1 artista**, con
-  los mismos archivos y todas las etiquetas originales.
-- Reimportación repetida conserva IDs y no aumenta artistas; corrección de una canción
-  **Abbath → Accept** reutiliza Accept y deja los demás créditos intactos.
-- El índice rechaza una segunda fila con el mismo nombre, incluso en una inserción
-  directa; el comportamiento entre dos escritores respeta la unicidad.
-- Una base temporal poblada en `001` se consolida a `002`: `MIN(id)` se conserva, ambas
-  tablas de créditos mantienen filas/roles/posiciones y no se altera `raw_tags` ni BLOBs.
-- Probar grupos con `external_id` canónico presente o ausente y artistas sin referencias.
-- Comprobar `PRAGMA foreign_key_check` sin filas e `integrity_check = ok` después del merge.
-- Fallos de respaldo o fallos inyectados tras redirigir créditos y antes de crear el índice
-  dejan el catálogo anterior utilizable, con sus datos y revisión originales.
-- Repetir la migración es idempotente; el respaldo conserva el catálogo anterior y el
-  downgrade retira sólo la garantía nueva.
-- Lectura de `001`/`002` conserva bytes; formulario de importación no migra; apertura del
-  escritor actualiza `001`; revisión desconocida o `002` sin índice se rechazan.
-- Separar la prueba del SQL histórico de `001` de la prueba del esquema vigente: hoy
-  `test_export_matches_migrated_schema_and_committed_artifact` compara el inicial con `head`.
-- Wheel instalado fuera del checkout contiene esquema vigente y revisión `002`, y genera,
-  migra e importa correctamente con el núcleo sin Qt y con la GUI.
+- Same names share IDs across albums, directories, roots/libraries and albumless songs; new names create one row.
+- Track/album credits share identity where applicable while preserving roles, multiple artists and order. Different names retain separate entities.
+- Existing contextual catalog test expects **2 albums and 1 artist**, with unchanged files/original tags.
+- Repeated import preserves IDs/artist count; **Abbath → Accept** reuses Accept and preserves other credits.
+- The index rejects a second exact name even through direct insertion; two writers respect uniqueness.
+- Populated temporary `001` consolidates to `002`: retain `MIN(id)`, both credit tables' rows/roles/positions, `raw_tags` and BLOBs.
+- Cover present/absent canonical `external_id` and unreferenced artists.
+- `PRAGMA foreign_key_check` returns no rows; `integrity_check = ok` after merge.
+- Backup failure or injected failures after credit redirection/before index creation leave old data/revision usable.
+- Migration is idempotent; backup retains the old catalog and downgrade removes only the new guarantee.
+- Reading `001`/`002` preserves bytes; import forms do not migrate; writer opening upgrades `001`; unknown revisions or `002` without index are rejected.
+- Separate historical `001` SQL tests from current-schema tests: `test_export_matches_migrated_schema_and_committed_artifact` currently compares initial schema to `head`.
+- Installed wheel outside checkout includes current schema/revision `002` and correctly generates, migrates and imports with Qt-free core and GUI.
 
-Modificar `tests/test_catalog.py`, ampliar pruebas de base, sesiones, destinos e integración
-GUI y añadir `tests/test_artist_migration.py`. Las comprobaciones automáticas usan bases
-temporales. Antes de actualizar el catálogo de trabajo, probar la consolidación en una
-copia de éste y verificar los resultados de la tabla inicial de este plan.
+Modify `tests/test_catalog.py`, expand database/session/destination/GUI integration tests and add `tests/test_artist_migration.py`. Automated checks use temporary databases. Before upgrading the working catalog, consolidate a copy and verify the baseline table above.
 
-## 6. Orden de implementación y entrega
+## 6. Implementation order and delivery
 
-| Fase | Archivos y trabajo | Salida verificable |
+| Phase | Files/work | Verifiable output |
 | --- | --- | --- |
-| 1. Esquema vigente | Nuevo `infrastructure/schema.py`, validación compartida y separación del snapshot `001`. | Esquemas conocidos reconocidos y exportación histórica estable. |
-| 2. Migración | Nueva `versions/002_unique_artists.py`, respaldo y actualización atómica. | Copia poblada consolidada, IDs/créditos preservados y rollback probado. |
-| 3. Importador | `infrastructure/catalog.py` y pruebas de reutilización global. | Importar varios discos genera una fila por nombre; prueba Abbath → Accept correcta. |
-| 4. Puntos de entrada | `database.py`, `session.py`, `import_target.py`, `migrations/env.py` y comando de actualización. | Lectura compatible; toda escritura utiliza `002`; actualización sin música disponible. |
-| 5. Entrega | SQL vigente, workflow, documentación, paquete instalado y validación. | Pruebas, Ruff, formato, mypy y diagnóstico pasan; resultados registrados. |
+| 1. Current schema | New `infrastructure/schema.py`, shared validation, separate `001` snapshot | Known schemas recognized; historical export stable |
+| 2. Migration | New `versions/002_unique_artists.py`, backup and atomic upgrade | Populated copy consolidated; IDs/credits preserved; rollback tested |
+| 3. Importer | `infrastructure/catalog.py`, global reuse tests | Multiple discs produce one row per name; Abbath → Accept passes |
+| 4. Entry points | `database.py`, `session.py`, `import_target.py`, `migrations/env.py`, upgrade command | Compatible reads; all writes use `002`; upgrade without music |
+| 5. Delivery | Current SQL, workflow, docs, installed package, validation | Tests, Ruff, formatting, mypy and diagnostics pass; results recorded |
 
-Actualizar `.github/workflows/release.yml`: empaquetar esquema vigente y revisión `002` y
-reemplazar la expectativa literal de `001_initial` en la creación del wheel por la revisión
-vigente. Mantener la matriz y el entorno bloqueado actuales, sin dependencias nuevas.
+Update `.github/workflows/release.yml` to package current schema/revision `002` and replace literal `001_initial` expectations for wheel-created databases. Retain the current matrix/locked environment without new dependencies.
 
-Al implementar, actualizar `docs/database.md` para describir la unicidad y la actualización
-de catálogos; `docs/architecture.md` para separar snapshot y esquema vigente; README con
-el comando de migración; `docs/import-plan.md` y `VALIDATION.md` con el estado real.
+Update `docs/database.md` for uniqueness/upgrades, `docs/architecture.md` for snapshot/current-schema separation, README for the migration command, and `docs/import-plan.md`/`VALIDATION.md` for actual status.
 
-La entrega termina cuando una importación nueva cumple la unicidad y un catálogo existente
-se puede consolidar conservando sus datos relacionados. Registrar por separado las
-comprobaciones locales, la ejecución de CI y cualquier revisión visual pendiente.
+Delivery ends when new imports enforce uniqueness and existing catalogs consolidate while preserving related data. Record local checks, CI runs and pending visual reviews separately.

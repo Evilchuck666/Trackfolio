@@ -1,48 +1,48 @@
-# Plan de preparación de Trackfolio
+# Trackfolio setup plan
 
-Fecha: 6 de octubre de 2026. Este documento prepara el entorno antes de desarrollar la aplicación.
+Date: October 6, 2026. This document prepares the environment before application development.
 
-> Este es el plan original. Su infraestructura ya se ha implementado; los comandos actuales están en README.md y los resultados medidos en VALIDATION.md. La situación de la sección 1 corresponde a la inspección previa.
+> This is the original plan. Its infrastructure has been implemented; current commands are in README.md and measured results in VALIDATION.md. Section 1 describes the initial inspection.
 
-El resultado de esta fase será un repositorio que se pueda clonar en otro PC, abrir en VS Code y preparar con los mismos comandos de `uv`. Todavía no se implementarán el catálogo musical, el editor de etiquetas ni las interfaces CLI/TUI/web.
+This phase will deliver a repository that can be cloned onto another PC, opened in VS Code and prepared with the same `uv` commands. The music catalog, tag editor and CLI/TUI/web interfaces will not be implemented yet.
 
-## 1. Situación comprobada
+## 1. Verified situation
 
-| Elemento | Estado en este PC |
+| Item | State on this PC |
 | --- | --- |
-| Directorio | Existe `/home/evilchuck/projects/Trackfolio` |
-| Workspace | Existe `Trackfolio.code-workspace`, con una carpeta relativa `.` |
-| Git | Instalado: 2.55.0; el directorio todavía no es un repositorio |
-| uv | Instalado: 0.12.10 |
-| Python del sistema | CPython 3.14.7 |
-| SQLite del sistema | 3.53.4; consulta en memoria comprobada |
-| VS Code | Instalado: 1.140.0; extensiones Python, Pylance y depuración disponibles |
-| GitHub CLI | Instalado y autenticado como `Evilchuck666` mediante HTTPS |
-| Identidad de Git | Nombre y correo configurados; se reutilizarán |
-| Repositorio remoto | La consulta de `Evilchuck666/Trackfolio` no encontró un repositorio accesible |
+| Directory | `/home/evilchuck/projects/Trackfolio` exists |
+| Workspace | `Trackfolio.code-workspace` exists, with a relative `.` folder |
+| Git | Installed: 2.55.0; the directory is not yet a repository |
+| uv | Installed: 0.12.10 |
+| System Python | CPython 3.14.7 |
+| System SQLite | 3.53.4; in-memory query verified |
+| VS Code | Installed: 1.140.0; Python, Pylance and debugging extensions available |
+| GitHub CLI | Installed and authenticated as `Evilchuck666` over HTTPS |
+| Git identity | Name and email configured; they will be reused |
+| Remote repository | The query for `Evilchuck666/Trackfolio` found no accessible repository |
 
-No se han instalado dependencias, inicializado Git ni publicado archivos. La consulta de SQLite verifica el Python del sistema; habrá que repetirla con el intérprete del proyecto. Tampoco se ha comprobado aún que Qt pueda abrir una ventana en este PC.
+No dependencies have been installed, Git initialized or files published. The SQLite query checks the system Python; it must be repeated with the project interpreter. Qt's ability to open a window on this PC has not yet been checked either.
 
-## 2. Contrato de compatibilidad
+## 2. Compatibility contract
 
-La promesa será reproducibilidad en Windows, macOS y GNU/Linux compatibles. Tener cualquier versión de Python 3 y `uv` no basta para ejecutar cualquier versión de Qt.
+The promise is reproducibility on supported Windows, macOS and GNU/Linux systems. Having any Python 3 and `uv` version is not enough to run any Qt version.
 
-Base propuesta:
+Proposed baseline:
 
-- CPython **3.13.15**, disponible para descarga según el `uv` instalado. Se fijará el parche en `.python-version`, usando Python administrado por `uv` y sin sustituir el Python del sistema. Su instalación se verificará en cada plataforma objetivo.
-- `requires-python = ">=3.13,<3.14"` durante la primera etapa. El soporte de otras versiones se ampliará cuando pase la matriz de comprobaciones.
-- `uv` **0.12.10**, la versión comprobada en este PC. Se exigirá mediante `tool.uv.required-version`; los cambios de esta herramienta también se registrarán en Git.
-- PySide6 **6.11.2** como dependencia opcional de la GUI. SQLAlchemy, Mutagen y las herramientas de desarrollo tendrán versiones resueltas y registradas en `uv.lock` durante la preparación.
+- CPython **3.13.15**, available for download according to the installed `uv`. Pin the patch in `.python-version`, use `uv`-managed Python and do not replace system Python. Verify installation on each target platform.
+- `requires-python = ">=3.13,<3.14"` during the first stage. Expand support to other versions after they pass the verification matrix.
+- `uv` **0.12.10**, the version checked on this PC. Enforce it through `tool.uv.required-version`; record tool changes in Git too.
+- PySide6 **6.11.2** as an optional GUI dependency. SQLAlchemy, Mutagen and development tools will have versions resolved and recorded in `uv.lock` during setup.
 
-La primera matriz objetivo de GUI será Windows 10 1809+/11 x86-64, macOS 13+ Intel y Apple Silicon, y GNU/Linux x86-64 con glibc 2.34+ y escritorio X11 o Wayland compatible. La publicación de wheels no equivale a una prueba de funcionamiento: estas combinaciones tendrán que validarse. Windows ARM64 y Linux ARM64 se incorporarán después de comprobar sus dependencias y disponer de pruebas adecuadas. Alpine/musl y sistemas antiguos quedan fuera de esta primera matriz.
+The initial GUI target matrix is Windows 10 1809+/11 x86-64, macOS 13+ Intel and Apple Silicon, and GNU/Linux x86-64 with glibc 2.34+ and a compatible X11 or Wayland desktop. Published wheels do not prove functionality: these combinations must be validated. Windows ARM64 and Linux ARM64 will follow after dependency checks and suitable tests are available. Alpine/musl and older systems are outside this initial matrix.
 
-Los mínimos provienen de las [plataformas de Qt 6.11](https://doc.qt.io/qtforpython-6/overviews/qtdoc-supported-platforms.html) y de los [wheels de PySide6 6.11.2](https://pypi.org/project/PySide6/6.11.2/). Los binarios para Linux ARM64 de esta versión requieren glibc 2.39+.
+Minimum requirements come from [Qt 6.11 platforms](https://doc.qt.io/qtforpython-6/overviews/qtdoc-supported-platforms.html) and [PySide6 6.11.2 wheels](https://pypi.org/project/PySide6/6.11.2/). Linux ARM64 binaries for this version require glibc 2.39+.
 
-## 3. Directorio y archivos del proyecto
+## 3. Project directory and files
 
-Se conservarán el directorio y el workspace existentes. En otros equipos, la ubicación equivalente será `~/projects/Trackfolio`, o `%USERPROFILE%\projects\Trackfolio` en Windows. El proyecto podrá funcionar desde otra ubicación: ninguna ruta personal formará parte de su configuración compartida.
+Retain the existing directory and workspace. On other machines, the equivalent location is `~/projects/Trackfolio`, or `%USERPROFILE%\projects\Trackfolio` on Windows. The project must also work elsewhere: no personal paths belong in shared configuration.
 
-Estructura prevista; los módulos de aplicación se reservarán sin implementar todavía funcionalidades:
+Planned structure; reserve application modules without implementing features yet:
 
 ```text
 Trackfolio/
@@ -78,70 +78,70 @@ Trackfolio/
 └── tests/
 ```
 
-Se usará un paquete instalable con estructura `src`, para que las importaciones funcionen igual fuera del directorio raíz. El backend de construcción tendrá una versión exacta declarada en `[build-system]`. Se documentará la arquitectura prevista; se añadirán pruebas funcionales cuando haya comportamiento que probar.
+Use an installable package with a `src` layout so imports behave identically outside the repository root. Declare an exact build backend version in `[build-system]`. Document the planned architecture; add functional tests when there is behavior to test.
 
-`.gitignore` excluirá `.venv`, cachés, resultados de compilación, archivos de configuración local, bases de datos locales y música del usuario. Los datos de prueba deliberadamente incluidos se distinguirán de esos datos locales. `.gitattributes` y `.editorconfig` definirán UTF-8 y LF para código y configuración, con excepciones para archivos que requieran otro tratamiento.
+`.gitignore` excludes `.venv`, caches, build outputs, local configuration, local databases and user music. Deliberately included test data must be distinguishable from local data. `.gitattributes` and `.editorconfig` define UTF-8 and LF for code and configuration, with exceptions for files requiring other treatment.
 
-## 4. Dependencias y aislamiento
+## 4. Dependencies and isolation
 
-| Ámbito | Dependencias previstas | Motivo |
+| Area | Planned dependencies | Reason |
 | --- | --- | --- |
-| Persistencia | SQLAlchemy 2.x y Alembic | Acceso a SQLite y evolución del esquema |
-| Metadatos musicales | Mutagen | Lectura/escritura de FLAC y MP3 |
-| Directorios de usuario | platformdirs | Ubicación portable de configuración, caché y BD |
-| Extra `gui` | PySide6 6.11.2 | Qt 6 sin obligar al núcleo a instalar un escritorio |
-| Grupo `dev` | pytest, Ruff y mypy | Pruebas, formato, análisis y tipos |
+| Persistence | SQLAlchemy 2.x and Alembic | SQLite access and schema evolution |
+| Music metadata | Mutagen | FLAC and MP3 reading/writing |
+| User directories | platformdirs | Portable configuration, cache and database locations |
+| `gui` extra | PySide6 6.11.2 | Qt 6 without forcing the core to install desktop dependencies |
+| `dev` group | pytest, Ruff and mypy | Tests, formatting, analysis and types |
 
-Mutagen declara soporte para [FLAC y MP3](https://mutagen.readthedocs.io/en/latest/). La edición de metadatos no exige instalar FFmpeg; reproducción o conversión serían funcionalidades posteriores con sus propios requisitos.
+Mutagen declares support for [FLAC and MP3](https://mutagen.readthedocs.io/en/latest/). Metadata editing does not require FFmpeg; playback or conversion would be later features with their own requirements.
 
-SQLite se utilizará mediante `sqlite3`, incluido en las distribuciones habituales de CPython. El diagnóstico verificará su disponibilidad y funcionamiento; no se exigirá instalar un servidor de base de datos ni el ejecutable `sqlite3`.
+Use SQLite through `sqlite3`, included in standard CPython distributions. Diagnostics verify its availability and operation; no database server or `sqlite3` executable is required.
 
-Se versionarán `pyproject.toml`, `.python-version` y `uv.lock`. El lock contendrá versiones concretas y hashes de dependencias, incluyendo variantes de plataforma. Las dependencias de construcción se fijarán también en su configuración. Cada PC generará su propia `.venv`; nunca se trasladará como parte del proyecto. Véanse [estructura de proyectos uv](https://docs.astral.sh/uv/concepts/projects/layout/) y [portabilidad de los entornos Python](https://docs.python.org/3/library/venv.html).
+Track `pyproject.toml`, `.python-version` and `uv.lock` in Git. The lock contains concrete dependency versions and hashes, including platform variants. Pin build dependencies in their configuration too. Each PC generates its own `.venv`; never move it with the project. See [uv project layout](https://docs.astral.sh/uv/concepts/projects/layout/) and [Python environment portability](https://docs.python.org/3/library/venv.html).
 
-Se configurará `python-preference = "only-managed"` y se usarán `required-environments` para las arquitecturas comprometidas. Esta última opción ayuda a detectar ausencia de wheels en paquetes sin distribución de fuentes; las comprobaciones reales de instalación seguirán siendo necesarias. [Configuración de uv](https://docs.astral.sh/uv/reference/settings/).
+Configure `python-preference = "only-managed"` and use `required-environments` for the supported architectures. The latter helps detect missing wheels for packages without source distributions; actual installation checks remain necessary. [uv settings](https://docs.astral.sh/uv/reference/settings/).
 
-Durante la preparación inicial se generará `uv.lock`. Después, la instalación habitual usará `uv sync --locked`: un desacuerdo entre el manifiesto y el lock provocará un error. Las actualizaciones se harán explícitamente y se revisarán junto con ambos archivos. `--frozen` omite la comprobación de coherencia y no será el comando habitual de incorporación al proyecto. [Sincronización de uv](https://docs.astral.sh/uv/concepts/projects/sync/).
+Generate `uv.lock` during initial setup. Subsequent installation uses `uv sync --locked`: a manifest/lock mismatch causes an error. Updates are explicit and reviewed with both files. `--frozen` skips consistency checks and is not the normal onboarding command. [uv synchronization](https://docs.astral.sh/uv/concepts/projects/sync/).
 
-## 5. Instalación de requisitos ausentes
+## 5. Installing missing prerequisites
 
-En este PC ya están presentes las herramientas iniciales. Falta crear el entorno del proyecto, instalar su Python administrado y verificar sus dependencias.
+The initial tools are already present on this PC. The project environment, managed Python installation and dependency checks are still needed.
 
-Para otro PC:
+On another PC:
 
-1. Instalar Git desde las [instrucciones oficiales para cada sistema](https://git-scm.com/install/). Comprobar `git --version`.
-2. Instalar la versión fijada de `uv` con uno de los comandos siguientes. Reabrir la terminal si fuera necesario y comprobar `uv --version`.
-3. Clonar el repositorio o copiar sus fuentes y ejecutar `uv python install` desde la raíz. El comando leerá `.python-version`; no hace falta que el Python global coincida con el del proyecto. [Instalación de Python con uv](https://docs.astral.sh/uv/guides/install-python/).
-4. Para trabajar en VS Code, instalarlo desde su [descarga oficial](https://code.visualstudio.com/download) y aceptar las extensiones recomendadas del workspace. El editor será opcional para ejecutar Trackfolio.
-5. Para gestionar GitHub desde terminal, instalar opcionalmente [GitHub CLI](https://github.com/cli/cli#installation) y ejecutar `gh auth login`. GitHub CLI no será una dependencia de la aplicación.
+1. Install Git using the [official instructions for each system](https://git-scm.com/install/). Check `git --version`.
+2. Install the pinned `uv` version with one of the commands below. Reopen the terminal if needed and check `uv --version`.
+3. Clone the repository or copy its sources and run `uv python install` from the root. It reads `.python-version`; global Python need not match project Python. [Installing Python with uv](https://docs.astral.sh/uv/guides/install-python/).
+4. For VS Code development, install it from the [official download](https://code.visualstudio.com/download) and accept the workspace's recommended extensions. The editor is optional for running Trackfolio.
+5. To manage GitHub from the terminal, optionally install [GitHub CLI](https://github.com/cli/cli#installation) and run `gh auth login`. GitHub CLI is not an application dependency.
 
-Linux/macOS, instalación de `uv`:
+Linux/macOS `uv` installation:
 
 ```sh
 curl -LsSf https://astral.sh/uv/0.12.10/install.sh | sh
 ```
 
-Windows, instalación de `uv` desde PowerShell:
+Windows `uv` installation from PowerShell:
 
 ```powershell
 powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/0.12.10/install.ps1 | iex"
 ```
 
-Son los mecanismos oficiales para [instalar una versión específica de uv](https://docs.astral.sh/uv/getting-started/installation/). No se instalarán paquetes del proyecto globalmente con `pip`.
+These are the official mechanisms for [installing a specific uv version](https://docs.astral.sh/uv/getting-started/installation/). Do not install project packages globally with `pip`.
 
-Los wheels de PySide6 incluyen Qt, por lo que no se exigirá instalar el SDK Qt completo. [Instalación de Qt for Python](https://doc.qt.io/qtforpython-6/gettingstarted.html). En GNU/Linux pueden faltar bibliotecas gráficas del sistema: `uv` no instala esos paquetes. El diagnóstico identificará el fallo y `docs/environment.md` relacionará la biblioteca ausente con su paquete y comando de instalación por distribución, siguiendo los [requisitos de Qt 6.11 para Linux](https://doc.qt.io/qt-6.11/linux-requirements.html).
+PySide6 wheels include Qt, so the full Qt SDK is not required. [Installing Qt for Python](https://doc.qt.io/qtforpython-6/gettingstarted.html). GNU/Linux may lack system graphics libraries: `uv` does not install those packages. Diagnostics identify failures and `docs/environment.md` maps missing libraries to packages and installation commands by distribution, following [Qt 6.11 Linux requirements](https://doc.qt.io/qt-6.11/linux-requirements.html).
 
-Ejemplo concreto: si falta `libxcb-cursor.so.0`, Ubuntu/Debian necesitan `sudo apt install libxcb-cursor0`; Arch y derivados, `sudo pacman -S --needed xcb-util-cursor`. Se documentarán también las dependencias del backend elegido que aparezcan en las pruebas. Estos comandos resuelven esa biblioteca concreta; la GUI se volverá a comprobar después. Referencias: [paquete Ubuntu](https://packages.ubuntu.com/noble/libxcb-cursor0), [archivos del paquete Arch](https://archlinux.org/packages/extra/x86_64/xcb-util-cursor/files/).
+For example, a missing `libxcb-cursor.so.0` requires `sudo apt install libxcb-cursor0` on Ubuntu/Debian or `sudo pacman -S --needed xcb-util-cursor` on Arch and derivatives. Document any additional backend dependencies found during testing. These commands address that specific library; recheck the GUI afterward. References: [Ubuntu package](https://packages.ubuntu.com/noble/libxcb-cursor0), [Arch package files](https://archlinux.org/packages/extra/x86_64/xcb-util-cursor/files/).
 
-## 6. Preparación y diagnóstico antes de desarrollar
+## 6. Setup and diagnostics before development
 
-Se crearán dos herramientas portables, escritas en Python:
+Create two portable Python tools:
 
-- `bootstrap.py`: comprueba `uv` y su versión, instala el Python fijado y sincroniza desde el lock. Admitirá preparación del núcleo o de la GUI. Será repetible y propagará los errores. Las llamadas externas usarán argumentos estructurados, sin depender de Bash, Make ni `shell=True`.
-- `doctor.py`: comprueba intérprete, SO, arquitectura, versiones instaladas, imports, operación SQLite temporal, recursos y requisitos específicos de GUI. Mostrará errores accionables y devolverá un código distinto de cero cuando falte un requisito obligatorio.
+- `bootstrap.py`: checks `uv` and its version, installs the pinned Python and syncs from the lock. Supports core or GUI setup, is repeatable and propagates errors. External calls use structured arguments without Bash, Make or `shell=True` dependencies.
+- `doctor.py`: checks interpreter, OS, architecture, installed versions, imports, a temporary SQLite operation, resources and GUI-specific requirements. Shows actionable errors and returns nonzero when a mandatory requirement is missing.
 
-El diagnóstico de Qt se ejecutará en un subproceso, porque un fallo del plugin gráfico puede abortar el proceso. Distinguirá una prueba sin pantalla (`offscreen`) de una prueba en el escritorio real; la primera no demuestra que X11, Wayland o el backend nativo funcionen.
+Run Qt diagnostics in a subprocess because graphics plugin failures can abort the process. Distinguish headless (`offscreen`) checks from actual desktop checks; the former does not prove that X11, Wayland or native backends work.
 
-Una vez creados el manifiesto, el lock y los scripts, los comandos comunes a las tres plataformas serán:
+Once the manifest, lock and scripts exist, shared commands for all three platforms are:
 
 ```sh
 uv python install
@@ -150,7 +150,7 @@ uv run --locked --extra gui python scripts/doctor.py --gui
 code Trackfolio.code-workspace
 ```
 
-Para desarrollar el núcleo sin Qt:
+To develop the core without Qt:
 
 ```sh
 uv python install
@@ -158,11 +158,11 @@ uv sync --locked --group dev
 uv run --locked python scripts/doctor.py --core
 ```
 
-Estos comandos son parte del entorno previsto y todavía no se pueden ejecutar contra este directorio: los archivos necesarios se crearán al realizar el plan. Se mantendrá explícito el extra `gui` en las tareas que lo necesiten. Los extras son opcionales y el grupo `dev` contiene herramientas de desarrollo, según la [gestión de dependencias de uv](https://docs.astral.sh/uv/concepts/projects/dependencies/).
+These commands describe the planned environment and cannot yet run against this directory: required files will be created when executing the plan. Keep the `gui` extra explicit in tasks that need it. Extras are optional and `dev` contains development tools, following [uv dependency management](https://docs.astral.sh/uv/concepts/projects/dependencies/).
 
-## 7. Git y preparación para GitHub
+## 7. Git and GitHub preparation
 
-Se inicializará Git después de generar los archivos de infraestructura:
+Initialize Git after generating infrastructure files:
 
 ```sh
 git init -b main
@@ -172,59 +172,59 @@ git config --get user.name
 git config --get user.email
 ```
 
-Se conservará la identidad ya configurada. En un equipo donde falte, se configurarán el nombre y el correo que el desarrollador use para sus commits, mediante `git config --local user.name` y `git config --local user.email`. Estas opciones no se incluirán en los archivos compartidos. [Configuración de Git](https://git-scm.com/book/en/v2/Getting-Started-First-Time-Git-Setup).
+Retain the configured identity. On a machine without one, configure the developer's commit name and email with `git config --local user.name` and `git config --local user.email`. Do not put these settings in shared files. [Git configuration](https://git-scm.com/book/en/v2/Getting-Started-First-Time-Git-Setup).
 
-Se revisarán los archivos a incluir y se hará un primer commit exclusivamente con el entorno y la documentación. Para crear posteriormente el remoto, la propuesta inicial es un repositorio privado:
+Review files for inclusion and make an initial commit containing only the environment and documentation. The initial proposal for subsequently creating the remote is a private repository:
 
 ```sh
 gh repo create Evilchuck666/Trackfolio --private --source=. --remote=origin
 git push -u origin main
 ```
 
-La visibilidad es una propuesta del plan; se podrá elegir pública al ejecutarlo. Antes de crear el remoto se volverá a comprobar si ya existe. Si existe, se configurará su URL como `origin` y se revisará su historial antes de subir commits. Las credenciales se gestionarán mediante GitHub CLI o el gestor de credenciales de Git; no se escribirán en el proyecto. [Creación de repositorios con GitHub CLI](https://cli.github.com/manual/gh_repo_create).
+Visibility is a proposal; public visibility may be chosen during execution. Before creating the remote, check again whether it exists. If it does, configure its URL as `origin` and inspect its history before uploading commits. Manage credentials through GitHub CLI or Git's credential manager; never write them into the project. [Creating repositories with GitHub CLI](https://cli.github.com/manual/gh_repo_create).
 
-## 8. Workspace de VS Code
+## 8. VS Code workspace
 
-Se ampliará el workspace existente, conservando `folders: [{"path": "."}]`:
+Extend the existing workspace, retaining `folders: [{"path": "."}]`:
 
-- Detectar el entorno local `.venv`, con selección explícita desde «Python: Select Interpreter» si hay una preferencia local distinta. No fijar `/home/...`, `.venv/bin/python` ni rutas que fallen en Windows.
-- Recomendar Python, Pylance, Python Debugger y Ruff. Formato y análisis se configurarán en `pyproject.toml`, compartidos por terminal y editor.
-- Añadir tareas de tipo `process` con ejecutable `uv` y argumentos separados para preparar, diagnosticar, comprobar formato y ejecutar pruebas cuando existan. El directorio de trabajo será `${workspaceFolder}`.
-- Posponer la configuración de lanzamiento de la aplicación hasta que exista su punto de entrada.
+- Discover local `.venv`, with explicit selection through “Python: Select Interpreter” if a different local preference exists. Do not pin `/home/...`, `.venv/bin/python` or paths that fail on Windows.
+- Recommend Python, Pylance, Python Debugger and Ruff. Configure formatting and analysis in `pyproject.toml`, shared by terminal and editor.
+- Add `process` tasks with executable `uv` and separate arguments for setup, diagnostics, formatting checks and tests when available. Set working directory to `${workspaceFolder}`.
+- Defer application launch configuration until its entry point exists.
 
-El editor admite descubrimiento de `.venv`; las preferencias explícitas del usuario pueden prevalecer sobre los valores por defecto. [Entornos Python en VS Code](https://code.visualstudio.com/docs/python/environments).
+The editor supports `.venv` discovery; explicit user preferences can override defaults. [Python environments in VS Code](https://code.visualstudio.com/docs/python/environments).
 
-## 9. Arquitectura que debe preservar el entorno
+## 9. Architecture the environment must preserve
 
-La dependencia será: interfaces → casos de uso → dominio. Los adaptadores de infraestructura implementarán los contratos definidos hacia el interior; el punto de arranque conectará las piezas.
+Dependency direction: interfaces → use cases → domain. Infrastructure adapters implement inward-defined contracts; the startup entry point wires the components.
 
-`domain` contendrá entidades y reglas; `application`, casos de uso y contratos; `infrastructure`, persistencia SQLAlchemy y acceso a metadatos/archivos; `interfaces/gui`, presentación y traducción de eventos. El dominio y los casos de uso no importarán Qt ni expondrán widgets, señales, `QObject` o modelos ORM como su contrato público.
+`domain` contains entities and rules; `application`, use cases and contracts; `infrastructure`, SQLAlchemy persistence and metadata/file access; `interfaces/gui`, presentation and event translation. Domain and use cases must not import Qt or expose widgets, signals, `QObject` or ORM models as public contracts.
 
-La GUI solicitará operaciones y mostrará resultados. Una futura CLI/TUI o API utilizará los mismos casos de uso. Un servidor futuro accederá a los archivos musicales y a SQLite en su propia máquina; el frontend remoto consumirá la API. Se reservará esta posibilidad sin desarrollar esas interfaces durante la preparación.
+The GUI requests operations and displays results. A future CLI/TUI or API uses the same use cases. A future server accesses music files and SQLite on its own machine; the remote frontend consumes the API. Preserve this possibility without developing those interfaces during setup.
 
-La política de rutas utilizará `pathlib`, identificadores de biblioteca y rutas relativas a su raíz para las pistas. La raíz de la música podrá cambiar por equipo. Configuración y BD estarán en directorios de usuario adecuados al sistema; los recursos visuales se empaquetarán con la aplicación.
+Path policy uses `pathlib`, library identifiers and root-relative track paths. Music roots may vary by machine. Configuration and database files belong in suitable OS-specific user directories; visual resources ship with the application.
 
-## 10. Apariencia uniforme prevista
+## 10. Planned consistent appearance
 
-Se propone Qt Widgets con estilo **Fusion** explícito, paleta y estilos propios, y fuentes e iconos incluidos como recursos. Para conservar la apariencia de los diálogos se elegirán implementaciones Qt en las superficies que deban ser uniformes. [Estilos de Qt](https://doc.qt.io/qt-6/qstylefactory.html).
+Use Qt Widgets with explicit **Fusion** style, a custom palette and stylesheet, and packaged fonts and icons. Choose Qt dialog implementations on surfaces requiring consistent appearance. [Qt styles](https://doc.qt.io/qt-6/qstylefactory.html).
 
-El criterio visual será el mismo diseño del área de aplicación: controles, colores, tipografía, iconos y distribución. Los sistemas pueden producir diferencias de rasterizado y escalado DPI. Si «idéntica» incluye también el marco y la barra de título, habrá que implementar decoraciones propias y validar sus comportamientos de ventana y accesibilidad; Fusion por sí solo no cubre esa exigencia.
+The visual criterion is the same application-area design: controls, colors, typography, icons and layout. Systems may differ in rasterization and DPI scaling. If “identical” includes the frame and title bar, custom decorations must be implemented and their window/accessibility behavior validated; Fusion alone does not meet that requirement.
 
-## 11. Validación y criterio de finalización
+## 11. Validation and completion criteria
 
-Se preparará GitHub Actions para recrear el entorno desde cero en Windows x86-64, Linux x86-64 y macOS Intel/ARM, usando el Python y `uv` fijados. Las acciones se fijarán por revisión y las imágenes de ejecución se elegirán explícitamente entre las disponibles. La configuración seguirá la [integración oficial de uv con GitHub Actions](https://docs.astral.sh/uv/guides/integration/github/).
+Prepare GitHub Actions to recreate the environment from scratch on Windows x86-64, Linux x86-64 and macOS Intel/ARM using pinned Python and `uv`. Pin actions by revision and explicitly select available runner images. Follow [uv's official GitHub Actions integration](https://docs.astral.sh/uv/guides/integration/github/).
 
-Antes de empezar la aplicación deberán cumplirse estas condiciones:
+Before application development starts:
 
-1. El repositorio contiene manifiesto, lock, versión de Python, documentación y workspace portable.
-2. Una copia o clon limpio, sin `.venv`, instala todas las dependencias desde el lock en la matriz objetivo.
-3. Repetir la preparación mantiene el lock y las versiones previstas; un lock desactualizado provoca un error claro.
-4. El diagnóstico comprueba SQLite y las dependencias usando el Python del proyecto.
-5. La preparación del núcleo funciona sin instalar PySide6 y sin necesitar escritorio.
-6. Qt abre una ventana mínima y procesa eventos en los escritorios probados. Linux incluye comprobaciones de X11 y Wayland; las pruebas sin pantalla se registran por separado.
-7. VS Code selecciona el entorno local y las tareas funcionan sin rutas personales ni dependencia de un shell concreto.
-8. Los fallos de requisitos producen instrucciones de instalación específicas y códigos de salida útiles.
+1. The repository contains the manifest, lock, Python version, documentation and portable workspace.
+2. A clean copy or clone without `.venv` installs all locked dependencies across the target matrix.
+3. Repeated setup preserves the lock and expected versions; an outdated lock produces a clear error.
+4. Diagnostics check SQLite and dependencies with project Python.
+5. Core setup works without installing PySide6 or requiring a desktop.
+6. Qt opens a minimal window and processes events on tested desktops. Linux includes X11 and Wayland checks; headless tests are recorded separately.
+7. VS Code selects the local environment and tasks work without personal paths or a specific shell dependency.
+8. Missing prerequisites produce specific installation instructions and useful exit codes.
 
-Los resultados se registrarán por SO y arquitectura. Este documento no afirma que Windows y macOS ya hayan pasado las comprobaciones: para garantizar la portabilidad habrá que ejecutar esa matriz.
+Record results by OS and architecture. This document does not claim Windows and macOS have already passed: portability requires executing that matrix.
 
-Orden de ejecución: archivos del proyecto → manifiesto y lock → preparación/diagnóstico → workspace → Git y remoto → validación multiplataforma. El desarrollo de Trackfolio comenzará cuando esta infraestructura quede comprobada.
+Execution order: project files → manifest and lock → setup/diagnostics → workspace → Git and remote → cross-platform validation. Trackfolio development begins once this infrastructure is verified.

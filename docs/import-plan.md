@@ -1,285 +1,287 @@
-# Plan de importación de música y generación de catálogo
+# Music import and catalog creation plan
 
-Estado: implementación funcional completada y comprobada localmente el 9 de octubre
-de 2026. La validación de esta entrega en CI y la revisión visual en Windows/macOS
-quedan pendientes; véanse los resultados medidos en [VALIDATION.md](../VALIDATION.md).
+Status: functional implementation completed and checked locally on October 9,
+2026. CI validation of this delivery and visual review on Windows/macOS remain
+pending; see measured results in [VALIDATION.md](../VALIDATION.md).
 
-## Resultado esperado
+## Expected outcome
 
-La acción **Importar música…** permite seleccionar una carpeta y construir un catálogo
-con sus archivos FLAC/MP3, incluidas las subcarpetas. También permite añadir o actualizar
-la música de esa carpeta en el catálogo abierto. Al terminar, la GUI muestra los datos
-guardados, sin necesidad de ejecutar scripts ni utilizar SQLiteBrowser.
+The **Import music…** action selects a folder and builds a catalog from its FLAC/MP3
+files, including subfolders. It also adds or updates that folder's music in the
+open catalog. When finished, the GUI shows the saved data without requiring
+scripts or SQLiteBrowser.
 
-El núcleo coordina la exploración, lectura de metadatos y persistencia mediante contratos
-Python independientes de Qt. La GUI recoge la solicitud, presenta el progreso y muestra
-el resultado. Los archivos musicales se leen sin modificarlos.
+The core coordinates scanning, metadata reading and persistence through Python
+contracts independent of Qt. The GUI collects the request, presents progress and
+shows the result. Music files are read without modification.
 
-## Punto de partida comprobado
+## Verified starting point
 
-| Componente existente | Qué se reutiliza o amplía |
+| Existing component | Reused or extended behavior |
 | --- | --- |
-| [`ImportAudio`](../src/trackfolio/application/catalog.py) | Importación individual y validación de pertenencia a una raíz. Falta la coordinación de una carpeta. |
-| [`read_metadata`](../src/trackfolio/infrastructure/metadata.py) | Lectura FLAC/MP3 por contenido, etiquetas originales, datos ausentes y portada incrustada o `album.jpg`. |
-| [`SqliteCatalogRepository`](../src/trackfolio/infrastructure/catalog.py) | Transacción por archivo y actualización por biblioteca/ruta, conservando identificadores. |
-| [`migrate_database`](../src/trackfolio/infrastructure/database.py) | Creación del esquema canónico mediante Alembic y rechazo de bases ajenas. |
-| [`open_catalog`](../src/trackfolio/infrastructure/session.py) | Apertura exclusivamente de lectura para consultar el resultado. |
-| [`CatalogController`](../src/trackfolio/interfaces/gui/controller.py) | Trabajos asíncronos, descarte de respuestas antiguas y conservación de la selección. |
-| [`scripts/import_audio.py`](../scripts/import_audio.py) | Herramienta individual que debe conservar sus argumentos y usar las reglas compartidas. |
+| [`ImportAudio`](../src/trackfolio/application/catalog.py) | Individual import and root containment validation. Folder coordination is missing. |
+| [`read_metadata`](../src/trackfolio/infrastructure/metadata.py) | Content-based FLAC/MP3 reading, original tags, missing data and embedded artwork or `album.jpg`. |
+| [`SqliteCatalogRepository`](../src/trackfolio/infrastructure/catalog.py) | Per-file transactions and library/path updates that preserve identifiers. |
+| [`migrate_database`](../src/trackfolio/infrastructure/database.py) | Canonical schema creation through Alembic and rejection of unrelated databases. |
+| [`open_catalog`](../src/trackfolio/infrastructure/session.py) | Read-only opening to query the result. |
+| [`CatalogController`](../src/trackfolio/interfaces/gui/controller.py) | Asynchronous jobs, stale response rejection and selection preservation. |
+| [`scripts/import_audio.py`](../scripts/import_audio.py) | Individual tool that must retain its arguments and use shared rules. |
 
-La escritura actual vuelve a consultar el detalle completo después del commit. El lote
-necesita un resultado ligero para evitar recargar portadas y para distinguir una escritura
-confirmada de un error posterior de lectura. El cierre actual usa `waitForDone()` en el
-hilo gráfico: habrá que adaptar ese ciclo de vida para una importación larga.
+The current write operation queries full details again after committing. Batch
+import needs a lightweight result to avoid reloading artwork and distinguish a
+confirmed write from a later read error. Current shutdown uses `waitForDone()` on
+the GUI thread: that lifecycle needs adapting for long imports.
 
-## 1. Alcance y reglas de la primera entrega
+## 1. Scope and rules for the first delivery
 
-- Una carpeta raíz por operación, recorrida de forma recursiva. Se seleccionan archivos
-  regulares con extensión `.flac` o `.mp3`, sin distinguir mayúsculas. El lector comprueba
-  el contenido real; un archivo corrupto con esa extensión produce una incidencia.
-  Los archivos con otras extensiones se ignoran, aunque contengan audio reconocible.
-- La raíz se normaliza y valida antes de preparar el destino. Las rutas del catálogo
-  siguen siendo relativas a esa raíz, con el mismo criterio que la importación actual.
-- No seguir enlaces simbólicos de archivos o directorios ni puntos de unión que puedan
-  introducir otra raíz o ciclos. Comprobar también la pertenencia a la raíz al importar,
-  por si el árbol cambia desde la exploración.
-- Orden determinista por ruta relativa. Se enumeran rutas antes de importar; se conserva
-  en memoria la lista de candidatos, sin cargar sus metadatos o imágenes por adelantado.
-- **Crear catálogo** usa un destino nuevo, con `.tfo` como extensión sugerida. Si la ruta
-  ya existe, se rechaza; la creación debe reservarla de forma exclusiva para evitar
-  sobrescrituras incluso si aparece después de validar el formulario.
-- **Usar catálogo abierto** añade archivos nuevos y actualiza los ya importados. Debe
-  validar que sigue siendo un catálogo Trackfolio compatible y escribible. Se conserva
-  la extensión de cualquier catálogo existente admitido por el visor.
-- Cada candidato se relee en cada importación. La misma raíz y ruta relativa conservan
-  `file_id` y `track_id`; los metadatos eliminados del archivo también se eliminan de su
-  registro. El contador de actualizados incluye los archivos releídos sin cambios.
-- Otra raíz, una copia o un renombrado se consideran ubicaciones nuevas. No se fusionan
-  grabaciones por título, etiquetas, formato o contenido. Seleccionar una subcarpeta como
-  raíz diferente tampoco equivale a reimportar la raíz original.
-- No borrar registros de archivos desaparecidos ni limpiar entidades sin referencias.
-  Se mantienen las reglas actuales de álbumes, artistas, géneros y carátulas, los campos
-  ausentes como `NULL`/tuplas vacías y su presentación en blanco.
-- Una importación secuencial y un escritor por ventana. La selección de archivos sueltos
-  en la GUI, varias raíces simultáneas, vigilancia de carpetas, huellas para omitir archivos
-  sin cambios, edición de etiquetas y detección de duplicados quedan para otras entregas.
+- One root folder per operation, scanned recursively. Select regular files with
+  a `.flac` or `.mp3` extension, case-insensitively. The reader checks actual
+  content; a corrupt file with that extension produces an issue. Ignore other
+  extensions, even if their files contain recognizable audio.
+- Normalize and validate the root before preparing the destination. Catalog
+  paths remain relative to that root, following existing import rules.
+- Do not follow file/directory symbolic links or junctions that could introduce
+  another root or cycles. Check root containment again during import in case
+  the tree has changed since scanning.
+- Deterministic relative-path order. Enumerate paths before importing; keep the
+  candidate list in memory without preloading metadata or images.
+- **Create catalog** uses a new destination, with `.tfo` as the suggested
+  extension. Reject an existing path; creation must reserve it exclusively to
+  prevent overwriting even if it appears after form validation.
+- **Use open catalog** adds new files and updates previously imported ones.
+  Validate that it is still a compatible, writable Trackfolio catalog. Retain
+  the extension of any existing catalog accepted by the viewer.
+- Reread every candidate on every import. The same root and relative path retain
+  `file_id` and `track_id`; metadata removed from the file is also removed from
+  its record. The updated count includes files reread without changes.
+- Another root, a copy or a rename counts as a new location. Do not merge
+  recordings by title, tags, format or content. Selecting a subfolder as a
+  different root is not equivalent to reimporting the original root.
+- Do not delete records for missing files or clean up unreferenced entities.
+  Retain existing rules for albums, artists, genres and artwork, missing values
+  as `NULL`/empty tuples and their blank presentation.
+- Sequential import and one writer per window. Selecting individual files in
+  the GUI, simultaneous roots, folder watching, fingerprints to skip unchanged
+  files, tag editing and duplicate detection are deferred to later deliveries.
 
-Este alcance utiliza el esquema actual. No requiere modificar `001_initial`, el SQL
-exportado ni `migrations/env.py`. Cualquier necesidad futura de columnas o historial se
-resolverá mediante una nueva revisión de Alembic.
+This scope uses the current schema. It requires no changes to `001_initial`, the
+exported SQL or `migrations/env.py`. Future columns or history will require a new
+Alembic revision.
 
-La entrega posterior de [artistas únicos por nombre](artist-identity-plan.md) está
-implementada: sustituye la reutilización contextual de artistas y añade la revisión `002`
-para consolidar catálogos existentes. Los párrafos anteriores describen el alcance original
-de esta importación.
+The subsequent [unique artists by name](artist-identity-plan.md) delivery is
+implemented: it replaces contextual artist reuse and adds revision `002` to
+consolidate existing catalogs. The paragraphs above describe the original import
+scope.
 
-La [escritura de etiquetas](tag-write-plan.md) añade una acción explícita independiente
-de importar y guardar. Sus respaldos terminan en `.tfo-bak` y sus temporales en `.tmp`,
-para que el explorador FLAC/MP3 no los importe. Reimportar después de escribir recupera
-los campos publicados; las correcciones que solo permanecen en SQLite se sustituyen
-por los valores del archivo, según las reglas anteriores.
+[Tag writing](tag-write-plan.md) adds an explicit action separate from importing
+and saving. Backups end in `.tfo-bak` and temporary files in `.tmp`, so the
+FLAC/MP3 scanner does not import them. Reimporting after writing reads published
+fields; corrections retained only in SQLite are replaced by file values under
+the rules above.
 
-La [edición de canciones](edit-plan.md), también implementada, añade aislamiento cuando
-varios archivos comparten una pista: al editar o reimportar uno se conserva `file_id` y se
-copia su pista, por lo que puede cambiar `track_id`. La importación conserva los créditos
-de roles adicionales que el lector musical no gestiona; los metadatos leídos siguen
-reemplazando los valores del catálogo, incluidas las correcciones manuales.
+[Song editing](edit-plan.md), also implemented, adds isolation when several files
+share a track: editing or reimporting one preserves `file_id` and copies its
+track, so `track_id` may change. Import preserves additional role credits that
+the music reader does not manage; read metadata still replaces catalog values,
+including manual corrections.
 
-## 2. Caso de uso y contratos del núcleo
+## 2. Core use case and contracts
 
-Crear `application/import_catalog.py` con el caso de uso `ImportCatalog`. Recibe una
-solicitud y adaptadores inyectados; devuelve un informe y publica progreso mediante un
-callback Python. La cancelación se consulta mediante un contrato Python, sin señales Qt.
-Los DTO serán dataclasses inmutables. Los errores de lectura y destino se definen en
-aplicación; los adaptadores traducen sus excepciones técnicas a esos errores, manteniendo
-la compatibilidad de los puntos de entrada existentes.
+Create `application/import_catalog.py` with the `ImportCatalog` use case. It
+accepts a request and injected adapters, returns a report and publishes progress
+through a Python callback. Cancellation is checked through a Python contract,
+without Qt signals. DTOs are immutable dataclasses. Read and destination errors
+are defined in the application layer; adapters translate technical exceptions
+into those errors while preserving existing entry-point compatibility.
 
-| Contrato propuesto | Contenido o responsabilidad |
+| Proposed contract | Content or responsibility |
 | --- | --- |
-| `ImportRequest` | Raíz musical, ruta de destino y modo `create`/`update`. |
-| `AudioSource` | Ruta del candidato y ruta relativa a la raíz validada. |
-| `AudioScanner` | Enumeración cancelable de candidatos e incidencias de exploración. Implementación en infraestructura. |
-| `MetadataReader` | Contrato existente de lectura de un archivo, con errores traducidos a errores de aplicación. |
-| `CatalogImportTargetFactory` | Prevalidación sin escritura y apertura/cierre del destino escribible cuando sea necesario. |
-| `CatalogWriter` | Guardar los metadatos de un archivo y devolver un `SaveOutcome`. |
-| `SaveOutcome` | `file_id`, `track_id` y operación `created`/`updated`, confirmados por la transacción. |
-| `ImportProgress` | Fase, candidatos encontrados, total conocido o `None`, procesados, creados, actualizados, fallidos y ruta actual. |
-| `ImportIssue` | Ruta, etapa (`scan`, `read`, `write`, `cleanup`) y causa presentable; sin excepciones de Mutagen/SQLAlchemy en el contrato. |
-| `ImportReport` | Destino, estado `completed`/`cancelled`/`failed`, contadores finales, incidencias y causa fatal cuando exista. |
+| `ImportRequest` | Music root, destination path and `create`/`update` mode. |
+| `AudioSource` | Candidate path and path relative to the validated root. |
+| `AudioScanner` | Cancellable candidate and scan-issue enumeration. Infrastructure implementation. |
+| `MetadataReader` | Existing single-file read contract, with errors translated into application errors. |
+| `CatalogImportTargetFactory` | Read-only prevalidation and opening/closing the writable destination when needed. |
+| `CatalogWriter` | Save one file's metadata and return a `SaveOutcome`. |
+| `SaveOutcome` | `file_id`, `track_id` and `created`/`updated` operation, confirmed by the transaction. |
+| `ImportProgress` | Phase, candidates found, known total or `None`, processed, created, updated, failed and current path. |
+| `ImportIssue` | Path, stage (`scan`, `read`, `write`, `cleanup`) and presentable cause; no Mutagen/SQLAlchemy exceptions in the contract. |
+| `ImportReport` | Destination, `completed`/`cancelled`/`failed` state, final counts, issues and fatal cause if any. |
 
-El informe distingue incidencias de exploración de archivos fallidos: una carpeta
-inaccesible no es un archivo de audio procesado. Al terminar la exploración,
-`procesados = creados + actualizados + fallidos`; lo pendiente es el total de candidatos
-menos los procesados. Los archivos ignorados por extensión o enlaces no aumentan los
-fallidos. Un estado `completed` puede contener incidencias y debe presentarse como tal.
-Si falla la escritura de un candidato, cuenta como fallido y procesado; si falla la
-preparación global del destino, los candidatos sin guardar siguen pendientes. Si se
-cancela la exploración, el informe indica que el total definitivo es desconocido.
+The report distinguishes scan issues from failed files: an inaccessible folder
+is not a processed audio file. After scanning,
+`processed = created + updated + failed`; pending candidates are the total minus
+processed files. Files ignored because of extensions or links do not increase
+failures. A `completed` state may contain issues and must be presented as such.
+A candidate write failure counts as failed and processed; if global destination
+preparation fails, unsaved candidates remain pending. If scanning is cancelled,
+the report indicates that the final total is unknown.
 
-La operación sigue esta secuencia:
+The operation follows this sequence:
 
-1. Validar raíz y destino sin crear ni migrar una base de datos.
-2. Explorar con progreso indeterminado y comprobaciones de cancelación. Una raíz
-   inaccesible impide iniciar; un subdirectorio inaccesible se registra y permite seguir.
-3. Publicar el total de candidatos y leerlos uno a uno mediante el lector actual.
-4. Abrir el escritor al obtener los primeros metadatos válidos, comprobar de nuevo la
-   cancelación y guardar cada archivo en su propia transacción.
-5. Contabilizar únicamente commits confirmados. Emitir progreso sin devolver metadatos,
-   BLOBs o el detalle completo de cada canción a la GUI.
-6. Cerrar el escritor en todas las salidas y devolver el informe, incluido el avance
-   parcial si se cancela o falla la operación.
+1. Validate root and destination without creating or migrating a database.
+2. Scan with indeterminate progress and cancellation checks. An inaccessible
+   root prevents starting; an inaccessible subdirectory is recorded and allows
+   the operation to continue.
+3. Publish the candidate total and read candidates individually with the current reader.
+4. Open the writer when the first valid metadata is available, check
+   cancellation again and save each file in its own transaction.
+5. Count confirmed commits only. Emit progress without returning metadata,
+   BLOBs or complete song details to the GUI.
+6. Close the writer on every exit and return the report, including partial
+   progress if the operation is cancelled or fails.
 
-Separar la preparación/escritura común de un archivo para compartirla con `ImportAudio`.
-Mantener el resultado público individual `CatalogEntry` y las consultas existentes;
-el lote utilizará la escritura ligera. No consultar la lista completa para decidir si un
-archivo es nuevo: esa decisión se toma en la misma transacción que lo guarda.
+Extract common single-file preparation/writing for reuse by `ImportAudio`.
+Retain its public `CatalogEntry` result and existing queries; batch import uses
+the lightweight write. Do not query the entire list to determine whether a file
+is new: make that decision within the transaction that saves it.
 
-## 3. Fallos, cancelación y persistencia
+## 3. Failures, cancellation and persistence
 
-| Situación | Comportamiento previsto |
+| Situation | Expected behavior |
 | --- | --- |
-| Carpeta vacía o sin candidatos | Mostrar que no se encontró FLAC/MP3. No crear un catálogo ni cambiar el visible. |
-| Archivo corrupto, ilegible o desaparecido | Registrar la incidencia y continuar con el siguiente. |
-| Subdirectorio inaccesible | Seguir con el resto y mostrar que la exploración fue incompleta. |
-| Destino ajeno, incompatible o sin permisos | Terminar con error de aplicación sin adoptar ni sobrescribir el archivo. |
-| Error de almacenamiento, esquema o bloqueo SQLite | Espera acotada; terminar con causa fatal y avance confirmado. Sin reintentos indefinidos. |
-| Cancelación durante exploración | Detener la enumeración; no comenzar a importar el listado parcial. |
-| Cancelación durante importación | Comprobar antes de leer y antes de guardar; dejar terminar la transacción activa y detenerse antes del siguiente archivo. |
-| Cancelación o fallo tras guardar archivos | Conservar las transacciones completadas y mostrar que el resultado es parcial. |
+| Empty folder or no candidates | Show that no FLAC/MP3 files were found. Do not create a catalog or change the visible one. |
+| Corrupt, unreadable or missing file | Record the issue and continue with the next file. |
+| Inaccessible subdirectory | Continue with the rest and show that scanning was incomplete. |
+| Unrelated, incompatible or unwritable destination | Finish with an application error without adopting or overwriting the file. |
+| Storage, schema or SQLite lock error | Bounded wait; finish with a fatal cause and confirmed progress. No indefinite retries. |
+| Cancellation during scanning | Stop enumeration; do not start importing the partial list. |
+| Cancellation during import | Check before reading and before saving; let the active transaction finish and stop before the next file. |
+| Cancellation or failure after saving files | Retain completed transactions and show that the result is partial. |
 
-La creación del catálogo nuevo se difiere hasta disponer de metadatos válidos. Si no
-se confirma ninguna escritura, cerrar los recursos e intentar eliminar únicamente el
-archivo nuevo creado por esa operación. Si esa limpieza falla, registrar la incidencia
-y la ruta restante en el informe. Un catálogo existente nunca se elimina. Si ya hubo
-commits, el catálogo nuevo permanece disponible aunque el resultado sea parcial.
+Defer new catalog creation until valid metadata is available. If no write is
+confirmed, close resources and attempt to delete only the new file created by
+that operation. If cleanup fails, record the issue and remaining path in the
+report. Never delete an existing catalog. Once commits exist, the new catalog
+remains available even if the result is partial.
 
-La cancelación es cooperativa: no interrumpe por fuerza Mutagen, una operación del
-sistema de archivos o una transacción. La GUI muestra **Cancelando…** hasta que el
-trabajador alcanza un punto de parada y libera los recursos. No prometer cancelación
-instantánea si el archivo o el dispositivo tarda en responder.
+Cancellation is cooperative: it does not forcibly interrupt Mutagen, filesystem
+operations or transactions. The GUI shows **Cancelling…** until the worker
+reaches a stopping point and releases resources. Do not promise instant
+cancellation when a file or device is slow to respond.
 
-## 4. Flujo de la GUI
+## 4. GUI flow
 
-Añadir un botón y acción **Importar música…**, con icono SVG propio, junto a **Abrir
-catálogo…** y **Actualizar**. Debe estar disponible sin catálogo; el estado inicial
-indicará que se puede abrir uno o crearlo importando música.
+Add an **Import music…** button and action, with its own SVG icon, beside **Open
+catalog…** and **Refresh**. It must be available without a catalog; the initial
+state indicates that users can open one or create one by importing music.
 
-El diálogo contiene:
+The dialog contains:
 
-- **Carpeta de música**, con selector Qt y aviso de que incluye subcarpetas FLAC/MP3.
-- **Destino**: usar el catálogo abierto, seleccionado inicialmente cuando lo haya,
-  o crear uno nuevo. Sin catálogo abierto sólo está disponible la creación.
-- **Archivo de catálogo**, para el modo de creación, con nombre `.tfo` sugerido y
-  ubicación elegida por el usuario. El directorio inicial procede de las preferencias
-  existentes o del directorio de datos de usuario de Trackfolio, sin rutas del checkout.
-- **Importar** y **Cancelar**. Cancelar el formulario no crea archivos ni inicia trabajos.
+- **Music folder**, with a Qt picker and a note that FLAC/MP3 subfolders are included.
+- **Destination**: use the open catalog, initially selected when available, or
+  create a new one. Without an open catalog, only creation is available.
+- **Catalog file**, for creation mode, with a suggested `.tfo` name and a
+  user-selected location. The initial directory comes from existing preferences
+  or Trackfolio's user data directory, without checkout paths.
+- **Import** and **Cancel**. Cancelling the form creates no files or jobs.
 
-Al usar el catálogo abierto, explicar: «Se añadirán canciones nuevas y se actualizarán
-las ya importadas desde esta carpeta». Durante el trabajo, indicar que cancelar conserva
-lo que ya se haya guardado.
+When using the open catalog, explain: “New songs will be added and songs
+previously imported from this folder will be updated.” During work, indicate
+that cancellation preserves data already saved.
 
-El progreso muestra la exploración indeterminada y después una barra con
-`procesados/total`, archivo actual y contadores. **Cancelar** permanece accesible.
-El resultado reúne creados, actualizados, fallidos y pendientes, con una lista consultable
-de incidencias. No abrir un diálogo por cada archivo fallido ni presentar excepciones
-técnicas crudas al usuario.
+Progress shows indeterminate scanning, followed by a `processed/total` bar,
+current file and counters. **Cancel** remains accessible. The result combines
+created, updated, failed and pending counts with a browsable issue list. Do not
+open a dialog for every failed file or present raw technical exceptions.
 
-Cuando exista un resultado nuevo con archivos guardados, abrirlo automáticamente mediante
-el lector actual y recordar la ruta sólo si se abre correctamente. Si el destino era el
-catálogo abierto, recargar lista y detalle conservando la selección por `file_id`.
-Aplicar este comportamiento también a resultados parciales; si no hubo escrituras,
-mantener o restaurar el catálogo anterior. Un error al abrir el resultado debe indicar
-que los archivos ya se guardaron y permitir volver a abrirlo.
+When a new result contains saved files, open it automatically through the
+current reader and remember its path only if opening succeeds. If the destination
+was the open catalog, reload the list and details while preserving selection by
+`file_id`. Apply this to partial results too; if there were no writes, retain or
+restore the previous catalog. An error opening the result must explain that
+files were already saved and allow reopening it.
 
-## 5. Trabajo asíncrono y ciclo de vida
+## 5. Asynchronous work and lifecycle
 
-Conectar los adaptadores desde `startup.py`. El controlador recibe el caso de uso o
-ejecutor de importación mediante un contrato; no importa SQLAlchemy, Alembic ni Mutagen.
-El motor escribible se crea, utiliza y libera dentro del trabajo de importación. La
-sesión `CatalogSession` continúa siendo exclusivamente de lectura.
+Wire adapters in `startup.py`. The controller receives the import use case or
+executor through a contract; it does not import SQLAlchemy, Alembic or Mutagen.
+Create, use and release the writable engine inside the import job.
+`CatalogSession` remains read-only.
 
-Estados previstos: disponible → preparando → explorando → importando → finalizando
-→ resultado; la solicitud de cancelación añade el estado cancelando. Separarlos del
-indicador actual de consulta para que un detalle antiguo no reactive acciones.
+Planned states: idle → preparing → scanning → importing → finalizing → result;
+a cancellation request adds the cancelling state. Separate these from the
+current query indicator so stale details cannot re-enable actions.
 
-- Deshabilitar Importar, Abrir, Actualizar y nuevas selecciones mientras exista una
-  operación de importación. Mantener visibles la lista y el detalle ya cargados.
-- Invalidar respuestas de consultas anteriores y esperar su finalización mediante
-  eventos, sin bloquear el hilo gráfico. Retirar/cerrar la sesión de lectura cuando
-  termine su último trabajo, antes de iniciar el escritor.
-- Traducir callbacks de progreso y resultado a señales encoladas identificadas por
-  operación. Los widgets se actualizan exclusivamente en el hilo gráfico.
-- Limitar la frecuencia de progreso para no saturar la cola de eventos con una biblioteca
-  grande; el informe final siempre contiene los contadores exactos.
-- Al terminar, liberar primero el escritor y después abrir/restaurar el lector. Conservar
-  ruta y selección anteriores durante este proceso.
-- Al cerrar la ventana durante una importación, solicitar cancelación y diferir el cierre
-  real. Mantener vivos ventana, controlador y señales hasta liberar los trabajadores.
-  Adaptar `closeEvent`, `shutdown`, los auxiliares de disposición y `interfaces/gui/app.py`:
-  sus rutas `aboutToQuit` y `finally` también deben respetar ese orden. Canalizar las
-  salidas normales por el cierre diferido y prever la liberación final antes de disponer
-  objetos Qt si el bucle de eventos ya terminó. No usar el actual `waitForDone()` para
-  esperar una importación larga mientras la ventana debe seguir procesando eventos.
+- Disable Import, Open, Refresh and new selections while an import is active.
+  Keep the loaded list and details visible.
+- Invalidate previous query responses and wait for completion through events,
+  without blocking the GUI thread. Retire/close the read session after its last
+  job finishes, before starting the writer.
+- Translate progress/result callbacks into queued signals identified by
+  operation. Update widgets exclusively on the GUI thread.
+- Throttle progress to avoid flooding the event queue with a large library;
+  the final report always contains exact counts.
+- On completion, release the writer before opening/restoring the reader.
+  Preserve the previous path and selection during this process.
+- When closing during import, request cancellation and defer actual window
+  closure. Keep the window, controller and signals alive until workers are
+  released. Adapt `closeEvent`, `shutdown`, disposal helpers and
+  `interfaces/gui/app.py`: its `aboutToQuit` and `finally` paths must respect
+  that order too. Route normal exits through deferred closure and provide final
+  cleanup before disposing Qt objects if the event loop has already stopped.
+  Do not use the current `waitForDone()` to wait for a long import while the
+  window must keep processing events.
 
-## 6. Fases de implementación y comprobación
+## 6. Implementation and verification phases
 
-| Fase | Trabajo | Criterio para avanzar |
+| Phase | Work | Advancement criterion |
 | --- | --- | --- |
-| 1. Contratos y reglas | Solicitud, progreso, informe, incidencias, cancelación y puertos en `application/import_catalog.py`; validación compartida con importación individual. | Pruebas del caso de uso con adaptadores de prueba, ejecutables sin Qt ni SQLite. |
-| 2. Adaptadores | Explorador en `infrastructure/audio_scan.py`, destino escribible en `infrastructure/import_target.py` y escritura ligera en `infrastructure/catalog.py`. | Recorrido controlado, conteos de creación/actualización, commits/rollback y cierre verificados con directorios y SQLite temporales. |
-| 3. Orquestación completa | Conectar `ImportCatalog`, errores de lectura/persistencia y composición reutilizable; conservar compatibilidad de `scripts/import_audio.py`. | Importar y reimportar una carpeta temporal real FLAC/MP3 produce el catálogo esperado y un informe exacto. |
-| 4. Presentación | Botón/acción, diálogo en `interfaces/gui/import_dialog.py`, progreso/resumen, icono, estilos y manifiesto de recursos. | QtTest cubre selección de origen/destino, estados, diálogos cancelados y presentación de resultados. |
-| 5. Integración asíncrona | Worker/controlador de importación, composición en `startup.py`, pausa de consultas, recarga y cierre diferido. | GUI receptiva, una sola importación, cancelación parcial y cierre sin conexiones ni trabajadores abandonados. |
-| 6. Entrega | Documentación de uso, comprobaciones del proyecto, paquete instalado y matriz multiplataforma. | Resultados registrados; pruebas automáticas y revisión visual manual identificadas por separado. |
+| 1. Contracts and rules | Request, progress, report, issues, cancellation and ports in `application/import_catalog.py`; validation shared with individual import. | Use-case tests with test adapters, runnable without Qt or SQLite. |
+| 2. Adapters | Scanner in `infrastructure/audio_scan.py`, writable destination in `infrastructure/import_target.py` and lightweight writes in `infrastructure/catalog.py`. | Controlled traversal, created/updated counts, commit/rollback and closure verified with temporary directories and SQLite. |
+| 3. Complete orchestration | Wire `ImportCatalog`, read/persistence errors and reusable composition; preserve `scripts/import_audio.py` compatibility. | Importing and reimporting a real temporary FLAC/MP3 folder produces the expected catalog and exact report. |
+| 4. Presentation | Button/action, dialog in `interfaces/gui/import_dialog.py`, progress/summary, icon, styles and resource manifest. | QtTest covers source/destination selection, states, cancelled dialogs and result presentation. |
+| 5. Asynchronous integration | Import worker/controller, composition in `startup.py`, query suspension, reload and deferred closure. | Responsive GUI, single import, partial cancellation and shutdown without abandoned connections or workers. |
+| 6. Delivery | Usage documentation, project checks, installed package and cross-platform matrix. | Recorded results; automated tests and manual visual review identified separately. |
 
-Las fases 1–3 deben completarse antes de conectar escrituras a la GUI. La presentación
-de la fase 4 puede desarrollarse en paralelo a los adaptadores una vez fijados los contratos.
+Complete phases 1–3 before connecting writes to the GUI. Phase 4 presentation
+can proceed alongside adapters once contracts are settled.
 
-### Casos que deben quedar verificados
+### Cases to verify
 
-- Árbol recursivo con FLAC/MP3, extensiones en mayúsculas, Unicode y espacios; archivos
-  ajenos, enlaces/puntos de unión, carpetas vacías e incidencias de permisos.
-- Reimportación sin duplicar rutas y conservando identificadores; desaparición de etiquetas
-  y actualización de relaciones; archivos ausentes que no provocan borrados del catálogo.
-- Metadatos completos, parciales y vacíos, portadas incrustadas y `album.jpg`, etiquetas
-  originales y orden de créditos. Reutilizar las comprobaciones individuales existentes.
-- Archivo inválido seguido de uno válido; fallo fatal tras commits anteriores; rollback
-  del archivo en curso; resultado ligero sin lectura posterior de BLOBs.
-- Destino desconocido o ya existente en modo creación, raíz inválida y ningún archivo
-  importable: no alterar archivos previos; comprobar la ausencia de catálogo nuevo vacío
-  cuando no se creó o su limpieza tuvo éxito, y el informe si falla esa limpieza.
-- Cancelación antes de empezar, durante exploración, después de leer y tras un commit;
-  conteos monotónicos y exactos; recursos cerrados en éxito, error y cancelación.
-- GUI → caso de uso → lector Mutagen → SQLite con audio controlado temporal. Consultar
-  luego metadatos y portada aunque se retire la música original.
-- Selección conservada al actualizar, informes parciales visibles y errores recuperables;
-  consultas antiguas que no sustituyen resultados ni reactivan acciones de importación.
-- Trabajo largo controlado con eventos de sincronización: la ventana procesa eventos,
-  cancelar funciona y cerrar espera de forma asíncrona. Evitar pruebas basadas en sleeps.
-- Salida de `QApplication`, además de cierre de ventana: cancelar, liberar el escritor
-  y disponer los objetos Qt en ese orden, incluido el camino de limpieza de `app.py`.
-- Sesión de consulta que sigue rechazando escrituras y núcleo que sigue funcionando
-  sin instalar PySide6.
+- Recursive FLAC/MP3 tree, uppercase extensions, Unicode and spaces; unrelated
+  files, links/junctions, empty folders and permission issues.
+- Reimport without duplicate paths and with identifiers preserved; removed tags
+  and updated relationships; missing files do not delete catalog records.
+- Complete, partial and empty metadata, embedded artwork and `album.jpg`,
+  original tags and credit order. Reuse existing single-file checks.
+- Invalid file followed by a valid one; fatal failure after previous commits;
+  rollback of the current file; lightweight result without later BLOB reads.
+- Unknown destination or existing creation target, invalid root and no
+  importable files: do not alter previous files; verify that no empty new
+  catalog remains when none was created or cleanup succeeded, and verify the
+  report when cleanup fails.
+- Cancellation before starting, while scanning, after reading and after a
+  commit; monotonic, exact counts; resources closed on success, error and cancellation.
+- GUI → use case → Mutagen reader → SQLite with controlled temporary audio.
+  Query metadata and artwork afterward even if the original music is removed.
+- Selection preserved on update, visible partial reports and recoverable
+  errors; stale queries cannot replace results or re-enable import actions.
+- Long-running work controlled with synchronization events: the window
+  processes events, cancellation works and closure waits asynchronously.
+  Avoid sleep-based tests.
+- `QApplication` exit as well as window closure: cancel, release the writer and
+  dispose Qt objects in that order, including the `app.py` cleanup path.
+- Query sessions still reject writes and the core works without PySide6 installed.
 
-Añadir pruebas en `tests/test_import_catalog.py`, `tests/test_audio_scan.py` y
-`tests/test_import_target.py`; ampliar las pruebas actuales de catálogo, widgets,
-integración GUI y cierre. Utilizar sólo carpetas, audio y bases de datos temporales.
+Add tests in `tests/test_import_catalog.py`, `tests/test_audio_scan.py` and
+`tests/test_import_target.py`; extend catalog, widget, GUI integration and
+shutdown tests. Use only temporary folders, audio and databases.
 
-### Validación de la entrega
+### Delivery validation
 
-Ejecutar Ruff, formato, mypy y pytest con `uv run --locked`, usando el extra `gui` para
-las comprobaciones gráficas. Mantener las pruebas del núcleo sin Qt y ampliar la matriz
-existente de Windows x86-64, GNU/Linux x86-64 y macOS Intel/Apple Silicon. No se prevén
-dependencias nuevas; conservar el lock y la preparación portable.
+Run Ruff, formatting, mypy and pytest with `uv run --locked`, using the `gui`
+extra for GUI checks. Retain core tests without Qt and extend the existing
+Windows x86-64, GNU/Linux x86-64 and macOS Intel/Apple Silicon matrix. No new
+dependencies are planned; preserve the lock and portable setup.
 
-Comprobar el wheel instalado fuera del checkout: debe poder generar y abrir un catálogo
-usando las migraciones y los recursos empaquetados. Revisar manualmente selección de
-carpetas, destino, progreso, cancelación y cierre con una biblioteca real elegida para
-la validación. Registrar SO, arquitectura y backend; `offscreen` no acredita interacción
-ni apariencia en un escritorio real. La revisión visual de Windows/macOS sigue pendiente
-en la fase anterior y debe mantenerse explícita hasta realizarla.
+Check the installed wheel outside the checkout: it must create and open a
+catalog using packaged migrations and resources. Manually review folder and
+destination selection, progress, cancellation and closure with a real library
+chosen for validation. Record OS, architecture and backend; `offscreen` does
+not establish interaction or appearance on a real desktop. Windows/macOS visual
+review remains pending from the previous phase and must remain explicit until performed.
 
-Actualizar README, `docs/database.md`, `docs/architecture.md`, `docs/gui-plan.md` y
-`VALIDATION.md` al implementar. Corregir también las menciones antiguas de `database.md`
-que aún describen la GUI como pendiente. Marcar este plan como implementado únicamente
-cuando el flujo completo y sus comprobaciones hayan terminado.
+Update README, `docs/database.md`, `docs/architecture.md`, `docs/gui-plan.md` and
+`VALIDATION.md` during implementation. Also correct old `database.md` references
+that still describe the GUI as pending. Mark this plan implemented only after
+the complete flow and its checks have finished.

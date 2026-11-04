@@ -166,8 +166,8 @@ def test_batch_draft_only_applies_checked_fields_and_can_clear_mixed_values(wind
         assert not window.fields[key].isEnabled()
     assert not window.lyrics.isEnabled()
     assert window.fields["album_year"].text() == "1981"
-    assert window.fields["album"].placeholderText() == "Valores distintos"
-    assert "Valores distintos" in window.batch_fields["artists"].toolTip()
+    assert window.fields["album"].placeholderText() == "Mixed values"
+    assert "Mixed values" in window.batch_fields["artists"].toolTip()
     window.batch_fields["album"].setChecked(True)
     assert window.fields["album"].isEnabled()
     assert window.edit_patch().as_dict() == {"album": None}
@@ -307,7 +307,7 @@ def test_saving_disables_navigation_and_keeps_draft_on_error(window):
     )
     assert window.fields["title"].text() == "Unsaved"
     window.set_edit_state(True)
-    window.set_error("El registro ha cambiado. Recarga o revisa el borrador.")
+    window.set_error("The record changed. Reload or review the draft.")
     assert window.fields["title"].text() == "Unsaved"
     assert window.edit_dirty()
     assert window.save_button.isEnabled()
@@ -347,8 +347,8 @@ def test_suggestions_request_has_field_and_query(window):
 def test_reimport_update_explains_manual_corrections_are_replaced(qt_app, tmp_path):
     dialog = ImportDialog(None, tmp_path / "catalog.tfo", tmp_path)
     try:
-        assert "se sustituirán los valores del catálogo" in dialog.update_note.text()
-        assert "correcciones manuales" in dialog.update_note.text()
+        assert "replace catalog values" in dialog.update_note.text()
+        assert "manual corrections" in dialog.update_note.text()
         assert not dialog.update_note.isHidden()
         dialog.create_radio.setChecked(True)
         assert dialog.update_note.isHidden()

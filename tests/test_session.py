@@ -115,9 +115,9 @@ def test_session_close_is_idempotent_and_reads_after_close_fail(tmp_path):
     session = open_catalog(path)
     session.close()
     session.close()
-    with pytest.raises(RuntimeError, match="cerrado"):
+    with pytest.raises(RuntimeError, match="closed"):
         session.get(1)
-    with pytest.raises(RuntimeError, match="cerrado"):
+    with pytest.raises(RuntimeError, match="closed"):
         session.list_summaries()
 
 
@@ -129,7 +129,7 @@ def test_open_rejects_missing_file_without_creating_file_or_parents(tmp_path):
 
 
 def test_open_rejects_a_directory(tmp_path):
-    with pytest.raises(ValueError, match="archivo"):
+    with pytest.raises(ValueError, match="file"):
         open_catalog(tmp_path)
 
 
@@ -186,7 +186,7 @@ def test_legacy_catalog_is_readable_without_migration_backup_or_byte_changes(tmp
 def test_open_rejects_non_sqlite_file_without_modifying_it(tmp_path):
     path = tmp_path / "not_sqlite.sqlite3"
     path.write_bytes(b"a file from another application")
-    with pytest.raises(CatalogAccessError, match="SQLite válida") as error:
+    with pytest.raises(CatalogAccessError, match="valid SQLite") as error:
         open_catalog(path)
     assert isinstance(error.value.__cause__, DatabaseError)
     assert "PRAGMA" not in str(error.value)
@@ -203,7 +203,7 @@ def test_locked_catalog_reports_recoverable_message_and_can_be_retried(tmp_path,
         with sqlite3.connect(path) as writer:
             writer.execute("BEGIN EXCLUSIVE")
             try:
-                with pytest.raises(CatalogAccessError, match="ocupado") as error:
+                with pytest.raises(CatalogAccessError, match="busy") as error:
                     if operation == "open":
                         open_catalog(path)
                     elif operation == "get":

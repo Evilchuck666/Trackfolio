@@ -57,8 +57,8 @@ def test_structurally_invalid_lock_is_an_actionable_error(doctor, configured_roo
     (configured_root / "uv.lock").write_text('package = ["invalid package"]', encoding="utf-8")
     results = doctor.check_versions(configured_root, gui=False)
     assert len(results) == 1 and not results[0].ok
-    assert "tabla TOML" in results[0].detail
-    assert "Recupera uv.lock" in results[0].detail
+    assert "TOML table" in results[0].detail
+    assert "Restore uv.lock" in results[0].detail
 
 
 def test_qt_abort_is_reported_without_aborting_doctor(doctor, monkeypatch):
@@ -80,14 +80,14 @@ def test_hung_qt_child_is_killed_and_reported(doctor, monkeypatch):
     result = doctor.check_qt(None, timeout=0.2)
     assert not result.ok
     assert "timeout" in result.detail
-    assert "detenido el subproceso" in result.detail
+    assert "subprocess has been stopped" in result.detail
 
 
 def test_child_success_without_qt_report_is_not_accepted(doctor, monkeypatch):
     monkeypatch.setattr(doctor, "QT_PROBE", "print('not a Qt confirmation')")
     result = doctor.check_qt(None, timeout=5)
     assert not result.ok
-    assert "no confirmó" in result.detail
+    assert "did not confirm" in result.detail
 
 
 @pytest.mark.parametrize("backend", ["offscreen", "minimal"])
@@ -113,7 +113,7 @@ def test_headless_qt_success_does_not_claim_desktop_validation(doctor, monkeypat
     monkeypatch.setattr(doctor.subprocess, "run", run)
     result = doctor.check_qt(backend, timeout=2)
     assert result.ok
-    assert "no confirma el escritorio real" in result.detail
+    assert "does not confirm the actual desktop" in result.detail
 
 
 @pytest.mark.parametrize(
@@ -142,7 +142,7 @@ def test_qt_report_requires_import_and_edit_confirmation(doctor, monkeypatch, mi
     )
     result = doctor.check_qt("offscreen", timeout=2)
     assert not result.ok
-    assert "importación y edición" in result.detail
+    assert "Import and editing" in result.detail
 
 
 def test_sqlite_persists_unicode_through_sqlalchemy_and_removes_temp_file(
@@ -169,7 +169,7 @@ def test_packaged_visual_resources_are_available_from_an_unrelated_directory(
     monkeypatch.chdir(tmp_path)
     result = doctor.check_resources()
     assert result.ok, result.detail
-    assert "fuentes, licencia, SVG y QSS" in result.detail
+    assert "fonts, license, SVG and QSS" in result.detail
 
 
 @pytest.mark.parametrize("resource", ["icons/open.svg", "fonts/Inter-Regular.ttf"])
@@ -195,7 +195,7 @@ def test_changed_font_is_detected_even_when_it_still_exists(doctor, monkeypatch,
     monkeypatch.setattr(doctor.importlib.resources, "files", lambda _: target)
     result = doctor.check_resources()
     assert not result.ok
-    assert "SHA-256 no coincide" in result.detail
+    assert "SHA-256 does not match" in result.detail
 
 
 def test_doctor_returns_nonzero_when_a_required_check_fails(doctor, monkeypatch, capsys):
@@ -206,7 +206,7 @@ def test_doctor_returns_nonzero_when_a_required_check_fails(doctor, monkeypatch,
     monkeypatch.setattr(doctor, "check_imports", lambda: [])
     monkeypatch.setattr(doctor, "check_sqlite", lambda: doctor.CheckResult("SQLite", True, "OK"))
     monkeypatch.setattr(
-        doctor, "check_resources", lambda: doctor.CheckResult("Recursos", True, "OK")
+        doctor, "check_resources", lambda: doctor.CheckResult("Resources", True, "OK")
     )
     assert doctor.main(["--core"]) != 0
-    assert "1 error(es)" in capsys.readouterr().out
+    assert "1 error(s)" in capsys.readouterr().out

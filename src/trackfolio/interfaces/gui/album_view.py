@@ -236,7 +236,9 @@ class AlbumView(QWidget):
         for row in range(self.list.count()):
             item = self.list.item(row)
             if item is not None:
-                item.setHidden(query.casefold() not in item.text().casefold())
+                album = self._albums[item.data(Qt.ItemDataRole.UserRole)]
+                searchable = " ".join((album.title or "", *album.artists))
+                item.setHidden(query.casefold() not in searchable.casefold())
                 if not item.isHidden():
                     visible.append(row)
         if not select:
@@ -317,12 +319,12 @@ class AlbumView(QWidget):
             if field in self.fields:
                 control = self.fields[field]
                 control.setText("" if mixed or values[0] is None else str(values[0]))
-                control.setPlaceholderText("Valores distintos" if mixed else "")
+                control.setPlaceholderText("Mixed values" if mixed else "")
                 control.setEnabled(False)
             else:
                 self.labels[field].set_names(() if mixed else values[0])
                 self.labels[field].name_edit.setPlaceholderText(
-                    "Valores distintos" if mixed else "Full name"
+                    "Mixed values" if mixed else "Full name"
                 )
                 self.labels[field].setEnabled(False)
         self.error.clear()

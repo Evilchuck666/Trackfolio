@@ -23,8 +23,8 @@ def test_wrong_uv_version_stops_before_install(
     assert bootstrap.main(["--core"]) != 0
     assert calls == [["uv", "--version"]]
     error = capsys.readouterr().err
-    assert "requiere uv >=0.13.4,<0.14" in error
-    assert f"se encontró {version}" in error
+    assert "requires uv >=0.13.4,<0.14" in error
+    assert f"found {version}" in error
     assert "https://astral.sh/uv/0.13.4/install.sh" in error
 
 
@@ -104,7 +104,7 @@ def test_uv_check_uses_configured_bounds(bootstrap, monkeypatch, requirement, ve
     if accepted:
         assert bootstrap.check_uv(requirement) == "uv"
     else:
-        with pytest.raises(bootstrap.BootstrapError, match="requiere uv"):
+        with pytest.raises(bootstrap.BootstrapError, match="requires uv"):
             bootstrap.check_uv(requirement)
 
 
@@ -116,7 +116,7 @@ def test_unrecognized_uv_version_is_rejected(bootstrap, monkeypatch, output):
         "run",
         lambda command, **kwargs: subprocess.CompletedProcess(command, 0, output, ""),
     )
-    with pytest.raises(bootstrap.BootstrapError, match="respuesta desconocida"):
+    with pytest.raises(bootstrap.BootstrapError, match="unknown response"):
         bootstrap.check_uv(">=0.13.4,<0.14")
 
 
@@ -136,7 +136,7 @@ def test_missing_uv_provides_minimum_version_install_instructions(bootstrap, mon
     monkeypatch.setattr(bootstrap.shutil, "which", lambda _: None)
     with pytest.raises(bootstrap.BootstrapError) as failure:
         bootstrap.check_uv(">=0.13.4,<0.14")
-    assert "Se requiere uv >=0.13.4,<0.14" in str(failure.value)
+    assert "Required uv version: >=0.13.4,<0.14" in str(failure.value)
     assert "https://astral.sh/uv/0.13.4/install.sh" in str(failure.value)
     assert "install.ps1" in str(failure.value)
 

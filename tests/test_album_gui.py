@@ -89,7 +89,7 @@ def test_album_editor_changes_common_data_without_changing_track_artists(
         QTest.mouseClick(view.edit_button, Qt.MouseButton.LeftButton)
         wait_until(qt_app, lambda: not controller._jobs and view._editing)
         assert not view.dirty()
-        assert view.labels["genres"].name_edit.placeholderText() == "Valores distintos"
+        assert view.labels["genres"].name_edit.placeholderText() == "Mixed values"
         view.apply_fields["album"].setChecked(True)
         view.fields["album"].setText("New album")
         view.apply_fields["album_artists"].setChecked(True)

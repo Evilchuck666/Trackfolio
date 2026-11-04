@@ -1,202 +1,108 @@
-# Catálogo SQLite y revisión en SQLiteBrowser
+# SQLite catalog and SQLiteBrowser review
 
-El catálogo permite importar, consultar y editar metadatos sin modificar los archivos
-FLAC/MP3. La GUI genera catálogos desde carpetas mediante **Importar música…**; el núcleo
-también funciona sin Qt. `scripts/import_audio.py` sigue siendo una herramienta individual
-de preparación y revisión, no la interfaz CLI completa de Trackfolio.
+The catalog imports, queries and edits metadata without modifying FLAC/MP3 files. The GUI generates catalogs from folders through **Import music…**; the core also works without Qt. `scripts/import_audio.py` remains an individual preparation/review tool, not Trackfolio's complete CLI.
 
-La extensión predeterminada de los catálogos nuevos es `.tfo`, de Trackfolio. Siguen
-siendo bases SQLite que se pueden consultar con SQLiteBrowser. También se pueden
-seguir abriendo los catálogos existentes con extensión `.sqlite3`, `.sqlite` o `.db`.
+New catalogs default to Trackfolio's `.tfo` extension. They remain SQLite databases readable by SQLiteBrowser. Existing `.sqlite3`, `.sqlite` and `.db` catalogs can still be opened.
 
-## Tablas y relaciones
+## Tables and relationships
 
-El catálogo usa varias tablas. La vista `track_details` reúne los datos para su consulta;
-no sustituye las tablas normalizadas ni contiene otra copia de los metadatos.
+The catalog uses multiple tables. `track_details` joins data for querying; it neither replaces normalized tables nor stores another metadata copy.
 
-| Tabla | Contenido |
+| Table | Contents |
 | --- | --- |
-| `libraries` | Raíz local de cada biblioteca. |
-| `albums` | Agrupaciones provisionales de álbum: biblioteca, directorio, título, año, fecha y total de discos. |
-| `tracks` | Título de pista, numeración, referencia opcional al álbum y letras cuando existen. |
-| `artists` | Artistas compartidos por nombre exacto único e identificador externo opcional. |
-| `genres` | Géneros, reutilizados cuando coincide exactamente el texto de su nombre. |
-| `track_artists` | Créditos de artistas de pista, con rol y posición. |
-| `album_artists` | Créditos de artistas de álbum, con rol y posición. |
-| `track_genres` | Géneros de cada pista, con posición. |
-| `audio_files` | Archivo físico, ruta relativa, formato, propiedades de audio y referencia/origen de la carátula. |
-| `artworks` | Bytes de la imagen en un BLOB, SHA-256, MIME y dimensiones. |
-| `raw_tags` | Etiquetas textuales leídas por archivo: clave, valor y posición dentro de esa clave. |
-| `alembic_version` | Revisión del esquema aplicada por Alembic. |
+| `libraries` | Each library's local root |
+| `albums` | Provisional album groups: library, directory, title, year, date and disc total |
+| `tracks` | Track title, numbering, optional album reference and available lyrics |
+| `artists` | Artists shared by unique exact name and optional external identifier |
+| `genres` | Genres reused when name text matches exactly |
+| `track_artists` | Track artist credits with role and position |
+| `album_artists` | Album artist credits with role and position |
+| `track_genres` | Track genres with position |
+| `audio_files` | Physical file, relative path, format, audio properties and artwork reference/source |
+| `artworks` | Image BLOB bytes, SHA-256, MIME and dimensions |
+| `raw_tags` | Text tags read per file: key, value and position within the key |
+| `alembic_version` | Schema revision applied by Alembic |
 
-Las claves foráneas conectan las tablas y se activan en cada conexión de la aplicación.
-Las posiciones conservan el orden de artistas y géneros. Las relaciones permiten
-varios artistas y géneros por pista, y un artista de álbum distinto del de la pista.
+Foreign keys connect tables and are enabled on every application connection. Positions preserve artist/genre order. Relationships allow multiple artists/genres per track and album artists different from track artists.
 
-Una pista puede relacionarse con varios archivos físicos en el esquema. El importador
-actual crea una pista por archivo nuevo: todavía no identifica automáticamente una
-misma grabación en FLAC, MP3 u otras ediciones. `track_details` devuelve **una fila por
-archivo**; si varios archivos comparten una pista, repetirán su `track_id`. Los créditos
-y géneros se agregan por separado para evitar multiplicar filas al consultar la vista.
+The schema permits one track to reference multiple physical files. The current importer creates one track per new file; it does not yet automatically identify the same recording in FLAC, MP3 or other editions. `track_details` returns **one row per file**; files sharing a track repeat its `track_id`. Credits/genres are aggregated separately to avoid multiplying query rows.
 
-## Identidad y datos ausentes
+## Identity and missing data
 
-Reimportar la misma ruta relativa dentro de la misma biblioteca actualiza sus datos y
-conserva sus identificadores. Una copia en otra ruta o un archivo renombrado se considera
-otro archivo; la ruta no demuestra que dos grabaciones sean iguales.
+Reimporting the same relative path within the same library updates data and preserves identifiers. A copy at another path or a renamed file is a different file; paths do not establish recording identity.
 
-Los álbumes se agrupan provisionalmente por biblioteca, directorio y metadatos de álbum,
-incluidos fecha, año, total de discos y artistas de álbum. Dos títulos iguales no bastan
-para fusionarlos. Si falta el título pero existen otros datos de álbum, se conserva una
-agrupación con título `NULL` para mantener esos datos y créditos.
+Albums are provisionally grouped by library, directory and album metadata, including date, year, disc total and album artists. Matching titles alone do not merge them. Missing titles with other album data retain a group with `NULL` title to preserve data and credits.
 
-Cada nombre exacto identifica un único artista en todo el catálogo. Sus pistas y álbumes
-comparten `artist_id` entre carpetas y bibliotecas; el índice `uq_artists_name` impide
-duplicados. No se normalizan espacios ni mayúsculas: `Accept` y `ACCEPT` son nombres
-distintos. `external_id` sigue siendo opcional y no determina la identidad.
+Each exact name identifies one artist across the catalog. Tracks/albums share `artist_id` across folders/libraries; `uq_artists_name` prevents duplicates. Spaces and case are not normalized: `Accept` and `ACCEPT` differ. Optional `external_id` does not determine identity.
 
-Corregir el artista de una canción de Abbath a Accept significa reasignar su crédito al
-ID de Accept, conservando Abbath y sus otros créditos. La reimportación de ese archivo
-ya permite aplicar una etiqueta corregida. La GUI permite corregir el crédito mediante
-**Editar** y **Guardar**, con sugerencias de artistas existentes y nombres nuevos exactos.
-Consulta el [plan implementado de edición](edit-plan.md).
-Consulta el [plan implementado de identidad de artistas](artist-identity-plan.md).
+Correcting a song's artist from Abbath to Accept reassigns its credit to Accept's ID, preserving Abbath and other credits. Reimport already applies corrected file tags. The GUI corrects credits through **Edit** and **Save**, with existing-artist suggestions and exact new names. See the implemented [editing](edit-plan.md) and [artist identity](artist-identity-plan.md) plans.
 
-La edición aplica sólo los campos modificados y preserva audio, portada, etiquetas
-originales y créditos de roles adicionales. La GUI y sus resúmenes muestran intérpretes
-de rol `artist` en **Artista(s)**; `track_details` sigue reuniendo todos los roles del catálogo.
+Editing applies only changed fields and preserves audio, artwork, original tags and additional-role credits. GUI summaries display `artist`-role performers under **Artist(s)**; `track_details` still aggregates all catalog roles.
 
-Cambiar el título o año de un álbum desde una canción reasigna únicamente esa pista a
-la agrupación resultante; no cambia la fila del álbum compartido. Se conservan fecha y
-créditos de álbum. El total de discos del formulario corresponde a `tracks.disc_total`:
-su edición no modifica `albums.disc_total`. Si un archivo comparte pista con otros,
-editarlo o reimportarlo copia la pista y sus relaciones antes de guardar. En ese caso se
-mantiene `file_id` y cambia su `track_id`; los demás archivos conservan sus datos.
+Changing album title/year from a song reassigns only that track to the resulting group without changing the shared album row. Date and album credits are preserved. The form's disc total is `tracks.disc_total`: editing it does not change `albums.disc_total`. If multiple files share a track, editing or reimporting one copies its track and relationships before saving. `file_id` remains but its `track_id` changes; other files retain their data.
 
-Un campo escalar ausente se guarda como `NULL`. Los artistas o géneros ausentes no
-generan relaciones: en los contratos Python se representan con una tupla vacía y en
-la vista agregada aparecen como `NULL`. La GUI los muestra en blanco.
-No se rellenan usando el nombre del archivo, otras pistas o información externa.
+Missing scalars are `NULL`. Missing artists/genres create no relationships: Python contracts use empty tuples and the aggregated view shows `NULL`; the GUI displays blanks. Values are not filled from filenames, other tracks or external information.
 
-El año puede extraerse de una fecha presente: `DATE=1981` produce `album_date='1981'`
-y `album_year=1981`. `raw_tags` conserva que la etiqueta original era `DATE`; no se
-inventa una etiqueta `YEAR`. La numeración propia de cada pista tampoco se completa
-con el total de discos de otro registro.
+Year can be extracted from an existing date: `DATE=1981` yields `album_date='1981'` and `album_year=1981`. `raw_tags` retains the original `DATE` tag without inventing `YEAR`. Track numbering is not completed from another record's disc total.
 
-`raw_tags` conserva los valores textuales originales leídos, incluso los no utilizados
-por el catálogo. No es una copia binaria de todas las estructuras del archivo. La
-importación elimina duplicados exactos en las relaciones normalizadas, conservando
-los valores leídos en `raw_tags`. Cambiar una entidad del catálogo no reescribe por sí
-solo las etiquetas musicales.
+`raw_tags` preserves original text values, including those unused by the catalog. It is not a binary copy of all file structures. Import removes exact duplicates from normalized relationships while retaining read values in `raw_tags`. Changing a catalog entity does not itself rewrite music tags.
 
-La acción **Escribir etiquetas…** compara los valores guardados con el archivo y publica
-todas las diferencias de sus campos editables. Su confirmación utiliza una instantánea que incluye `raw_tags`
-y actualiza esta observación con la lectura verificada. Si cambia la fecha física al
-escribir el año, actualiza también `album_date`, aislando las relaciones compartidas.
-Las demás correcciones guardadas, los roles y las carátulas permanecen intactos.
+**Write tags…** compares saved values with the file and publishes all editable-field differences. Confirmation uses a snapshot including `raw_tags` and updates that observation from the verified read. Physical date changes when writing year also update `album_date`, isolating shared relationships. Other saved corrections, roles and artwork remain intact.
 
-El registro recuperable se guarda fuera de SQLite, en la carpeta de datos de usuario
-`Trackfolio/tag-writes/<operación>/journal.json`; no añade tablas ni revisiones al esquema
-`002`. Publicar música y confirmar SQLite son pasos separados. Un resultado **catálogo
-pendiente** conserva el archivo ya escrito y requiere revisar su confirmación; no se
-revierte el audio ni se reemplaza una edición más reciente a ciegas. Véase la
-[guía de recuperación](tag-writing.md#recuperación).
+Recoverable logs are outside SQLite at `Trackfolio/tag-writes/<operation>/journal.json` in the user data folder; no tables or revisions are added to schema `002`. Publishing music and confirming SQLite are separate steps. **Catalog pending** retains the written file and requires confirmation review; audio is not rolled back and newer edits are not blindly replaced. See the [recovery guide](tag-writing.md#recovery).
 
-## Carátulas
+## Artwork
 
-Se utiliza primero una imagen incrustada reconocible, con preferencia por la portada
-frontal. Si no existe una válida, se intenta leer `album.jpg` del mismo directorio.
-Si tampoco existe o no se reconoce, la referencia y las propiedades de carátula quedan
-en `NULL`.
+Use recognizable embedded artwork first, preferring front covers. If none is valid, try `album.jpg` in the same directory. If absent or unrecognized, artwork reference/properties remain `NULL`.
 
-Los bytes se guardan en `artworks.data`, y las imágenes idénticas se reutilizan por su
-SHA-256. `audio_files` registra si el origen fue `embedded` o `album.jpg`; en el segundo
-caso también conserva la ruta relativa. La imagen sigue disponible en el catálogo
-aunque después cambie el archivo externo. Esta fase no descarga ni genera carátulas.
+Bytes are stored in `artworks.data`; identical images share their SHA-256 entry. `audio_files` records `embedded` or `album.jpg` source, with a relative path for the latter. Artwork remains available in the catalog even if the external file later changes. This phase does not download or generate artwork.
 
-## Importar para revisar
+## Import for review
 
-Desde la GUI, **Importar música…** permite elegir una carpeta raíz y crear un `.tfo`
-nuevo o actualizar el catálogo abierto. La exploración es recursiva y selecciona
-extensiones FLAC/MP3 sin distinguir mayúsculas; el lector comprueba su contenido real.
-Se ignoran otros archivos y no se atraviesan enlaces simbólicos ni puntos de unión.
+**Import music…** selects a root folder and creates a new `.tfo` or updates the open catalog. Scanning is recursive and selects FLAC/MP3 extensions case-insensitively; the reader verifies actual content. Other files are ignored; symlinks/junctions are not traversed.
 
-Cada archivo se guarda en su propia transacción. Un archivo ilegible produce una
-incidencia y permite continuar; un fallo del destino detiene la operación. Cancelar
-conserva los commits anteriores y el informe muestra los pendientes. Una carpeta vacía
-o sin audio válido no genera un catálogo nuevo. Si se creó uno y falló antes de guardar
-ningún archivo, se intenta eliminarlo; cualquier fallo de limpieza aparece en el informe.
-Un catálogo existente nunca se elimina ni se sobrescribe al elegir crear uno nuevo.
+Each file uses its own transaction. Unreadable files produce issues and allow continuation; destination failures stop the operation. Cancellation preserves earlier commits and reports pending files. Empty folders or folders without valid audio do not create a new catalog. If one was created but failed before any save, removal is attempted and cleanup failures reported. Existing catalogs are never deleted or overwritten by choosing create-new.
 
-Actualizar relee todos los candidatos: conserva `file_id` para la misma raíz/ruta y
-`track_id` mientras la pista no esté compartida. Reemplaza los metadatos anteriores,
-incluidas las correcciones manuales y los campos que ahora faltan; conserva créditos
-adicionales que el lector musical no gestiona. No elimina registros
-de audio desaparecido, no identifica grabaciones duplicadas y no reasigna raíces al
-mover la biblioteca. Consulta el [plan implementado](import-plan.md).
+Update rereads every candidate: `file_id` is preserved for the same root/path, and `track_id` while unshared. Previous metadata is replaced, including manual corrections and now-missing fields; additional credits unmanaged by the music reader are preserved. Missing-audio records are not deleted, duplicate recordings are not identified and moved roots are not reassigned. See the [implemented plan](import-plan.md).
 
-Desde la raíz del proyecto, con el entorno preparado, sustituir las rutas de ejemplo
-por un archivo y una biblioteca reales:
+From the project root with setup complete, replace example paths with a real file/library:
 
 ```sh
 uv sync --locked --group dev
-uv run --locked python scripts/import_audio.py "/ruta/a/biblioteca/cancion.flac" --database data/database.tfo --library-root "/ruta/a/biblioteca"
+uv run --locked python scripts/import_audio.py "/path/to/library/song.flac" --database data/database.tfo --library-root "/path/to/library"
 ```
 
-Los mismos argumentos funcionan en Windows usando sus rutas. El archivo debe estar
-dentro de la raíz indicada. Si se omite `--library-root`, se utiliza el directorio del
-archivo. El script prepara o reconoce el esquema antes de guardar el catálogo; una
-base de datos ajena o de revisión desconocida se rechaza.
+The same arguments work with Windows paths. The file must be inside the root. Without `--library-root`, use its directory. The script prepares/recognizes the schema before saving; unrelated databases or unknown revisions are rejected.
 
-Si se omite `--database`, se crea o actualiza `data/database.tfo`. Una ruta indicada
-explícitamente se respeta, incluida su extensión.
+Without `--database`, create/update `data/database.tfo`. Explicit paths, including extensions, are respected. This is the local review database. SQLite files/music are excluded from Git. A library root is local: moving the project neither moves music nor automatically adjusts roots in existing databases.
 
-La base local de revisión es `data/database.tfo`. Los archivos SQLite y la música
-están excluidos de Git. La raíz de biblioteca es una ubicación local: mover el proyecto
-no mueve la música ni adapta automáticamente la raíz guardada en una base existente.
+## Upgrade an older catalog
 
-## Actualizar un catálogo anterior
+The current revision is `002_unique_artists`. The GUI reads `001_initial` without modifying it. Importing or saving edits creates a consistent SQLite backup and migrates before writing. Preparing/cancelling drafts, saving without changes, validating import forms or importing folders without valid audio do not trigger this upgrade.
 
-La revisión vigente es `002_unique_artists`. La GUI puede consultar catálogos `001_initial`
-sin modificarlos. Al importar o guardar una edición sobre uno anterior, el escritor crea
-un respaldo consistente de SQLite y aplica la migración antes de escribir. Preparar o
-cancelar un borrador, guardar sin cambios, validar el formulario de importación o importar
-una carpeta sin audio válido no inicia esa actualización.
-
-Para consolidar los artistas sin releer música, cierra otras aplicaciones que estén
-escribiendo el catálogo y ejecuta:
+To consolidate artists without rereading music, close other catalog-writing applications and run:
 
 ```sh
 uv run --locked python -m trackfolio.infrastructure.database --upgrade data/database.tfo
 ```
 
-El comando imprime la ruta de la copia anterior, junto al catálogo, con el patrón
-`database.tfo.001_initial.<identificador>.bak`. No sobrescribe copias existentes. Si falla
-el respaldo, no empieza la migración; si falla la actualización, revierte sus cambios.
-Repetir el comando sobre `002` no cambia datos ni crea otro respaldo.
+The command prints the previous-copy path beside the catalog, matching `database.tfo.001_initial.<identifier>.bak`. Existing copies are not overwritten. Backup failure prevents migration; upgrade failure rolls back changes. Repeating on `002` changes no data and creates no backup.
 
-La consolidación conserva el menor ID de cada nombre exacto y redirige tanto los créditos
-de pista como los de álbum. Conserva sus filas, roles y posiciones, y los IDs y datos de
-pistas, archivos y álbumes. Si el `external_id` canónico está vacío, toma el primer valor
-no nulo por ID del grupo. El downgrade sólo retira el índice: para recuperar las filas
-duplicadas originales hay que restaurar la copia de respaldo con la aplicación cerrada.
+Consolidation retains the lowest ID per exact name and redirects track and album credits. Rows, roles, positions and track/file/album IDs/data are preserved. If canonical `external_id` is empty, take the first non-null value by group ID. Downgrade removes only the index; restoring original duplicate rows requires restoring the backup with the application closed.
 
-El SQL histórico [001_initial.sql](../migrations/001_initial.sql) permanece intacto.
-[002_current.sql](../migrations/002_current.sql) crea una base nueva hasta la revisión
-vigente; no se ejecuta sobre un catálogo poblado. Ambos se generan desde Alembic:
+Historical [001_initial.sql](../migrations/001_initial.sql) remains intact. [002_current.sql](../migrations/002_current.sql) creates a new database through the current revision; do not run it on populated catalogs. Both are generated from Alembic:
 
 ```sh
 uv run --locked python -m trackfolio.infrastructure.database --export-sql migrations/001_initial.sql
 uv run --locked python -m trackfolio.infrastructure.database --export-current-sql migrations/002_current.sql
 ```
 
-## Comprobar en SQLiteBrowser
+## Check in SQLiteBrowser
 
-1. Abrir `data/database.tfo` con **Abrir base de datos**.
-2. En **Estructura de base de datos**, revisar las tablas anteriores y `track_details`.
-3. En **Examinar datos**, seleccionar la vista `track_details` para ver los metadatos
-   reunidos, o una tabla para comprobar sus relaciones.
-4. En **Ejecutar SQL**, ejecutar estas consultas de revisión:
+1. Open `data/database.tfo` using **Open Database**.
+2. Under **Database Structure**, inspect the tables above and `track_details`.
+3. Under **Browse Data**, select `track_details` for combined metadata or a table to inspect relationships.
+4. Under **Execute SQL**, run:
 
 ```sql
 SELECT file_id, track_id, relative_path, format,
@@ -207,9 +113,9 @@ FROM track_details
 ORDER BY file_id;
 
 SELECT file_id,
-       album_artists IS NULL AS sin_artista_de_album,
-       lyrics IS NULL AS sin_letras,
-       cover_source IS NULL AS sin_caratula
+       album_artists IS NULL AS no_album_artist,
+       lyrics IS NULL AS no_lyrics,
+       cover_source IS NULL AS no_artwork
 FROM track_details;
 
 SELECT id, mime, width, height, length(data) AS bytes
@@ -221,50 +127,33 @@ PRAGMA foreign_key_check;
 PRAGMA integrity_check;
 ```
 
-La revisión de un catálogo actualizado debe ser `002_unique_artists`; la consulta de
-nombres repetidos y `foreign_key_check` no deben devolver filas, e `integrity_check` debe
-devolver `ok`. En `artworks`, SQLiteBrowser permite
-examinar el BLOB de la imagen; la consulta anterior comprueba sus propiedades sin
-mostrar el contenido binario.
+An upgraded catalog reports `002_unique_artists`; duplicate-name and `foreign_key_check` queries return no rows; `integrity_check` returns `ok`. SQLiteBrowser can inspect image BLOBs in `artworks`; the query above checks properties without displaying binary contents.
 
-En la muestra de validación, el resultado esperado es:
+Expected validation sample:
 
-| Campo | Valor |
+| Field | Value |
 | --- | --- |
-| Título / artista de pista | Run If You Can / Accept |
-| Álbum / fecha / año | Breaker / 1981 / 1981 |
-| Artista de álbum | `NULL` en la vista; sin filas en `album_artists` |
-| Género | Heavy Metal |
-| Pista / total de pistas | 3 / 10 |
-| Disco / total de discos | 1 / 1 |
-| Carátula | `embedded`, `image/jpeg`, 500 × 500, 385192 bytes |
-| Letras | `NULL` |
+| Title / track artist | Run If You Can / Accept |
+| Album / date / year | Breaker / 1981 / 1981 |
+| Album artist | `NULL` in the view; no `album_artists` rows |
+| Genre | Heavy Metal |
+| Track / total | 3 / 10 |
+| Disc / total | 1 / 1 |
+| Artwork | `embedded`, `image/jpeg`, 500 × 500, 385192 bytes |
+| Lyrics | `NULL` |
 
-La ausencia de artista de álbum en esta muestra es intencionada: el archivo sólo
-acredita al artista de pista. La GUI conserva esa ausencia; importar no completa
-metadatos mediante suposiciones.
+Missing album artist is intentional: the file credits only the track performer. The GUI preserves that absence; import does not infer metadata.
 
-## Migración canónica y SQL reproducible
+## Canonical migration and reproducible SQL
 
-La fuente del esquema es la migración Alembic empaquetada en
-`src/trackfolio/infrastructure/migrations/versions/001_initial.py` y su definición
-`initial_schema.py`. La aplicación la ejecuta mediante `migrate_database`; no crea
-tablas por un camino independiente con `create_all`.
+The schema source is the packaged Alembic migration `src/trackfolio/infrastructure/migrations/versions/001_initial.py` and its `initial_schema.py` definition. The application runs it through `migrate_database`; it does not independently create tables with `create_all`.
 
-`migrations/001_initial.sql` se genera desde esa misma revisión para examinarla y
-crear una base nueva desde SQLiteBrowser. Se regenera con:
+`migrations/001_initial.sql` is generated from that revision for inspection and creating new databases in SQLiteBrowser. Regenerate with:
 
 ```sh
 uv run --locked python -m trackfolio.infrastructure.database --export-sql migrations/001_initial.sql
 ```
 
-Para comprobar sólo la estructura, crear otra base vacía en SQLiteBrowser, abrir el
-archivo SQL en **Ejecutar SQL** y ejecutar el script completo. Incluye la transacción,
-las tablas, la vista, la revisión Alembic y la marca de identificación de Trackfolio.
-No contiene la música ni los datos de la muestra y no se ejecuta sobre un catálogo
-existente. Esta ruta permite revisar el mismo esquema que usa la migración en línea.
+To check only structure, create another empty database in SQLiteBrowser, open the SQL under **Execute SQL** and run the entire script. It includes the transaction, tables, view, Alembic revision and Trackfolio identification marker. It contains no music/sample data and is not run on existing catalogs. This path reviews the same schema as online migration.
 
-En desarrollo, `uv run --locked alembic upgrade head` aplica la migración sobre la
-base configurada en `alembic.ini`, por defecto `data/database.tfo`. Las siguientes
-modificaciones del esquema deberán convertirse en nuevas revisiones; el SQL inicial
-no sustituye las migraciones de catálogos existentes.
+During development, `uv run --locked alembic upgrade head` migrates the database configured in `alembic.ini`, default `data/database.tfo`. Future schema changes must be new revisions; initial SQL does not replace migrations of existing catalogs.

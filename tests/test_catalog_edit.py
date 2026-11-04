@@ -145,7 +145,7 @@ def test_batch_edit_preserves_individual_fields_and_unselected_tracks(
 def test_batch_rejects_individual_fields_before_opening_writer(catalogue, tmp_path, field):
     path, repository = catalogue
     item = repository.save(TrackMetadata(title="Song", audio_format="flac"), tmp_path, "a.flac")
-    with pytest.raises(CatalogEditError, match="En grupo"):
+    with pytest.raises(CatalogEditError, match="Batch editing"):
         UpdateCatalogTracks(NeverWriterFactory()).execute(
             path, (editable(path, item.file_id),), patch(**{field: None})
         )

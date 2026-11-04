@@ -1,151 +1,90 @@
-# Plan de escritura de etiquetas FLAC y MP3
+# FLAC and MP3 tag-writing plan
 
-Estado: implementación funcional del 2 de noviembre de 2026, con el flujo simplificado
-solicitado después de la primera entrega. La comprobación local y la validación por
-plataforma de cada revisión se registran en [VALIDATION.md](../VALIDATION.md).
-La [guía de uso y recuperación](tag-writing.md) describe los formatos y límites.
-Desde el 3 de noviembre de 2026 también se actualiza opcionalmente `album.nfo`,
-según el [plan implementado de NFO](album-nfo-plan.md). Se comparte operación,
-registro y limpieza de respaldos; los resultados NFO se separan de los musicales.
+Status: functional implementation dated November 2, 2026, with the simplified flow requested after the first delivery. Local and per-platform checks for each revision are recorded in [VALIDATION.md](../VALIDATION.md). The [usage and recovery guide](tag-writing.md) describes formats and limits. Since November 3, 2026, optional `album.nfo` updates follow the [implemented NFO plan](album-nfo-plan.md). Operations, logs and backup cleanup are shared; NFO results remain separate from music results.
 
-## Resultado y alcance
+## Result and scope
 
-Editar y guardar los valores en el catálogo, seleccionar una o varias canciones y
-pulsar **Escribir etiquetas…**. El diálogo muestra inmediatamente las canciones,
-la salida del progreso y únicamente **Cerrar** y **Escribir etiquetas**.
+Edit and save catalog values, select one or more songs, and click **Write tags…**. The dialog immediately shows songs, progress output and only **Close** and **Write tags**.
 
-Pulsar escribir sobrescribe automáticamente todas las diferencias entre los
-campos editables guardados y los archivos. Cada canción utiliza sus propios valores;
-la selección múltiple no iguala títulos, artistas ni numeración por sí misma. Un valor
-vacío guardado elimina su etiqueta. Los archivos sin diferencias se omiten.
+Writing automatically overwrites every difference between saved editable fields and files. Each song uses its own values; multiple selection does not itself equalize titles, artists or numbering. An empty saved value removes its tag. Files without differences are skipped.
 
-La acción **Escribir etiquetas de todo el catálogo…** utiliza el mismo flujo con todas
-las canciones, sin depender de la selección. Obtiene la lista completa de SQLite en un
-trabajador antes de mostrar el diálogo, tras resolver los borradores pendientes.
+**Write tags for the entire catalog…** uses the same flow for all songs regardless of selection. It obtains the complete SQLite list in a worker before showing the dialog, after resolving pending drafts.
 
-No hay casillas de campos/archivos, revisión manual de diferencias, botones de informes
-ni gestor de operaciones pendientes. Si se produce un error, un pop-up ofrece guardar
-un informe JSON con los resultados y respaldos. El listado permanece visible durante
-la preparación, escritura y finalización, incluidas las canciones con incidencias.
+There are no field/file checkboxes, manual difference review, report buttons or pending-operation manager. Errors produce a popup offering a JSON report with results and backups. The list remains visible during preparation, writing and completion, including songs with issues.
 
-**Guardar** sigue editando únicamente SQLite. Antes de abrir el diálogo se resuelven
-los borradores con Guardar/Descartar/Cancelar. Se congela la selección y se calculan
-las diferencias contra los archivos actuales al ejecutar, sin usar una comparación
-antigua ni cambiar automáticamente los destinatarios.
+**Save** still edits only SQLite. Drafts are resolved with Save/Discard/Cancel before opening the dialog. Selection is frozen; differences are calculated against current files at execution, without stale comparisons or automatically changing targets.
 
-## Correspondencia de campos
+## Field mapping
 
-| Campo del catálogo | FLAC | MP3 ID3v2 |
+| Catalog field | FLAC | MP3 ID3v2 |
 | --- | --- | --- |
-| Canción | `TITLE` | `TIT2` |
-| Artistas | Valores repetidos de `ARTIST` | Lista `TPE1` |
-| Artistas del álbum | Valores repetidos de `ALBUMARTIST` | Lista `TPE2` |
-| Álbum | `ALBUM` | `TALB` |
-| Año | `DATE` | `TDRC`, o representación v2.3 |
-| Pista / total | `TRACKNUMBER` / `TRACKTOTAL` | `TRCK` |
-| Disco / total | `DISCNUMBER` / `DISCTOTAL` | `TPOS` |
-| Géneros | Valores repetidos de `GENRE` | Lista `TCON` |
-| Líricas | `LYRICS` | Primera versión `USLT` expuesta por el lector |
+| Song | `TITLE` | `TIT2` |
+| Artists | Repeated `ARTIST` values | `TPE1` list |
+| Album artists | Repeated `ALBUMARTIST` values | `TPE2` list |
+| Album | `ALBUM` | `TALB` |
+| Year | `DATE` | `TDRC`, or v2.3 representation |
+| Track / total | `TRACKNUMBER` / `TRACKTOTAL` | `TRCK` |
+| Disc / total | `DISCNUMBER` / `DISCTOTAL` | `TPOS` |
+| Genres | Repeated `GENRE` values | `TCON` list |
+| Lyrics | `LYRICS` | First `USLT` version exposed by the reader |
 
-- Se escribe únicamente lo que difiere, incluida la portada frontal elegida entre los
-  JPEG/PNG de la carpeta según el [plan de portadas](cover-writing-plan.md).
-  Se conservan el audio, las demás imágenes y los metadatos ajenos al catálogo.
-  Sin imágenes se conserva la portada actual. No se renombran archivos.
-  Si existe `album.nfo` junto al audio, se sincroniza una vez por carpeta con los
-  valores coherentes de todas sus pistas catalogadas, sin ampliar la selección musical.
-- Se actualiza la familia de alias de cada campo modificado, incluidos los `TXXX`
-  reconocidos por el lector, para que no prevalezcan valores antiguos al importar.
-- Los artistas y géneros conservan orden, Unicode y nombres completos, sin unir ni
-  dividir por comas, punto y coma o `/`. Las listas vacías eliminan su familia.
-- Se escriben los números y totales guardados. El total sin número vuelve a leerse
-  como número ausente, sin inventar numeración.
-- Al cambiar el año se conserva la precisión válida de la fecha. Si no es representable
-  o produce una fecha inválida, se sustituye por el año guardado; vaciar el año elimina
-  la fecha. Los años se serializan con cuatro dígitos, en el rango 1–9999.
-- Si hay varias líricas ID3, se actualiza la primera versión expuesta por el lector,
-  conservando su idioma y descripción y las otras versiones. No se pide otra selección.
-- Se conserva ID3v2.3/v2.4; sin etiquetas se crea v2.4. ID3v2.2, ID3v1 coexistente y
-  listas v2.3 que se unirían con pérdidas producen una incidencia, sin conversión.
+- Write only differences, including front artwork chosen from folder JPEG/PNG files under the [artwork plan](cover-writing-plan.md). Preserve audio, other images and metadata unrelated to the catalog. Without images, retain existing artwork. Do not rename files. Existing adjacent `album.nfo` is synchronized once per folder using consistent values from all cataloged tracks, without expanding music selection.
+- Update each modified field's alias family, including reader-recognized `TXXX`, so old values do not take precedence on import.
+- Artists and genres retain order, Unicode and complete names, without joining or splitting on commas, semicolons or `/`. Empty lists remove their family.
+- Write saved numbers/totals. A total without a number reads back with the number absent, without inventing numbering.
+- Changing year preserves valid date precision. Unrepresentable or invalid results become the saved year; clearing year removes the date. Years use four digits, range 1–9999.
+- With multiple ID3 lyrics, update the first reader-exposed version, preserving its language, description and other versions. Do not request another selection.
+- Preserve ID3v2.3/v2.4; absent tags create v2.4. ID3v2.2, coexisting ID3v1 and lossy v2.3 lists produce issues without conversion.
 
-## Escritura de un archivo
+## Writing a file
 
-La preparación y escritura se ejecutan secuencialmente en un trabajador. Antes de
-publicar se comprueba la raíz importada, los permisos, la identidad, tamaño, `mtime_ns`
-y SHA-256 completo del original. Se rechazan enlaces simbólicos/junctions, enlaces duros,
-rutas que escapen de la raíz y destinos físicos duplicados.
+Preparation and writing run sequentially in a worker. Before publication, check imported root, permissions, identity, size, `mtime_ns` and complete original SHA-256. Reject symlinks/junctions, hard links, escaping paths and duplicate physical targets.
 
-1. Obtener las instantáneas guardadas y calcular internamente todas las diferencias.
-2. Preparar el escritor SQLite y crear un registro persistente de operación.
-3. Crear un respaldo completo y exclusivo y verificar su hash.
-4. Crear un temporal propio en el mismo directorio del original y editar esa copia.
-5. Reabrir la copia para comprobar los valores, metadatos ajenos y hashes del audio.
-6. Conservar y comprobar permisos y atributos según la plataforma.
-7. Revalidar el original y el catálogo y registrar el hash posterior antes de publicar.
-8. Sincronizar la copia, reemplazar el original y registrar el resultado.
-9. Confirmar las observaciones en SQLite sin reimportar todo el archivo.
+1. Obtain saved snapshots and internally calculate all differences.
+2. Prepare the SQLite writer and persistent operation log.
+3. Create a complete exclusive backup and verify its hash.
+4. Create an owned temporary file in the original directory and edit that copy.
+5. Reopen the copy to verify values, unrelated metadata and audio hashes.
+6. Preserve and check platform-specific permissions and attributes.
+7. Revalidate original/catalog and log the resulting hash before publication.
+8. Sync the copy, replace the original and record the result.
+9. Confirm observations in SQLite without reimporting the entire file.
 
-Los respaldos se conservan en
-`<carpeta del audio>/.trackfolio-backups/<operación>/<id>-<nombre>.tfo-bak`.
-Los temporales terminan en `.tmp`; ninguno se reimporta como música. No se utilizan
-hardlinks como respaldo. Tras confirmar y registrar todo el lote correctamente,
-sin errores ni cancelación, se elimina el directorio `.trackfolio-backups` completo
-de cada carpeta afectada, con todos los UUID que contenga. Ante errores se conservan
-las copias. Si falla la limpieza, se informa y se mantienen las rutas aún existentes.
-La [guía](tag-writing.md) registra los límites de ACL, atributos y streams por plataforma.
+Backups are stored at `<audio folder>/.trackfolio-backups/<operation>/<id>-<name>.tfo-bak`. Temporaries end in `.tmp`; neither is reimported as music. Backups are not hard links. After successful batch confirmation and logging without errors/cancellation, remove the complete `.trackfolio-backups` directory from each affected folder, including all UUIDs. Errors retain copies. Cleanup failures are reported with paths still present. The [guide](tag-writing.md) records platform ACL, attribute and stream limits.
 
-La atomicidad es por archivo, no por lote ni entre música y SQLite. La revalidación
-no constituye un compare-and-swap portable frente a otros programas que editen música.
-Si una copia no se puede verificar o preservar, no se publica.
+Atomicity is per file, not per batch or across music and SQLite. Revalidation is not a portable compare-and-swap against other music editors. Unverifiable or unpreservable copies are not published.
 
-## SQLite, cancelación y errores
+## SQLite, cancellation and errors
 
-La instantánea incluye los valores musicales y `raw_tags`. La confirmación compara
-esa instantánea bajo transacción y actualiza solamente las observaciones y la fecha
-física afectada. No sustituye correcciones nuevas ni otros registros, roles o carátulas;
-se aíslan las pistas y álbumes compartidos cuando hace falta.
+Snapshots include musical values and `raw_tags`. Confirmation compares them transactionally and updates only observations and the affected physical date. It does not replace newer corrections, other records, roles or artwork; shared tracks/albums are isolated where necessary.
 
-El registro `Trackfolio/tag-writes/<id>/journal.json` conserva rutas, selección, cambios,
-hashes, respaldos y estados. Se escribe mediante temporal, reemplazo y sincronización.
-Si el archivo se publicó y la confirmación falla, queda como **catálogo pendiente**;
-no se informa que el original quedó intacto ni se restaura a ciegas.
+`Trackfolio/tag-writes/<id>/journal.json` retains paths, selection, changes, hashes, backups and states. It is written through temporary file, replacement and sync. Publication followed by failed confirmation becomes **catalog pending**; it is not reported as an intact original or blindly restored.
 
-**Cerrar** durante un trabajo solicita cancelación cooperativa y espera a un punto
-seguro antes de cerrar. Se conserva lo ya publicado. Los errores aislados permiten
-continuar con los demás archivos; perder el catálogo o el registro y los fallos
-esenciales de almacenamiento detienen los restantes. La ventana mantiene su respuesta.
+**Close** during work requests cooperative cancellation and waits for a safe point. Published work is retained. Isolated errors allow other files to continue; catalog/log loss and essential storage failures stop remaining work. The window remains responsive.
 
-La salida muestra resultados por archivo: escrito, catálogo pendiente, sin cambios,
-no escribible, conflicto, fallido o pendiente. Los errores ofrecen exportación en un
-pop-up; cancelar o finalizar sin errores no abre ese pop-up. Los registros y respaldos
-permiten recuperación manual. El núcleo conserva `ReviewTagWrites` para inspeccionar
-hashes y confirmar observaciones mediante sus contratos; no hay pantalla de recuperación
-ni escrituras/restauraciones automáticas al iniciar la GUI.
+Output shows per-file results: written, catalog pending, unchanged, not writable, conflict, failed or pending. Errors offer export in a popup; cancellation or error-free completion does not. Logs/backups allow manual recovery. Core `ReviewTagWrites` inspects hashes and confirms observations through contracts; there is no recovery screen or automatic writing/restoration at GUI startup.
 
-## Componentes y aceptación
+## Components and acceptance
 
-| Componente | Responsabilidad |
+| Component | Responsibility |
 | --- | --- |
-| `domain/tag_write.py` | Solicitudes, instantáneas, diferencias, estados, progreso e informe. |
-| `application/write_tags.py` | `TagWriteService.execute` prepara todos los cambios y escribe; contratos sin Qt/ORM/Mutagen. |
-| `infrastructure/tag_write.py` | Modificación Mutagen y verificación de audio, bloques y frames. |
-| `infrastructure/tag_write_files.py` | Rutas, hashes, copias exclusivas, publicación, atributos y registros. |
-| `infrastructure/tag_write_catalog.py` | Confirmación parcial con comparación de instantánea en SQLite. |
-| `application/album_nfo.py` | Preparación, agregación, publicación y revisión de NFO mediante contratos. |
-| `infrastructure/album_nfo.py` | Edición y verificación del XML, conservando contenido ajeno. |
-| `interfaces/gui/tag_write_dialog.py` | Listado fijo, progreso, dos botones y pop-up de informe ante errores. |
+| `domain/tag_write.py` | Requests, snapshots, differences, states, progress and report |
+| `application/write_tags.py` | `TagWriteService.execute` prepares all changes and writes; contracts without Qt/ORM/Mutagen |
+| `infrastructure/tag_write.py` | Mutagen modification and audio/block/frame verification |
+| `infrastructure/tag_write_files.py` | Paths, hashes, exclusive copies, publication, attributes and logs |
+| `infrastructure/tag_write_catalog.py` | Partial confirmation with transactional SQLite snapshot comparison |
+| `application/album_nfo.py` | NFO preparation, aggregation, publication and review through contracts |
+| `infrastructure/album_nfo.py` | XML editing/verification preserving unrelated content |
+| `interfaces/gui/tag_write_dialog.py` | Fixed list, progress, two buttons and error-report popup |
 
-Se reutilizan los casos internos de preparación, escritura y revisión técnica, sin
-exponer su granularidad en la GUI. El esquema `002` y las dependencias no cambian.
+Reuse internal preparation, writing and technical review without exposing their granularity in the GUI. Schema `002` and dependencies remain unchanged.
 
-La aceptación verifica:
+Acceptance verifies:
 
-- Editar → guardar → escribir → importar en otro catálogo y recuperar los campos editables.
-- Eliminaciones, Unicode, listas, fechas, numeración y USLT, sin cambiar metadatos ajenos.
-- Hash del audio real y conservación de imágenes, bloques, frames desconocidos y APEv2.
-- Fallos antes/después de publicar, espacio insuficiente, archivos modificados, permisos,
-  bloqueos, enlaces, cancelación e interrupción real del proceso con registro durable.
-- Listado completo desde la apertura, escritura directa sin revisión, salida de progreso,
-  cierre diferido y oferta de informe únicamente ante errores.
-- Ruff, formato, mypy, pytest, diagnóstico, núcleo sin Qt y wheel fuera del checkout.
-- Matriz Linux, Windows y macOS Intel/Apple Silicon, registrando por separado la revisión
-  visual manual de escritorios y los resultados automáticos `offscreen`/nativos.
+- Edit → save → write → import into another catalog and recover editable fields.
+- Clearing, Unicode, lists, dates, numbering and USLT without unrelated metadata changes.
+- Actual audio hashes and preservation of images, blocks, unknown frames and APEv2.
+- Failures before/after publication, insufficient space, changed files, permissions, locks, links, cancellation and actual process interruption with durable logs.
+- Complete list from opening, direct writing without review, progress output, deferred close and report offers only on errors.
+- Ruff, formatting, mypy, pytest, diagnostics, Qt-free core and wheel outside checkout.
+- Linux, Windows and macOS Intel/Apple Silicon matrix, separating manual desktop visual review from automatic `offscreen`/native results.

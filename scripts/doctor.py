@@ -21,7 +21,7 @@ try:
     import tomllib
 except ModuleNotFoundError:
     sys.exit(
-        "Esta herramienta necesita Python 3.11 o posterior. Usa: "
+        "This tool requires Python 3.11 or later. Use: "
         "uv run --locked python scripts/doctor.py --core"
     )
 
@@ -79,7 +79,7 @@ def check_python(root: Path) -> CheckResult:
             "Python",
             False,
             f"Required CPython version: {expected}; using {sys.implementation.name} {actual}. "
-            "Ejecuta uv python install y luego uv run --locked python scripts/doctor.py.",
+            "Run uv python install, then uv run --locked python scripts/doctor.py.",
         )
     return CheckResult("Python", True, f"CPython {actual}: {sys.executable}")
 
@@ -113,8 +113,8 @@ def check_versions(root: Path, gui: bool) -> list[CheckResult]:
             actual
             if ok
             else (
-                f"Instalado {actual}; the lockfile requires {', '.join(sorted(expected))}. "
-                f"Ejecuta {sync_command}."
+                f"Installed {actual}; the lockfile requires {', '.join(sorted(expected))}. "
+                f"Run {sync_command}."
             )
         )
         results.append(CheckResult(name, ok, detail))
@@ -131,12 +131,12 @@ def check_imports() -> list[CheckResult]:
                 CheckResult(
                     f"Import {name}",
                     False,
-                    f"{type(exc).__name__}: {exc}. Ejecuta uv sync --locked --group dev. "
+                    f"{type(exc).__name__}: {exc}. Run uv sync --locked --group dev. "
                     "If sqlite3 fails, reinstall managed CPython with uv python install.",
                 )
             )
         else:
-            results.append(CheckResult(f"Import {name}", True, "Disponible"))
+            results.append(CheckResult(f"Import {name}", True, "Available"))
     return results
 
 
@@ -212,15 +212,15 @@ def check_resources() -> CheckResult:
                 raise ValueError(f"Resource {name} is empty or its SHA-256 does not match.")
     except Exception as exc:
         return CheckResult(
-            "Recursos",
+            "Resources",
             False,
             f"Cannot validate packaged trackfolio.resources assets: {exc}. "
             "Check the package resources and run uv sync --locked again.",
         )
     return CheckResult(
-        "Recursos",
+        "Resources",
         True,
-        f"{len(required)} recursos accesibles; fuentes, licencia, SVG y QSS verificados",
+        f"{len(required)} accessible resources; fonts, license, SVG and QSS verified",
     )
 
 
@@ -233,17 +233,17 @@ def check_gui_platform() -> CheckResult:
     detail = f"{system} {platform.release()} ({machine})"
     if system == "Windows":
         if machine not in ("amd64", "x86_64"):
-            return CheckResult("Plataforma GUI", False, f"{detail}. Se requiere Windows x86-64.")
+            return CheckResult("GUI platform", False, f"{detail}. Windows x86-64 is required.")
         windows_version = version_tuple(platform.version())
         if len(windows_version) < 3 or windows_version < (10, 0, 17763):
             return CheckResult(
-                "Plataforma GUI", False, f"{detail}. Se requiere Windows 10 1809 o posterior."
+                "GUI platform", False, f"{detail}. Windows 10 1809 or later is required."
             )
     elif system == "Darwin":
         mac_version = platform.mac_ver()[0]
         if machine not in ("x86_64", "arm64") or version_tuple(mac_version) < (13,):
             return CheckResult(
-                "Plataforma GUI", False, f"{detail}. Se requiere macOS 13+ Intel o Apple Silicon."
+                "GUI platform", False, f"{detail}. macOS 13+ Intel or Apple Silicon is required."
             )
         detail = f"macOS {mac_version} ({machine})"
     elif system == "Linux":
@@ -254,25 +254,25 @@ def check_gui_platform() -> CheckResult:
             or version_tuple(libc_version) < (2, 34)
         ):
             return CheckResult(
-                "Plataforma GUI",
+                "GUI platform",
                 False,
-                f"{detail}; libc={libc or 'desconocida'} {libc_version}. "
+                f"{detail}; libc={libc or 'unknown'} {libc_version}. "
                 "GNU/Linux x86-64 with glibc 2.34+ is required. See docs/environment.md.",
             )
         detail += f"; glibc {libc_version}"
     else:
         return CheckResult(
-            "Plataforma GUI",
+            "GUI platform",
             False,
             f"{detail}. The initial matrix covers Windows, macOS and GNU/Linux.",
         )
-    return CheckResult("Plataforma GUI", True, detail)
+    return CheckResult("GUI platform", True, detail)
 
 
 def qt_failure_help(output: str) -> str:
     lowered = output.lower()
     if "no module named" in lowered:
-        return "Instala Qt con uv sync --locked --group dev --extra gui."
+        return "Install Qt with uv sync --locked --group dev --extra gui."
     if any(
         fragment in lowered
         for fragment in (
@@ -289,14 +289,14 @@ def qt_failure_help(output: str) -> str:
     if platform.system() == "Linux":
         return (
             "Check the plugin libraries and graphical session; "
-            "consulta docs/environment.md. "
-            "Si falta libxcb-cursor.so.0: Debian/Ubuntu: sudo apt install libxcb-cursor0; "
+            "see docs/environment.md. "
+            "If libxcb-cursor.so.0 is missing: Debian/Ubuntu: sudo apt install libxcb-cursor0; "
             "Arch: sudo pacman -S --needed xcb-util-cursor. "
             "If another .so is missing, install the system package specified in that documentation."
         )
     return (
         "Check the minimum system requirements and desktop. Reinstall dependencies with "
-        "uv sync --locked --group dev --extra gui; consulta docs/environment.md."
+        "uv sync --locked --group dev --extra gui; see docs/environment.md."
     )
 
 
@@ -406,7 +406,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--qt-timeout", type=positive_timeout, default=15.0, metavar="SECONDS")
     args = parser.parse_args(argv)
     if args.platform and not args.gui:
-        parser.error("--platform necesita --gui.")
+        parser.error("--platform requires --gui.")
     return args
 
 

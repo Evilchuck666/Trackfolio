@@ -26,7 +26,7 @@ def _upgrade(engine, revision):
 
 @pytest.fixture
 def legacy_catalog(tmp_path):
-    path = tmp_path / "artistas % antiguos.tfo"
+    path = tmp_path / "old artists %.tfo"
     engine = db.create_engine(path)
     _upgrade(engine, schema.LEGACY_REVISION)
     with engine.begin() as connection:
@@ -132,7 +132,7 @@ def test_populated_legacy_catalogue_preserves_every_credit_and_unrelated_value(l
     with engine.connect() as connection:
         view_before = connection.exec_driver_sql("SELECT * FROM track_details").all()
         assert validate_catalog_connection(connection) == schema.LEGACY_REVISION
-        with pytest.raises(UnknownDatabaseError, match="actualizarse"):
+        with pytest.raises(UnknownDatabaseError, match="upgraded"):
             validate_catalog_connection(connection, require_current=True)
     _upgrade(engine, schema.REVISION)
     after = _snapshot(engine)
@@ -248,7 +248,7 @@ def test_future_revision_is_rejected(legacy_catalog):
     _, engine = legacy_catalog
     with engine.begin() as connection:
         connection.exec_driver_sql("UPDATE alembic_version SET version_num = '999_future'")
-    with engine.connect() as connection, pytest.raises(UnknownDatabaseError, match="revisión"):
+    with engine.connect() as connection, pytest.raises(UnknownDatabaseError, match="revision"):
         validate_catalog_connection(connection)
 
 

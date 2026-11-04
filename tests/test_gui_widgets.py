@@ -105,12 +105,12 @@ def test_table_exposes_only_summary_values(qt_app):
 
 
 def test_detail_renders_all_fields_as_read_only_plain_text(window):
-    lyrics = "<b>Sin HTML</b>\nOtra línea: 坂本"
+    lyrics = "<b>No HTML</b>\nAnother line Ω: 坂本"
     window.set_detail(
         entry(
             TrackMetadata(
                 title="Canción Ω",
-                artists=("Accept", "Otro artista"),
+                artists=("Accept", "Other artist"),
                 album="Breaker",
                 album_year=1981,
                 track_number=3,
@@ -125,7 +125,7 @@ def test_detail_renders_all_fields_as_read_only_plain_text(window):
     )
     assert {key: field.text() for key, field in window.fields.items()} == {
         "title": "Canción Ω",
-        "artists": "Accept; Otro artista",
+        "artists": "Accept; Other artist",
         "album": "Breaker",
         "album_year": "1981",
         "track_number": "3",
@@ -147,8 +147,8 @@ def test_partial_detail_clears_previous_cover_lyrics_and_totals(window):
     window.set_detail(
         entry(
             TrackMetadata(
-                title="Anterior",
-                artists=("Artista",),
+                title="Previous",
+                artists=("Artist",),
                 album="Album",
                 album_year=2000,
                 track_number=4,
@@ -156,7 +156,7 @@ def test_partial_detail_clears_previous_cover_lyrics_and_totals(window):
                 disc_number=2,
                 disc_total=2,
                 genres=("Rock",),
-                lyrics="Texto anterior",
+                lyrics="Previous text",
                 artwork=Artwork(png_bytes(), "image/png"),
             )
         )
@@ -180,11 +180,11 @@ def test_invalid_cover_leaves_other_metadata_available(window):
 
 def test_catalog_selects_first_and_preserves_id_after_refresh(window, qt_app):
     signals = QSignalSpy(window.track_selected)
-    rows = (summary(3, title="Primera"), summary(7, title="Segunda"))
+    rows = (summary(3, title="First"), summary(7, title="Second"))
     window.set_catalog(Path("library.sqlite3"), rows)
     assert window.current_file_id() == 3
     assert signals.count() == 1 and signals.at(0) == [3]
-    window.set_detail(entry(TrackMetadata(title="Primera"), file_id=3))
+    window.set_detail(entry(TrackMetadata(title="First"), file_id=3))
     window.table.setFocus()
     QTest.keyClick(window.table, Qt.Key.Key_Down)
     qt_app.processEvents()
@@ -218,13 +218,13 @@ def test_actions_errors_and_loading_remain_recoverable(window, qt_app):
     window.set_busy(False)
     QTest.mouseClick(window.refresh_button, Qt.MouseButton.LeftButton)
     assert refreshed.count() == 1
-    window.set_error("No se pudo abrir <catálogo>.")
+    window.set_error("Could not open <catalog>.")
     assert window.error_label.isVisible()
     assert window.error_label.textFormat() == Qt.TextFormat.PlainText
     window.set_error("")
     assert window.error_label.isHidden()
-    window.set_status("1 canción cargada.")
-    assert window.status_label.text() == "1 canción cargada."
+    window.set_status("1 song loaded.")
+    assert window.status_label.text() == "1 song loaded."
     window.set_catalog(None, ())
     assert not window.refresh_button.isEnabled()
     assert window.catalog_label.text() == "No catalog"
@@ -234,10 +234,10 @@ def test_qt_title_controls_toggle_maximize_and_close(window, qt_app):
     closed = QSignalSpy(window.closing)
     QTest.mouseClick(window.title_bar.maximize_button, Qt.MouseButton.LeftButton)
     wait_until(window.isMaximized)
-    assert window.title_bar.maximize_button.accessibleName() == "Restaurar"
+    assert window.title_bar.maximize_button.accessibleName() == "Restore"
     QTest.mouseClick(window.title_bar.maximize_button, Qt.MouseButton.LeftButton)
     wait_until(lambda: not window.isMaximized())
-    assert window.title_bar.maximize_button.accessibleName() == "Maximizar"
+    assert window.title_bar.maximize_button.accessibleName() == "Maximize"
     QTest.mouseClick(window.title_bar.close_button, Qt.MouseButton.LeftButton)
     assert closed.count() == 1
 
@@ -260,7 +260,7 @@ def test_failed_wayland_move_enables_system_frame(window, monkeypatch):
     window.title_bar.mousePressEvent(event)
     assert not window.windowFlags() & Qt.WindowType.FramelessWindowHint
     assert window.title_bar.isHidden()
-    assert "marco" in window.status_label.text().lower()
+    assert "frame" in window.status_label.text().lower()
 
 
 def test_manual_resize_respects_minimum_size_when_system_operation_unavailable(window, monkeypatch):

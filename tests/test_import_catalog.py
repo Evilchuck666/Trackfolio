@@ -120,7 +120,7 @@ def setup_import(tmp_path, filenames=("Álbum/a.flac", "b.MP3"), operations=()):
 
 def test_committed_operations_and_scan_issues_are_counted_separately(tmp_path):
     request, scanner, target, factory = setup_import(tmp_path, operations=("updated", "created"))
-    scanner.issues = (ImportIssue(request.library_root / "private", "scan", "Sin acceso"),)
+    scanner.issues = (ImportIssue(request.library_root / "private", "scan", "Access denied"),)
     events = []
     report = ImportCatalog(scanner, lambda _: TrackMetadata(audio_format="flac"), factory).execute(
         request, on_progress=events.append
@@ -170,7 +170,7 @@ def test_empty_or_unreadable_library_never_creates_catalog(tmp_path, filenames):
     request, scanner, target, factory = setup_import(tmp_path, filenames)
 
     def read(_):
-        raise MetadataReadError("Archivo corrupto")
+        raise MetadataReadError("Corrupt file")
 
     report = ImportCatalog(scanner, read, factory).execute(request)
     assert (report.state, report.saved, report.failed) == ("completed", 0, len(filenames))
@@ -290,12 +290,12 @@ def test_cancel_after_commit_preserves_partial_result_and_closes_target(tmp_path
 
 def test_validation_failures_do_not_scan_or_open(tmp_path):
     request, scanner, target, factory = setup_import(tmp_path)
-    factory.validate_error = ImportTargetError("El destino ya existe")
+    factory.validate_error = ImportTargetError("The destination already exists")
     report = ImportCatalog(scanner, lambda _: pytest.fail("reader"), factory).execute(request)
     assert (report.state, report.total, report.fatal_error) == (
         "failed",
         None,
-        "El destino ya existe",
+        "The destination already exists",
     )
     assert scanner.calls == factory.openings == target.events == []
 
@@ -311,31 +311,31 @@ def test_invalid_root_fails_before_destination_validation(tmp_path):
 
 def test_fatal_scan_error_does_not_prepare_writer(tmp_path):
     request, scanner, target, factory = setup_import(tmp_path)
-    scanner.error = AudioScanError("No se puede explorar la raíz")
+    scanner.error = AudioScanError("Cannot scan the root")
     report = ImportCatalog(scanner, lambda _: pytest.fail("reader"), factory).execute(request)
     assert (report.state, report.total, report.fatal_error) == (
         "failed",
         None,
-        "No se puede explorar la raíz",
+        "Cannot scan the root",
     )
     assert factory.openings == target.events == []
 
 
 def test_open_failure_keeps_current_candidate_pending_and_reports_cleanup(tmp_path):
     request, scanner, target, factory = setup_import(tmp_path)
-    cleanup = ImportIssue(request.database_path, "cleanup", "No se pudo eliminar el archivo nuevo")
-    factory.open_error = ImportTargetError("No se pudo preparar el esquema", cleanup)
+    cleanup = ImportIssue(request.database_path, "cleanup", "Could not remove the new file")
+    factory.open_error = ImportTargetError("Could not prepare the schema", cleanup)
     report = ImportCatalog(scanner, lambda _: TrackMetadata(), factory).execute(request)
     assert (report.state, report.saved, report.failed, report.pending) == ("failed", 0, 0, 2)
     assert report.issues == (cleanup,)
-    assert report.fatal_error == "No se pudo preparar el esquema"
+    assert report.fatal_error == "Could not prepare the schema"
     assert target.events == []
 
 
 @pytest.mark.parametrize("committed", [0, 1])
 def test_write_failure_stops_batch_counts_failed_and_preserves_commits(tmp_path, committed):
     request, scanner, target, factory = setup_import(tmp_path, ("a.flac", "b.flac", "c.mp3"))
-    target.write_error = ImportTargetError("El destino está bloqueado")
+    target.write_error = ImportTargetError("The destination is locked")
     target.fail_after = committed
     report = ImportCatalog(scanner, lambda _: TrackMetadata(), factory).execute(request)
     assert (report.state, report.created, report.failed, report.pending) == (
@@ -344,7 +344,7 @@ def test_write_failure_stops_batch_counts_failed_and_preserves_commits(tmp_path,
         1,
         2 - committed,
     )
-    assert report.fatal_error == "El destino está bloqueado"
+    assert report.fatal_error == "The destination is locked"
     assert report.issues[-1].stage == "write"
     assert target.events == ["write"] * committed + ["close"] + (
         ["discard"] if not committed else []
@@ -360,25 +360,25 @@ def test_cleanup_failure_is_reported_without_losing_cancellation_or_counts(tmp_p
         cancelled = True
 
     factory.after_open = cancel
-    target.discard_error = ImportTargetError("Permanece el catálogo vacío")
+    target.discard_error = ImportTargetError("The empty catalog remains")
     report = ImportCatalog(scanner, lambda _: TrackMetadata(), factory).execute(
         request, lambda: cancelled
     )
     assert (report.state, report.saved, report.failed, report.pending) == ("cancelled", 0, 0, 2)
     assert report.issues == (
-        ImportIssue(request.database_path, "cleanup", "Permanece el catálogo vacío"),
+        ImportIssue(request.database_path, "cleanup", "The empty catalog remains"),
     )
     assert target.events == ["close", "discard"]
 
 
 def test_close_failure_is_fatal_and_retains_saved_counts(tmp_path):
     request, scanner, target, factory = setup_import(tmp_path)
-    target.close_error = ImportTargetError("No se pudo cerrar el destino")
+    target.close_error = ImportTargetError("Could not close the destination")
     report = ImportCatalog(scanner, lambda _: TrackMetadata(), factory).execute(request)
     assert (report.state, report.saved, report.pending) == ("failed", 2, 0)
-    assert report.fatal_error == "No se pudo cerrar el destino"
+    assert report.fatal_error == "Could not close the destination"
     assert report.issues == (
-        ImportIssue(request.database_path, "cleanup", "No se pudo cerrar el destino"),
+        ImportIssue(request.database_path, "cleanup", "Could not close the destination"),
     )
     assert target.events == ["write", "write", "close"]
 
@@ -436,7 +436,7 @@ def test_shared_preparation_rejects_directory_and_parent_link(tmp_path):
         alias.symlink_to(real, target_is_directory=True)
     except (OSError, NotImplementedError):
         pytest.skip("Creating symbolic links is unavailable on this platform")
-    with pytest.raises(ValueError, match="enlaces"):
+    with pytest.raises(ValueError, match="links"):
         prepare_audio_source(alias / "audio.flac", root)
 
 
@@ -447,7 +447,7 @@ def test_shared_validation_and_individual_import_remain_core_only(tmp_path):
     source.touch()
     assert validate_library_root(root / ".") == root.resolve()
     assert prepare_audio_source(source, root.resolve()) == (source.resolve(), "audio.flac")
-    with pytest.raises(ValueError, match="directorio"):
+    with pytest.raises(ValueError, match="directory"):
         validate_library_root(source)
     calls = []
 

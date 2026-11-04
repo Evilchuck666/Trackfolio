@@ -55,7 +55,7 @@ def main(argv: list[str] | None = None) -> int:
     print(
         f"Imported file: {entry.relative_path}; file_id={entry.file_id}, track_id={entry.track_id}"
     )
-    print("Consulta en SQLiteBrowser: SELECT * FROM track_details;")
+    print("Query in SQLiteBrowser: SELECT * FROM track_details;")
     return 0
 
 

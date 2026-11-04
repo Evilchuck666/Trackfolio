@@ -322,7 +322,7 @@ def test_rich_artist_replacement_is_conflict(tmp_path):
         "<album><albumArtistCredits><artist>A</artist><musicBrainzArtistID>id-a</musicBrainzArtistID></albumArtistCredits></album>",
         encoding="utf-8",
     )
-    with pytest.raises(TagWriteConflict, match="enriquecidos"):
+    with pytest.raises(TagWriteConflict, match="enriched"):
         XmlAlbumNfoCodec().plan(source, VALUES)
 
 
@@ -599,7 +599,7 @@ def test_duplicate_catalogue_positions_do_not_overwrite_one_xml_track(tmp_path):
             AlbumNfoSong(2, "Unselected", 1, 2, False),
         ),
     )
-    with pytest.raises(TagWriteConflict, match="Varias songs"):
+    with pytest.raises(TagWriteConflict, match="Multiple songs"):
         XmlAlbumNfoCodec().plan(source, values)
 
 

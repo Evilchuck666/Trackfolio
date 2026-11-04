@@ -115,7 +115,7 @@ def test_import_and_reimport_real_audio_then_read_without_music(qt_app, tmp_path
     music.mkdir()
     source = write_flac(
         music / "a.FLAC",
-        [("TITLE", "Song"), ("ARTIST", "Artista"), ("LYRICS", "Texto\nOtra línea")],
+        [("TITLE", "Song"), ("ARTIST", "Artist"), ("LYRICS", "Text\nAnother line Ω")],
         [(3, png())],
     )
     untagged = write_mp3(music / "b.mp3")
@@ -133,7 +133,7 @@ def test_import_and_reimport_real_audio_then_read_without_music(qt_app, tmp_path
         assert (reports[0].created, reports[0].updated, reports[0].failed) == (2, 0, 1)
         assert window.model.rowCount() == 2
         assert preferences.last_catalog() == database
-        assert window.lyrics.toPlainText() == "Texto\nOtra línea"
+        assert window.lyrics.toPlainText() == "Text\nAnother line Ω"
         assert not window.cover.pixmap().isNull()
         window.table.selectRow(1)
         wait_until(qt_app, lambda: window.fields["title"].text() == "")
@@ -158,8 +158,8 @@ def test_import_and_reimport_real_audio_then_read_without_music(qt_app, tmp_path
 def test_update_legacy_catalog_migrates_only_when_writer_opens(qt_app, tmp_path):
     music = tmp_path / "music"
     music.mkdir()
-    write_flac(music / "a.flac", [("TITLE", "Actualizada"), ("ARTIST", "Accept")])
-    write_flac(music / "b.flac", [("TITLE", "Nueva"), ("ARTIST", "Accept")])
+    write_flac(music / "a.flac", [("TITLE", "Updated"), ("ARTIST", "Accept")])
+    write_flac(music / "b.flac", [("TITLE", "New"), ("ARTIST", "Accept")])
     database = tmp_path / "legacy.tfo"
     with closing(sqlite3.connect(database)) as connection, connection:
         connection.executescript(initial_schema_sql())
@@ -170,7 +170,7 @@ def test_update_legacy_catalog_migrates_only_when_writer_opens(qt_app, tmp_path)
         connection.executemany(
             "INSERT INTO artists(id, name) VALUES (?, ?)", [(1, "Accept"), (2, "Accept")]
         )
-        connection.execute("INSERT INTO tracks(id, title) VALUES (1, 'Anterior')")
+        connection.execute("INSERT INTO tracks(id, title) VALUES (1, 'Previous')")
         connection.execute(
             "INSERT INTO audio_files(id, library_id, relative_path, track_id, format) "
             "VALUES (1, 1, 'a.flac', 1, 'FLAC')"
@@ -185,7 +185,7 @@ def test_update_legacy_catalog_migrates_only_when_writer_opens(qt_app, tmp_path)
     controller.import_finished.connect(reports.append)
     try:
         controller.open_database(database)
-        wait_until(qt_app, lambda: window.fields["title"].text() == "Anterior")
+        wait_until(qt_app, lambda: window.fields["title"].text() == "Previous")
         assert window.fields["artists"].text() == "Accept"
         selected = window.current_file_id()
         empty = tmp_path / "empty"
@@ -200,7 +200,7 @@ def test_update_legacy_catalog_migrates_only_when_writer_opens(qt_app, tmp_path)
         wait_until(qt_app, lambda: len(reports) == 2 and not controller._jobs)
         assert (reports[1].created, reports[1].updated, reports[1].failed) == (1, 1, 0)
         assert window.current_file_id() == selected
-        assert window.fields["title"].text() == "Actualizada"
+        assert window.fields["title"].text() == "Updated"
         assert window.model.rowCount() == 2
         with closing(sqlite3.connect(database)) as connection, connection:
             assert connection.execute("SELECT id, name FROM artists").fetchall() == [(1, "Accept")]
@@ -239,7 +239,7 @@ class GateReader:
 def test_cancel_or_close_remains_responsive_and_keeps_committed_files(qt_app, tmp_path, closing):
     music = tmp_path / "music"
     music.mkdir()
-    write_flac(music / "a.flac", [("TITLE", "Guardada")])
+    write_flac(music / "a.flac", [("TITLE", "Saved")])
     write_flac(music / "b.flac", [("TITLE", "Pending")])
     database = tmp_path / "partial.tfo"
     gate = GateReader()
@@ -279,7 +279,7 @@ def test_cancel_or_close_remains_responsive_and_keeps_committed_files(qt_app, tm
             assert controller._closed and not controller._pool.activeThreadCount()
         else:
             wait_until(qt_app, lambda: window.model.rowCount() == 1 and not controller._jobs)
-            assert window.fields["title"].text() == "Guardada"
+            assert window.fields["title"].text() == "Saved"
             assert window.import_button.isEnabled()
         session = open_catalog(database)
         try:
@@ -295,7 +295,7 @@ def test_cancel_or_close_remains_responsive_and_keeps_committed_files(qt_app, tm
 def test_empty_import_restores_previous_catalog_and_selection(qt_app, tmp_path):
     music = tmp_path / "music"
     music.mkdir()
-    write_flac(music / "a.flac", [("TITLE", "Anterior")])
+    write_flac(music / "a.flac", [("TITLE", "Previous")])
     database = tmp_path / "previous.tfo"
     window, controller = create_window(CatalogPreferences(tmp_path / "settings.json"))
     window.views.setCurrentWidget(window.splitter)
@@ -303,7 +303,7 @@ def test_empty_import_restores_previous_catalog_and_selection(qt_app, tmp_path):
     controller.import_finished.connect(reports.append)
     try:
         controller.start_import(ImportRequest(music, database, "create"))
-        wait_until(qt_app, lambda: window.fields["title"].text() == "Anterior")
+        wait_until(qt_app, lambda: window.fields["title"].text() == "Previous")
         selected = window.current_file_id()
         empty = tmp_path / "empty"
         empty.mkdir()
@@ -313,7 +313,7 @@ def test_empty_import_restores_previous_catalog_and_selection(qt_app, tmp_path):
         assert reports[-1].total == 0
         assert not destination.exists()
         assert window.current_file_id() == selected
-        assert window.fields["title"].text() == "Anterior"
+        assert window.fields["title"].text() == "Previous"
     finally:
         controller.shutdown()
         dispose_window(window)
@@ -345,7 +345,7 @@ def test_dispose_window_defers_deletion_until_import_worker_finishes(qt_app, tmp
 def test_import_waits_for_previous_detail_and_closes_reader(qt_app, tmp_path):
     music = tmp_path / "music"
     music.mkdir()
-    write_flac(music / "new.flac", [("TITLE", "Importada")])
+    write_flac(music / "new.flac", [("TITLE", "Imported")])
     previous = ControlledSession(tmp_path / "old.tfo", delay_first=True)
     scanned = threading.Event()
 
@@ -372,7 +372,7 @@ def test_import_waits_for_previous_detail_and_closes_reader(qt_app, tmp_path):
         qt_app.processEvents()
         assert not scanned.is_set()
         previous.release.set()
-        wait_until(qt_app, lambda: window.fields["title"].text() == "Importada")
+        wait_until(qt_app, lambda: window.fields["title"].text() == "Imported")
         assert scanned.is_set() and previous.closed
     finally:
         previous.release.set()
@@ -467,8 +467,8 @@ def test_import_finished_observer_can_start_another_import(qt_app, tmp_path, swi
     second = tmp_path / "second"
     first.mkdir()
     second.mkdir()
-    write_flac(first / "a.flac", [("TITLE", "Primera")])
-    write_flac(second / "b.flac", [("TITLE", "Segunda")])
+    write_flac(first / "a.flac", [("TITLE", "First")])
+    write_flac(second / "b.flac", [("TITLE", "Second")])
     window, controller = create_window(CatalogPreferences(tmp_path / "settings.json"))
     window.views.setCurrentWidget(window.splitter)
     reports = []
@@ -483,7 +483,7 @@ def test_import_finished_observer_can_start_another_import(qt_app, tmp_path, swi
     try:
         sys.setswitchinterval(switch_interval)
         controller.start_import(ImportRequest(first, tmp_path / "first.tfo", "create"))
-        wait_until(qt_app, lambda: len(reports) == 2 and window.fields["title"].text() == "Segunda")
+        wait_until(qt_app, lambda: len(reports) == 2 and window.fields["title"].text() == "Second")
         assert not controller.importing
         assert reports[0].saved == reports[1].saved == 1
         assert window.model.rowCount() == 1

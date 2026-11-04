@@ -1,1 +1,1 @@
-"""Recursos distribuibles de Trackfolio, accesibles con importlib.resources."""
+"""Packaged Trackfolio resources, accessible through importlib.resources."""

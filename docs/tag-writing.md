@@ -1,253 +1,119 @@
-# Escritura de etiquetas y recuperación
+# Tag writing and recovery
 
-**Guardar** edita el catálogo. **Escribir etiquetas…** publica todas las diferencias
-entre sus campos editables guardados y los FLAC/MP3 seleccionados, incluidos los
-artistas del álbum editados desde la [vista de álbum](album-view.md). Primero se
-resuelven los cambios sin guardar mediante Guardar/Descartar/Cancelar.
+**Save** edits the catalog. **Write tags…** publishes all differences between saved editable fields and the selected FLAC/MP3 files, including album artists edited from the [album view](album-view.md). Unsaved changes are first resolved through Save/Discard/Cancel.
 
-**Escribir etiquetas de todo el catálogo…**, sobre el listado principal, abre el mismo
-flujo para todas las canciones del catálogo. No requiere selección y consulta la base
-de nuevo en segundo plano, incluyendo entradas añadidas desde que se abrió. Permanece
-deshabilitado sin catálogo, con un catálogo vacío o mientras otra operación está activa.
-La acción de escribir la selección sigue disponible junto al detalle de la canción.
+**Write tags for the entire catalog…**, above the main list, opens the same flow for every catalog song. It requires no selection and queries the database again in the background, including entries added since opening. It remains disabled without a catalog, with an empty catalog or while another operation is active. The selection-writing action remains available beside song details.
 
-El diálogo muestra todas las canciones desde que se abre, la salida del progreso y
-únicamente **Cerrar** y **Escribir etiquetas**. Pulsar escribir prepara y verifica los
-cambios internamente, sin selección de campos ni revisión manual de diferencias.
-Cada canción conserva sus propios valores; se omiten los archivos sin diferencias
-de texto ni portada.
-También se comprueba y actualiza `album.nfo` si existe junto al audio, incluso cuando
-las etiquetas musicales ya están actualizadas. Su ausencia es normal y no lo crea.
-Los errores abren un pop-up que ofrece guardar el informe JSON; una operación correcta
-no muestra ese pop-up.
+The dialog shows all songs from the moment it opens, progress output, and only **Close** and **Write tags**. Clicking write prepares and verifies changes internally, without field selection or manual difference review. Each song retains its own values; files without text or artwork differences are skipped. Existing `album.nfo` files beside audio are also checked and updated, even if music tags already match. Absence is normal and does not create them. Errors open a popup offering JSON report export; successful operations do not show it.
 
-Tras completar la escritura correctamente, **Escribir etiquetas** queda deshabilitado
-y **Cerrar** sigue disponible. También se deshabilita si todos los archivos y NFO estaban
-ya actualizados, o los NFO no existen. Si hay errores o pendientes, permite reintentar
-en el mismo diálogo, incluido actualizar sólo el NFO después de escribir el audio.
+After successful completion, **Write tags** is disabled and **Close** remains available. Writing is also disabled if all files/NFOs already match or NFOs are absent. Errors or pending work allow retries in the same dialog, including updating only NFO after audio has been written.
 
-## Incrustación de portadas
+## Embedding artwork
 
-Al pulsar **Escribir etiquetas**, se buscan `.jpg`, `.jpeg` y `.png` en la misma
-carpeta de cada canción, sin distinguir mayúsculas. No se buscan imágenes en otras
-carpetas ni se usan SQLite o el NFO como fuentes.
+Clicking **Write tags** searches for `.jpg`, `.jpeg` and `.png` files in each song's folder, ignoring extension case. Other folders are not searched, and SQLite/NFO are not image sources.
 
-| Imágenes en la carpeta | Resultado |
+| Images in the folder | Result |
 | --- | --- |
-| Ninguna | Conserva la portada incrustada actual; si no tiene portada, continúa sin ella. |
-| Una | La incrusta automáticamente, sustituyendo la frontal anterior. |
-| Varias | Abre **Elegir portadas**, con nombre, dimensiones y vista previa. Exige una elección por carpeta o **Conservar portada actual**. |
+| None | Preserve embedded artwork or its absence |
+| One | Embed automatically, replacing the previous front cover |
+| Multiple | Open **Choose covers** with name, dimensions and preview; require one choice per folder or **Keep current cover** |
 
-Todas las elecciones se completan antes de publicar música o NFO. Cancelar el
-selector cancela el intento completo; se puede reintentar. La elección se comparte
-entre las canciones destinatarias de la carpeta, sin escribir las no seleccionadas.
+All choices are completed before publishing music or NFO. Cancelling the selector cancels the entire attempt; retry is available. The choice is shared by target songs in the folder without writing unselected songs.
 
-La portada elegida se copia con sus bytes y formato originales, sin convertirla ni
-modificar la imagen fuente. Se admite JPEG/PNG de hasta **15 MiB**. Una imagen inválida,
-ilegible o demasiado grande bloquea las canciones de esa carpeta; otras carpetas
-pueden continuar. Los cambios de fuente o inventario producen una incidencia y
-requieren un nuevo intento. No se siguen enlaces internos ni imágenes enlazadas;
-se admiten alias de la raíz importada.
+The chosen cover is copied with its original bytes and format, without conversion or source modification. JPEG/PNG up to **15 MiB** is supported. Invalid, unreadable or oversized images block that folder's songs; other folders can continue. Source or inventory changes cause an issue and require another attempt. Internal links and linked images are not followed; imported-root aliases are accepted.
 
-La escritura deja exactamente una portada frontal (`PICTURE` FLAC o `APIC` MP3 tipo 3).
-Conserva contraportadas, libretos, imágenes de otros tipos y la versión ID3 admitida.
-También funciona sin cambios de texto. Si ya coincide exactamente, no reemplaza el
-audio; si sólo está desactualizada la miniatura de SQLite, actualiza el catálogo.
-Tras una publicación correcta, la miniatura del detalle se refresca al cerrar el diálogo.
+Writing leaves exactly one front cover (FLAC `PICTURE` or MP3 `APIC` type 3). Back covers, booklets, other image types and supported ID3 versions are preserved. This also works without text changes. If artwork already matches exactly, audio is not replaced; if only the SQLite thumbnail is stale, the catalog is updated. After successful publication, the detail thumbnail refreshes when the dialog closes.
 
-El informe distingue portada conservada, incrustada, sustituida, coincidente u omitida
-por elección, y muestra la ruta fuente. La portada se verifica directamente dentro
-del audio y participa en el mismo respaldo, temporal y reemplazo que las etiquetas.
-Los fallos conservan los respaldos según las reglas del lote.
+Reports distinguish preserved, embedded, replaced, matching and explicitly skipped artwork and show its source path. Artwork is verified directly inside the audio and shares the same backup, temporary file and replacement as tags. Failures retain backups under batch rules.
 
-## Actualización opcional de album.nfo
+## Optional album.nfo updates
 
-Se admite XML con raíz `<album>` sin namespace, compatible con metadatos de álbum Kodi.
-Se busca `album.nfo` únicamente en la misma carpeta que los FLAC/MP3 destinatarios,
-una vez por carpeta. No se busca en carpetas superiores: un NFO común situado sobre
-subcarpetas de discos no se actualiza automáticamente.
+XML with an `<album>` root without a namespace is supported, compatible with Kodi album metadata. `album.nfo` is searched only in the target FLAC/MP3 folder, once per folder. Parent folders are not searched: a shared NFO above disc subfolders is not updated automatically.
 
-La selección determina las carpetas. Los datos NFO se obtienen de todas las pistas
-catalogadas de cada carpeta, sin escribir audio fuera de la selección:
+Selection determines folders. NFO data comes from every cataloged track in each folder without writing audio outside the selection:
 
-| Dato NFO | Regla |
+| NFO field | Rule |
 | --- | --- |
-| `title` | Nombre de álbum guardado, coincidente en todas las pistas. |
-| `year` | Año guardado, coincidente en todas las pistas. |
-| `releasedate` existente | Actualiza el año conservando mes/día válidos; una fecha inválida se reduce al año. No cambia `originalreleasedate`. |
-| `genre` | Unión de géneros sin duplicados exactos, según ruta relativa y orden de cada lista. |
-| `thumb` | Nombre del archivo de portada elegido para incrustar, también si el audio ya la contiene. Se añade si falta; sin imagen o al conservar la portada actual, no se modifica. |
-| `artist` o `albumArtistCredits/artist` existentes | Créditos de álbum coincidentes; si todos carecen de ellos, artistas de pista cuando coincidan en todas las canciones. Se conserva la representación existente, sin añadir bloques de créditos donde no existen. |
-| `artistdesc` existente | Descripción de los artistas resueltos, separados por ` / `. No se divide ningún nombre. |
-| `track/title` en una lista de pistas existente | Título guardado de cada canción destinataria; se asocia por `position` y `discnumber` si existe en la pista o el álbum. |
+| `title` | Saved album name, identical across all tracks |
+| `year` | Saved year, identical across all tracks |
+| Existing `releasedate` | Update year, preserving valid month/day; invalid dates reduce to year. Do not change `originalreleasedate` |
+| `genre` | Genre union without exact duplicates, by relative path and each list's order |
+| `thumb` | Filename of the cover selected for embedding, even if audio already contains it. Add if missing; preserve without a selected image or when keeping current artwork |
+| Existing `artist` or `albumArtistCredits/artist` | Matching album credits; if all are absent, track artists only when identical across every song. Preserve the existing representation without adding absent credit blocks |
+| Existing `artistdesc` | Resolved artist names joined with ` / `; no name splitting |
+| `track/title` in an existing track list | Saved target song title, matched by `position` and `discnumber` when present on track or album |
 
-Los valores vacíos coherentes eliminan sus elementos gestionados. Si faltan créditos
-de álbum y difieren los artistas de pista, conserva los créditos NFO existentes,
-como en una recopilación. Se conservan los identificadores asociados a los mismos
-artistas; sustituir un crédito enriquecido por otro artista produce un conflicto.
-Si hay un `artist` directo, se usa esa representación y se retiran los bloques simples
-`albumArtistCredits` redundantes; se conservan los bloques con identificadores, atributos o
-anotaciones. Esto permite limpiar los bloques redundantes añadidos por versiones anteriores.
+Consistent empty values remove managed elements. When album credits are missing and track artists differ, existing NFO credits are preserved, as for compilations. Identifiers belonging to the same artists are preserved; replacing an enriched credit with another artist causes a conflict. If direct `artist` elements exist, they are used and redundant simple `albumArtistCredits` blocks are removed; blocks containing identifiers, attributes or annotations remain. This cleans up redundant blocks added by earlier versions.
 
-Álbumes, años o créditos contradictorios, audio sin catalogar y pistas catalogadas
-ausentes dejan el NFO intacto con una incidencia. Un XML no compatible o malformado
-tampoco se convierte ni se sobrescribe. Se rechazan DTD, entidades y documentos de
-más de 16 MiB; no se consultan recursos externos.
+Conflicting albums, years or credits, uncataloged audio and missing cataloged tracks leave the NFO intact with an issue. Unsupported or malformed XML is neither converted nor overwritten. DTDs, entities and documents over 16 MiB are rejected; external resources are not accessed.
 
-Si el NFO contiene una lista `<track>`, se actualizan los títulos de las canciones
-destinatarias, también cuando el audio ya tiene el título correcto. El título general
-del álbum se gestiona por separado; los títulos fuera de la selección se conservan. La numeración
-debe identificar una única canción y una única entrada XML: una asociación ausente
-o ambigua produce un conflicto. Se aceptan ceros iniciales en posición/disco. No se
-crea una lista de pistas donde no existe ni se cambia su orden, posición o duración.
+If the NFO contains a `<track>` list, target song titles update even when the audio title already matches. The general album title is handled separately; unselected song titles remain intact. Numbering must identify exactly one song and XML entry: missing or ambiguous matches cause conflicts. Leading zeros in position/disc are accepted. No absent track list is created, and its order, positions and durations are unchanged.
 
-Se conservan reseñas, sellos, otras imágenes, identificadores, puntuaciones, campos
-desconocidos y el resto de los datos de las listas de pistas, además de los atributos y comentarios
-de los elementos conservados y las instrucciones de procesamiento. Al escribir
-puede normalizarse la representación XML; se mantiene la codificación admitida,
-el BOM UTF-8 y el uso de CRLF cuando existen. Se conserva la declaración XML original,
-su separación respecto al contenido y los saltos finales. Si la declaración y `<album>`
-estaban pegados por una escritura anterior, se separan con un salto de línea, incluso
-sin diferencias musicales. Sin cambios de datos ni reparación de cabecera, no cambia
-el contenido, la fecha ni el archivo físico.
+Reviews, labels, other images, identifiers, ratings, unknown fields, other track-list data, attributes/comments of retained elements and processing instructions are preserved. Writing may normalize XML representation; supported encoding, UTF-8 BOM and existing CRLF are retained. The original XML declaration, its content separation and final line breaks are preserved. A declaration joined to `<album>` by an earlier write is separated with a newline even without musical differences. Without data changes or header repair, content, timestamp and physical file remain unchanged.
 
-Cada NFO se publica después de que sus audios destinatarios hayan terminado
-confirmados o sin cambios. Si falla el audio, queda pendiente el NFO de esa carpeta.
-Si falla el NFO, los audios ya escritos conservan su resultado y se mantienen los
-respaldos del lote. Otros álbumes pueden continuar salvo un fallo esencial de
-almacenamiento, catálogo o registro. La cancelación conserva lo ya publicado.
+Each NFO is published after its target audio files finish confirmed or unchanged. Audio failure leaves that folder's NFO pending. NFO failure preserves actual audio results and batch backups. Other albums can continue unless essential storage, catalog or logging fails. Cancellation retains already published work.
 
-La salida y el informe JSON incluyen los NFO por separado: actualizado, sin cambios,
-ausente, pendiente, conflicto o fallido. El contador de audio escrito no los incluye.
-Los errores NFO ofrecen el mismo pop-up de informe y permiten reintentar. Una
-publicación seguida de un fallo se identifica expresamente como NFO reemplazado.
+Output and JSON reports list NFOs separately as updated, unchanged, absent, pending, conflict or failed. Written-audio counts exclude NFOs. NFO errors offer the same report popup and allow retry. Publication followed by failure is explicitly identified as NFO replaced.
 
-El [plan de la entrega](album-nfo-plan.md) detalla contratos y criterios de aceptación.
+The [delivery plan](album-nfo-plan.md) details contracts and acceptance criteria.
 
-## Formatos y valores admitidos
+## Supported formats and values
 
-| Caso | Comportamiento |
+| Case | Behavior |
 | --- | --- |
-| FLAC | Modifica los comentarios Vorbis que difieren del catálogo; sustituye la portada frontal cuando se elige una fuente y conserva las demás imágenes, otros bloques y audio. |
-| MP3 con ID3v2.4 | Conserva v2.4 y las listas de artistas/géneros con orden y Unicode. |
-| MP3 con ID3v2.3 | Conserva v2.3; bloquea listas que se unirían al guardar. No convierte a v2.4. |
-| MP3 sin ID3 | Crea ID3v2.4. |
-| ID3v2.2 o ID3v1 coexistente | Bloqueado; esta entrega no convierte ni descarta etiquetas legadas. |
-| Pista/disco y totales | Escribe los números y totales guardados. Un total sin número vuelve a leerse como número ausente. |
-| Fechas completas | Cambia el año conservando la precisión válida y representable. Si la fecha resultante es inválida o no representable, guarda solo el año; vaciarlo elimina la fecha. |
-| Varias líricas USLT | Actualiza la primera versión de líricas que expone el lector y conserva las demás. El importador puede mostrar otra versión restante, porque solo expone un texto de líricas. |
-| Alias y TXXX | Retira o actualiza la familia del campo modificado para que un alias antiguo no prevalezca. |
-| Metadatos ajenos | Verifica comentarios, frames conocidos/desconocidos, imágenes no seleccionadas y etiquetas APEv2 finales; si no puede preservarlos, no publica. |
+| FLAC | Modify Vorbis comments differing from the catalog; replace front artwork when a source is chosen and preserve other images, blocks and audio |
+| MP3 with ID3v2.4 | Preserve v2.4 and ordered Unicode artist/genre lists |
+| MP3 with ID3v2.3 | Preserve v2.3; block lists that would be joined on save. Do not convert to v2.4 |
+| MP3 without ID3 | Create ID3v2.4 |
+| ID3v2.2 or coexisting ID3v1 | Blocked; this delivery does not convert or discard legacy tags |
+| Track/disc numbers and totals | Write saved numbers/totals. A total without a number reads back as a missing number |
+| Full dates | Change year while preserving valid representable precision. Invalid/unrepresentable results become year-only; clearing year removes the date |
+| Multiple USLT lyrics | Update the first lyrics version exposed by the reader and preserve others. Import may display another remaining version because it exposes only one lyrics text |
+| Aliases and TXXX | Remove/update the modified field's family so an old alias cannot take precedence |
+| Unrelated metadata | Verify comments, known/unknown frames, unselected images and trailing APEv2 tags; do not publish if preservation fails |
 
-Los números se serializan sin inventar valores; los años utilizan cuatro dígitos en
-el intervalo 1–9999. La escritura no divide nombres por comas, punto y coma ni `/`.
-Un campo guardado vacío elimina su etiqueta. Las listas vacías eliminan su familia de etiquetas.
-Con ID3v2.3 se admiten fechas con precisión de año, día o minuto; otras precisiones
-se reducen al año cuando este cambia. El progreso indica cada archivo incompatible.
+Numbers are serialized without inventing values; years use four digits in the range 1–9999. Writing does not split names on commas, semicolons or `/`. An empty saved field removes its tag. Empty lists remove their tag family. ID3v2.3 supports year, day or minute date precision; other precision reduces to year when the year changes. Progress identifies each incompatible file.
 
-Los hashes del audio comparan los bytes situados después de los bloques de metadatos
-FLAC o entre las etiquetas iniciales/finales de MP3. No se recodifica ni se verifica
-mediante duración o el MD5 declarado solamente. La verificación de etiquetas se realiza
-reabriendo la copia modificada antes de reemplazar el original.
+Audio hashes compare bytes after FLAC metadata blocks or between MP3 leading/trailing tags. Audio is not re-encoded, and verification does not rely only on duration or declared MD5. Tags are verified by reopening the modified copy before replacing the original.
 
-## Archivos, permisos y espacio
+## Files, permissions and space
 
-Cada archivo, incluido el NFO, necesita espacio para un respaldo completo y una copia temporal. Se
-procesan secuencialmente: reserva espacio para todos los respaldos y el mayor temporal.
-Antes de escribir se comprueba ese espacio por volumen, con un margen adicional de 1 MiB.
-No se siguen enlaces simbólicos/junctions, no se reemplazan enlaces duros ni destinos
-fuera de su raíz importada. Un original ausente o de solo lectura queda bloqueado;
-esto no impide editar sus datos en SQLite.
-La propia raíz importada puede ser un alias, como `/var` en macOS: se normaliza para
-operar sobre el NFO y se conserva su representación guardada para consultar el catálogo.
-Los enlaces dentro de la biblioteca y los cambios de destino durante la operación
-siguen bloqueados.
+Each file, including NFO, needs space for a complete backup and temporary copy. Processing is sequential: reserve space for all backups and the largest temporary file. Space is checked per volume before writing, with an additional 1 MiB margin. Symlinks/junctions are not followed; hard links and targets outside imported roots are not replaced. Missing/read-only originals are blocked, without preventing SQLite editing.
 
-En Linux se copian y comprueban modo, propietario/grupo y atributos extendidos,
-incluidas las ACL que se representen mediante esos atributos. En macOS se utiliza
-`copyfile` de libSystem para conservar permisos, ACL y atributos, incluido el resource
-fork, y se comprueban mediante las API nativas.
-En macOS, un atributo distinto del resource fork que supere 16 MiB se bloquea para
-mantener acotada la memoria de verificación; el resource fork se compara por streaming.
-En Windows se copian propietario, grupo, DACL y streams con nombre mediante API nativa;
-no se copian reglas de auditoría SACL que requieren privilegios. Los archivos NTFS
-comprimidos o cifrados se rechazan. No se promete conservar metadatos que el sistema
-no exponga, ni identidad de inode o fecha de creación tras el reemplazo. Si falla la
-preservación requerida, el original permanece intacto.
+The imported root itself may be an alias, such as `/var` on macOS: normalize it for NFO operations and retain its stored spelling for catalog queries. Internal library links and target changes during the operation remain blocked.
 
-Se sincronizan copias y registros a disco; en POSIX también se sincronizan directorios
-cuando el sistema lo permite. Windows no ofrece esa sincronización de directorio
-mediante esta implementación. La publicación utiliza `os.replace` en el mismo volumen.
-Su durabilidad final depende del sistema de archivos y del almacenamiento; las
-comprobaciones no impiden todas las carreras con otros programas que editen música.
+Linux copies and checks mode, owner/group and extended attributes, including ACLs represented through those attributes. macOS uses libSystem `copyfile` to preserve permissions, ACLs and attributes, including resource forks, verified through native APIs. Non-resource-fork macOS attributes over 16 MiB are blocked to bound verification memory; resource forks are compared by streaming. Windows copies owner, group, DACL and named streams through native APIs; privileged SACL audit rules are not copied. Compressed/encrypted NTFS files are rejected. Metadata not exposed by the system, inode identity or creation time after replacement are not guaranteed. If required preservation fails, the original remains intact.
 
-## Resultados y cancelación
+Copies and logs are synced to disk; POSIX also syncs directories where supported. This implementation does not provide directory sync on Windows. Publication uses same-volume `os.replace`. Final durability depends on filesystem and storage; checks cannot prevent every race with other music-editing programs.
 
-Cada archivo puede quedar confirmado, escrito con catálogo pendiente, sin cambios,
-excluido, en conflicto, fallido o pendiente. La salida muestra errores y respaldos. Si hay errores, el pop-up permite exportar el
-informe JSON. La escritura no cambia los valores musicales guardados en el catálogo.
+## Results and cancellation
 
-**Cerrar** durante un trabajo solicita la cancelación, espera un punto seguro y
-cierra el diálogo conservando lo ya publicado. El bucle de eventos sigue respondiendo.
-Un fallo aislado permite continuar con otros archivos; la pérdida del catálogo o del
-registro y fallos esenciales de almacenamiento detienen los pendientes. No hay una
-transacción global entre los archivos y SQLite, ni un deshacer automático del lote.
+Each file may be confirmed, written with catalog pending, unchanged, excluded, conflicting, failed or pending. Output shows errors and backups; errors enable JSON export in the popup. Writing does not change saved musical values in the catalog.
 
-## Recuperación
+**Close** during work requests cancellation, waits for a safe point and closes the dialog while preserving published files. The event loop remains responsive. Isolated failures allow other files to continue; catalog/log loss and essential storage failures stop pending work. There is no global transaction between files and SQLite, or automatic batch undo.
 
-Antes de editar una copia se crea un respaldo completo junto a cada original:
+## Recovery
+
+Before editing a copy, create a complete backup beside each original:
 
 ```text
-<carpeta de música>/.trackfolio-backups/<operación>/<id>-<nombre>.tfo-bak
+<music folder>/.trackfolio-backups/<operation>/<id>-<name>.tfo-bak
 ```
 
-Los temporales propios están en la carpeta del original:
-`.trackfolio-<operación>-<id>.tmp`. Estos sufijos evitan reimportarlos como música.
-El respaldo NFO se llama `nfo-album.nfo.tfo-bak` dentro del mismo directorio de operación;
-su temporal es `.trackfolio-<operación>-album-nfo.tmp` junto al original.
-Después de escribir y confirmar todo el lote, incluidos sus NFO, sin errores ni cancelación, se elimina
-el directorio `.trackfolio-backups` completo en cada carpeta donde se crearon copias,
-incluidos los UUID y respaldos anteriores que contenga. La limpieza espera al final
-del lote y al registro de su confirmación; no se realiza por canción. Los resultados
-sin cambios no crean copias ni borran respaldos antiguos por sí solos.
+Owned temporary files sit beside the original: `.trackfolio-<operation>-<id>.tmp`. These suffixes prevent music reimport. The NFO backup is `nfo-album.nfo.tfo-bak` inside the same operation directory; its temporary file is `.trackfolio-<operation>-album-nfo.tmp` beside the original.
 
-Si hay un fallo, conflicto, catálogo pendiente o cancelación, se conservan las copias
-del lote. Si falla la propia limpieza, el informe indica el error y mantiene las rutas
-de las copias que sigan presentes; otras carpetas pueden haberse eliminado ya.
+After the entire batch, including NFOs, is written and confirmed without errors or cancellation, the complete `.trackfolio-backups` directory is removed from every folder where copies were created, including older UUID directories and backups. Cleanup waits for batch completion and logged confirmation; it is not per song. Unchanged results alone neither create copies nor delete old backups.
 
-El registro persistente está en la carpeta de datos del usuario, en
-`Trackfolio/tag-writes/<operación>/journal.json`. En Linux normalmente es
-`~/.local/share/Trackfolio/tag-writes/`; se respeta `XDG_DATA_HOME` y en macOS/Windows
-se utiliza el equivalente de `platformdirs`. El registro guarda rutas, valores
-confirmados, hashes y estados, sin incluir las portadas binarias. La versión `3`
-incorpora las fuentes, huellas e intenciones de portada. Se siguen admitiendo los
-registros `1` (audio) y `2` (audio y NFO). La revisión puede confirmar en SQLite una
-portada ya publicada sin necesitar de nuevo la imagen fuente; no reescribe audio.
+Failures, conflicts, catalog-pending states or cancellation retain batch copies. Cleanup failures are reported and paths of remaining copies retained; other folders may already have been removed.
 
-Los registros se conservan como historial. Los respaldos que permanecen después de un
-lote incompleto permiten recuperación manual.
-La GUI no presenta un gestor de operaciones pendientes ni reanuda escrituras al arrancar.
-El caso de uso técnico `ReviewTagWrites` sigue disponible para inspeccionar hashes y
-reconciliar observaciones del catálogo e inspeccionar los hashes de los NFO mediante
-sus contratos Python, sin reescribir
-ni restaurar audio. Una confirmación requiere que el catálogo y su instantánea sigan
-siendo válidos; las ediciones posteriores se conservan como conflictos.
+The persistent log is in the user's data folder at `Trackfolio/tag-writes/<operation>/journal.json`. On Linux this is normally `~/.local/share/Trackfolio/tag-writes/`; `XDG_DATA_HOME` is respected and macOS/Windows use their `platformdirs` equivalent. Logs store paths, confirmed values, hashes and states without binary artwork. Version `3` adds cover sources, fingerprints and intents. Versions `1` (audio) and `2` (audio/NFO) remain supported. Review can confirm published artwork in SQLite without the original image source; it does not rewrite audio.
 
-Para restaurar manualmente, cierra los programas que usen el archivo, conserva una
-copia de su versión actual y comprueba la ruta de respaldo en el informe. Copia el
-contenido del `.tfo-bak` sobre la ruta original, recuperando su extensión original;
-el respaldo es el archivo completo, no un formato propio. Conserva el respaldo y el
-registro hasta comprobar la restauración. SQLite mantiene sus correcciones: reimportar
-volverá a sustituirlas por las etiquetas restauradas.
+Logs remain as history. Backups retained after incomplete batches support manual recovery. The GUI has no pending-operation manager and does not resume writes at startup. The technical `ReviewTagWrites` use case remains available through Python contracts to inspect hashes, reconcile catalog observations and inspect NFO hashes without rewriting or restoring audio. Confirmation requires a valid catalog and snapshot; later edits remain conflicts.
 
-Un temporal parcial que no llegó a verificarse se conserva para revisión manual tras
-una interrupción brusca; el informe indica su ruta. No borres respaldos o registros de
-operaciones pendientes antes de resolverlos. Los registros cerrados quedan como historial.
+To restore manually, close programs using the file, retain a copy of its current version and check the backup path in the report. Copy the `.tfo-bak` contents onto the original path with its original extension; backups are complete files, not a proprietary format. Retain backup and log until restoration is verified. SQLite keeps its corrections: reimporting replaces them with restored tags.
 
-Las comprobaciones locales y por plataforma se registran en [VALIDATION.md](../VALIDATION.md).
+A partial temporary file not yet verified is retained for manual review after abrupt interruption; the report gives its path. Do not delete pending-operation backups/logs before resolving them. Closed logs remain as history.
 
-Referencias de plataforma: [permisos y herencia en Windows](https://learn.microsoft.com/en-us/windows/win32/secauthz/security-information),
-[representación del descriptor de seguridad](https://learn.microsoft.com/en-us/windows/win32/api/sddl/nf-sddl-convertsecuritydescriptortostringsecuritydescriptorw)
-y [enumeración de streams](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-findfirststreamw).
-Para macOS: [copyfile y metadatos](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man3/copyfile.3.html)
-y [ACL](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man3/acl_get_file.3.html).
+Local and platform checks are recorded in [VALIDATION.md](../VALIDATION.md).
+
+Platform references: [Windows permissions and inheritance](https://learn.microsoft.com/en-us/windows/win32/secauthz/security-information), [security descriptor representation](https://learn.microsoft.com/en-us/windows/win32/api/sddl/nf-sddl-convertsecuritydescriptortostringsecuritydescriptorw) and [stream enumeration](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-findfirststreamw). For macOS: [copyfile and metadata](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man3/copyfile.3.html) and [ACL](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man3/acl_get_file.3.html).
