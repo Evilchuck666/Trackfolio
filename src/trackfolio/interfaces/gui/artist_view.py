@@ -16,10 +16,12 @@ from PySide6.QtWidgets import (
 
 from trackfolio.application.artists import group_artists
 from trackfolio.domain.album import Album
+from trackfolio.interfaces.gui.cover_widget import CoverLabel
 
 
 class ArtistView(QWidget):
     album_requested = Signal(str)
+    artist_selected = Signal(object)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -50,15 +52,23 @@ class ArtistView(QWidget):
         right = QVBoxLayout(panel)
         right.setContentsMargins(22, 22, 22, 22)
         right.setSpacing(16)
+        header = QHBoxLayout()
+        self.cover = CoverLabel(panel)
+        self.cover.setAccessibleName("Imagen del artista")
+        header.addWidget(self.cover, 0, Qt.AlignmentFlag.AlignTop)
+        info = QVBoxLayout()
         self.title = QLabel(panel)
         self.title.setObjectName("songTitle")
         self.title.setTextFormat(Qt.TextFormat.PlainText)
         self.title.setWordWrap(True)
-        right.addWidget(self.title)
+        info.addWidget(self.title)
         self.summary = QLabel(panel)
         self.summary.setProperty("role", "secondary")
         self.summary.setWordWrap(True)
-        right.addWidget(self.summary)
+        info.addWidget(self.summary)
+        info.addStretch()
+        header.addLayout(info, 1)
+        right.addLayout(header)
         self.albums = QListWidget(panel)
         self.albums.setAccessibleName("Álbumes del artista")
         right.addWidget(self.albums, 1)
@@ -100,13 +110,17 @@ class ArtistView(QWidget):
             if not item.isHidden():
                 visible.append(row)
         current = self.list.currentRow()
+        blocker = QSignalBlocker(self.list)
         self.list.setCurrentRow(current if current in visible else visible[0] if visible else -1)
+        del blocker
         self._selected()
 
     def _selected(self) -> None:
         self.albums.clear()
+        self.cover.set_cover(None)
         item = self.list.currentItem()
         if item is None:
+            self.artist_selected.emit(())
             self.title.setText("Sin artistas")
             self.summary.setText(
                 "No hay artistas que coincidan con la búsqueda."
@@ -116,6 +130,9 @@ class ArtistView(QWidget):
             self._actions()
             return
         editions = self._groups[item.data(Qt.ItemDataRole.UserRole)]
+        self.artist_selected.emit(
+            editions if item.data(Qt.ItemDataRole.UserRole) is not None else ()
+        )
         self.title.setText(item.text())
         self.summary.setText(
             f"{len(editions)} álbumes · {sum(len(a.tracks) for a in editions)} pistas"

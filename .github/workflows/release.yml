@@ -223,6 +223,7 @@ jobs:
                   "trackfolio/infrastructure/album_catalog.py",
                   "trackfolio/interfaces/gui/album_view.py",
                   "trackfolio/interfaces/gui/artist_view.py",
+                  "trackfolio/infrastructure/artist_images.py",
                   "trackfolio/interfaces/gui/cover_widget.py",
                   "trackfolio/infrastructure/cover_files.py",
                   "trackfolio/interfaces/gui/cover_dialog.py",

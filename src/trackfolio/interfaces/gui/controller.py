@@ -154,6 +154,7 @@ _JobKind = Literal[
     "tag_covers",
     "albums",
     "album_detail",
+    "artist_image",
     "album_edit",
 ]
 
@@ -186,6 +187,7 @@ class CatalogController(QObject):
         import_directory: Path | None = None,
         edit_factory: CatalogEditSessionFactory | None = None,
         tag_writer: TagWriteService | None = None,
+        artist_image_reader: Callable[[tuple[Album, ...]], bytes | None] | None = None,
     ) -> None:
         super().__init__(window)
         self.window = window
@@ -194,6 +196,8 @@ class CatalogController(QObject):
         self._importer = importer
         self._edit_factory = edit_factory
         self._tag_writer = tag_writer
+        self._artist_image_reader = artist_image_reader
+        self._artist_image_token = 0
         self._tag_dialog: TagWriteDialog | None = None
         self._cover_dialog: CoverChoiceDialog | None = None
         self._tag_running = False
@@ -270,6 +274,17 @@ class CatalogController(QObject):
         )
         window.view_changed.connect(self.change_view)
         window.artist_view.album_requested.connect(self.open_artist_album)
+        window.artist_view.artist_selected.connect(self.select_artist_image)
+
+    @Slot(object)
+    def select_artist_image(self, albums: tuple[Album, ...]) -> None:
+        self._artist_image_token += 1
+        reader = self._artist_image_reader
+        if self._closed or self._session is None or reader is None or not albums:
+            return
+        self._submit(
+            lambda: reader(albums), "artist_image", self._artist_image_token, self._session
+        )
 
     @Slot(int)
     def change_view(self, index: int) -> None:
@@ -1173,6 +1188,7 @@ class CatalogController(QObject):
             "tag_covers": self._tag_token,
             "albums": self._album_list_token,
             "album_detail": self._album_detail_token,
+            "artist_image": self._artist_image_token,
             "album_edit": self._edit_token,
         }
         return job.request_token == token[job.kind]
@@ -1188,6 +1204,10 @@ class CatalogController(QObject):
                 result.session.close()
         elif job.kind in ("tag_write", "tag_list", "tag_covers"):
             self._finish_tag_job(job)
+        elif job.kind == "artist_image":
+            self.window.artist_view.cover.set_cover(
+                cast(bytes | None, job.task.result) if not job.task.error else None
+            )
         elif job.kind in ("albums", "album_detail", "album_edit"):
             self._finish_album_job(job)
         elif job.kind == "save":

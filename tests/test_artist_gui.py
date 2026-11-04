@@ -4,11 +4,14 @@ import pytest
 
 pytest.importorskip("PySide6")
 
+from PySide6.QtGui import QImage
 from test_album_gui import library
 from test_catalog_edit import edit
 from test_import_gui_integration import wait_until
 from test_tag_write import setup_tags as setup_tags
 from test_tag_write_gui import open_window, teardown
+
+from trackfolio.startup import create_window
 
 
 def test_artist_search_and_album_navigation_work_offline(qt_app, setup_tags, tmp_path):
@@ -45,5 +48,30 @@ def test_artist_search_and_album_navigation_work_offline(qt_app, setup_tags, tmp
         assert view.albums.count() == 0
         view.search.setText("renamed")
         assert view.title.text() == "Renamed" and view.albums.count() == 1
+    finally:
+        teardown(window, controller)
+
+
+def test_artist_portrait_loads_and_clears_when_unavailable(qt_app, setup_tags, tmp_path):
+    source, _, _ = library(setup_tags, tmp_path)
+    portrait = source.parent.parent / "artist.JPG"
+    image = QImage(80, 40, QImage.Format.Format_RGB32)
+    image.fill(0xFF008800)
+    assert image.save(str(portrait), "JPEG")
+    window, controller = create_window(tag_journal_root=tmp_path / "journal")
+    try:
+        controller.open_database(setup_tags[0])
+        wait_until(qt_app, lambda: not controller._jobs)
+        view = window.artist_view
+        view.search.setText("album artist")
+        wait_until(qt_app, lambda: not controller._jobs)
+        assert not view.cover.pixmap().isNull()
+        assert view.cover.pixmap().width() > view.cover.pixmap().height()
+        view.search.setText("no matches")
+        assert view.cover.pixmap().isNull()
+        portrait.unlink()
+        view.search.setText("album artist")
+        wait_until(qt_app, lambda: not controller._jobs)
+        assert view.cover.pixmap().isNull()
     finally:
         teardown(window, controller)

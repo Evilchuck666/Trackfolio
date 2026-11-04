@@ -103,6 +103,7 @@ def test_headless_qt_success_does_not_claim_desktop_validation(doctor, monkeypat
         "nfo_written": True,
         "cover_written": True,
         "albums_viewed": True,
+        "artists_viewed": True,
     }
     output = doctor.QT_PROBE_PREFIX + json.dumps(report)
 

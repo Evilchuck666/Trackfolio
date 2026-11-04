@@ -22,6 +22,7 @@ def create_window(
     from trackfolio.application.import_catalog import ImportCatalog
     from trackfolio.application.write_tags import TagWriteService
     from trackfolio.infrastructure.album_nfo import XmlAlbumNfoCodec
+    from trackfolio.infrastructure.artist_images import read_artist_image
     from trackfolio.infrastructure.audio_scan import FileSystemAudioScanner
     from trackfolio.infrastructure.catalog_edit import SqliteCatalogEditSessionFactory
     from trackfolio.infrastructure.cover_files import FileCoverAccess
@@ -49,6 +50,7 @@ def create_window(
         ),
         import_directory=directory,
         edit_factory=SqliteCatalogEditSessionFactory(),
+        artist_image_reader=read_artist_image,
         tag_writer=TagWriteService(
             SqliteTagCatalog(),
             MutagenTagCodec(),
