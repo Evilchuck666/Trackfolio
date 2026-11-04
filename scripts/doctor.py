@@ -367,11 +367,12 @@ def check_qt(qt_platform: str | None, timeout: float) -> CheckResult:
                 "nfo_written",
                 "cover_written",
                 "albums_viewed",
+                "artists_viewed",
             )
         ):
             raise ValueError(
                 "No se comprobó la importación y edición, "
-                "incluidas la escritura musical, portada, NFO y vista de álbum."
+                "incluidas la escritura musical, portada, NFO y vistas de álbum y artistas."
             )
     except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
         return CheckResult("Qt/Fusion", False, f"El subproceso no confirmó la prueba Qt: {exc}")
@@ -384,7 +385,7 @@ def check_qt(qt_platform: str | None, timeout: float) -> CheckResult:
         "Qt/Fusion",
         True,
         f"Qt {qt_version}, Fusion, backend {backend}; "
-        "importación, edición, etiquetas, portada, NFO y vista de álbum comprobadas. "
+        "importación, edición, etiquetas, portada, NFO y vistas de álbum y artistas comprobadas. "
         f"{scope}",
     )
 

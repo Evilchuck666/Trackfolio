@@ -218,9 +218,11 @@ jobs:
                   "trackfolio/application/album_nfo.py",
                   "trackfolio/application/cover_writes.py",
                   "trackfolio/application/albums.py",
+                  "trackfolio/application/artists.py",
                   "trackfolio/domain/album.py",
                   "trackfolio/infrastructure/album_catalog.py",
                   "trackfolio/interfaces/gui/album_view.py",
+                  "trackfolio/interfaces/gui/artist_view.py",
                   "trackfolio/interfaces/gui/cover_widget.py",
                   "trackfolio/infrastructure/cover_files.py",
                   "trackfolio/interfaces/gui/cover_dialog.py",
@@ -517,6 +519,7 @@ jobs:
           assert report["nfo_written"] is True, report
           assert report["cover_written"] is True, report
           assert report["albums_viewed"] is True, report
+          assert report["artists_viewed"] is True, report
           print("Wheel GUI instalado fuera del checkout:", report)
           """
               subprocess.run(

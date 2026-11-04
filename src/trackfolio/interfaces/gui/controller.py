@@ -269,13 +269,22 @@ class CatalogController(QObject):
             lambda: window.views.setCurrentIndex(index)
         )
         window.view_changed.connect(self.change_view)
+        window.artist_view.album_requested.connect(self.open_artist_album)
 
     @Slot(int)
     def change_view(self, index: int) -> None:
-        if self.window.views.widget(index) is self.window.album_view:
+        if self.window.views.widget(index) in (self.window.album_view, self.window.artist_view):
             self.load_albums()
         elif self.window.current_file_id() is not None:
             self.select_track(cast(int, self.window.current_file_id()))
+
+    @Slot(str)
+    def open_artist_album(self, key: str) -> None:
+        if not self._guard_edit(lambda: self.open_artist_album(key)):
+            return
+        self.window.album_view.search.clear()
+        self.window.album_view.select_key(key)
+        self.window.views.setCurrentWidget(self.window.album_view)
 
     def load_albums(self) -> None:
         if self._closed or self._session is None or self.saving or self.importing or self.tagging:
@@ -312,6 +321,7 @@ class CatalogController(QObject):
             return
         if job.kind == "albums":
             view.set_albums(cast(tuple[Album, ...], job.task.result))
+            self.window.artist_view.set_albums(cast(tuple[Album, ...], job.task.result))
         elif job.kind == "album_detail":
             entry = cast(CatalogEntry | None, job.task.result)
             view.cover.set_cover(
@@ -400,6 +410,8 @@ class CatalogController(QObject):
 
     @Slot()
     def choose_tag_write(self) -> None:
+        if self.window.views.currentWidget() is self.window.artist_view:
+            return
         if self.window.views.currentWidget() is self.window.album_view:
             self.choose_album_tag_write()
             return
@@ -678,6 +690,8 @@ class CatalogController(QObject):
 
     @Slot()
     def start_edit(self) -> None:
+        if self.window.views.currentWidget() is self.window.artist_view:
+            return
         if self.window.views.currentWidget() is self.window.album_view:
             self.start_album_edit()
             return
@@ -1199,7 +1213,10 @@ class CatalogController(QObject):
                     self._remember(result.session.database_path)
                 except OSError as exc:
                     self.window.set_error(f"No se pudo guardar la preferencia del catálogo: {exc}")
-            if self.window.views.currentWidget() is self.window.album_view:
+            if self.window.views.currentWidget() in (
+                self.window.album_view,
+                self.window.artist_view,
+            ):
                 self.load_albums()
             self.catalog_loaded.emit()
         elif job.kind == "list" and self._session is not None:
@@ -1216,7 +1233,10 @@ class CatalogController(QObject):
                 self.window.current_file_id(),
                 selected_file_ids=self.window.selected_file_ids(),
             )
-            if self.window.views.currentWidget() is self.window.album_view:
+            if self.window.views.currentWidget() in (
+                self.window.album_view,
+                self.window.artist_view,
+            ):
                 self.load_albums()
             self.catalog_loaded.emit()
         elif job.kind == "detail":

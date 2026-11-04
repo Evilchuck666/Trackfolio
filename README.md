@@ -140,6 +140,10 @@ Las ediciones se separan por biblioteca, carpeta y metadatos. Los subdirectorios
 disco reconocidos se agrupan cuando coinciden con su numeración. Consulta las
 [reglas de agrupación y edición](docs/album-view.md).
 
+La pestaña **Artistas** agrupa sus álbumes y permite abrir cada edición en la vista
+de álbum. Incluye búsqueda por nombre y funciona con la música desconectada.
+Consulta las [reglas de agrupación por artista](docs/artist-view.md).
+
 ## Escribir etiquetas en la música
 
 1. Guarda las correcciones en el catálogo y selecciona una o varias canciones.

@@ -299,6 +299,22 @@ def run_probe(argv: list[str]) -> dict[str, object]:
                 assert view.cover.pixmap() is not None and not view.cover.pixmap().isNull()
                 assert view.edit_button.isEnabled() and view.write_button.isEnabled()
                 state["albums_viewed"] = True
+                window.views.setCurrentWidget(window.artist_view)
+                QTimer.singleShot(20, inspect_artists)
+            except Exception as exc:
+                fail(str(exc) or type(exc).__name__)
+
+        def inspect_artists() -> None:
+            if controller._jobs:
+                QTimer.singleShot(20, inspect_artists)
+                return
+            try:
+                view = window.artist_view
+                assert view.list.count() == 1
+                assert view.title.text() == "Accept"
+                assert view.albums.count() == 1 and view.open_button.isEnabled()
+                assert not window.edit_action.isEnabled()
+                state["artists_viewed"] = True
                 state["failure"] = ""
                 app.quit()
             except Exception as exc:
@@ -331,4 +347,5 @@ def run_probe(argv: list[str]) -> dict[str, object]:
             "nfo_written": bool(state.get("nfo_written")),
             "cover_written": bool(state.get("cover_written")),
             "albums_viewed": bool(state.get("albums_viewed")),
+            "artists_viewed": bool(state.get("artists_viewed")),
         }

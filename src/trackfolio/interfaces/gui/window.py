@@ -60,6 +60,7 @@ from trackfolio.domain.catalog_edit import (
     TrackEditPatch,
 )
 from trackfolio.interfaces.gui.album_view import AlbumView
+from trackfolio.interfaces.gui.artist_view import ArtistView
 from trackfolio.interfaces.gui.catalog_model import CatalogTableModel
 from trackfolio.interfaces.gui.cover_widget import CoverLabel
 from trackfolio.interfaces.gui.ordered_labels import OrderedLabels
@@ -290,6 +291,8 @@ class MainWindow(QMainWindow):
         self.views = QTabWidget(content)
         self.views.setAccessibleName("Vistas de la biblioteca")
         self.album_view = AlbumView(self.views)
+        self.artist_view = ArtistView(self.views)
+        self.views.addTab(self.artist_view, "Artistas")
         self.views.addTab(self.album_view, "Álbumes")
         self.views.addTab(self.splitter, "Canciones")
         self.views.setCurrentWidget(self.album_view)
@@ -654,6 +657,7 @@ class MainWindow(QMainWindow):
         self._catalog_path = path
         if path is None:
             self.album_view.set_albums(())
+            self.artist_view.set_albums(())
         blocker = QSignalBlocker(self.table.selectionModel())
         self.model.set_summaries(rows)
         self.table.clearSelection()
@@ -974,6 +978,7 @@ class MainWindow(QMainWindow):
         self.table.setEnabled(navigating)
         self.views.tabBar().setEnabled(navigating)
         self.album_view.set_busy(self._busy or not navigating, blocked=not navigating)
+        self.artist_view.setEnabled(not self._busy and navigating)
         self.edit_action.setEnabled(
             self._edit_enabled
             and self._detail_loaded
@@ -1017,6 +1022,15 @@ class MainWindow(QMainWindow):
             )
             self.save_action.setEnabled(album_editing and self.album_view.dirty() and navigating)
             self.cancel_edit_action.setEnabled(album_editing and not self._saving)
+
+        if self.views.currentWidget() is self.artist_view:
+            for action in (
+                self.edit_action,
+                self.save_action,
+                self.cancel_edit_action,
+                self.write_tags_action,
+            ):
+                action.setEnabled(False)
 
         for action, button in (
             (self.edit_action, self.edit_button),
