@@ -114,11 +114,8 @@ class TagWriteDialog(QDialog):
         heading.setObjectName("PageTitle")
         layout.addWidget(heading)
         description = QLabel(
-            "Se escribirán todas las etiquetas modificadas con los valores guardados "
-            "de cada canción y se actualizará album.nfo si existe junto al audio. "
-            "Las imágenes JPG/PNG de la carpeta se incrustarán como portada; "
-            "si hay varias, podrás elegir cuál usar. "
-            "El respaldo se eliminará si todo termina correctamente.",
+            "Se actualizarán las etiquetas, la portada disponible y album.nfo si existe. "
+            "Si hay varias imágenes, podrás elegir una.",
             self,
         )
         description.setWordWrap(True)
