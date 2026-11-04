@@ -196,6 +196,7 @@ def check_resources() -> CheckResult:
                     "import",
                     "refresh",
                     "check",
+                    "chevron-down",
                     "edit",
                     "tag",
                     "disc",

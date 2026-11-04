@@ -17,6 +17,7 @@ ICON_NAMES = frozenset(
         "import",
         "refresh",
         "check",
+        "chevron-down",
         "edit",
         "tag",
         "disc",

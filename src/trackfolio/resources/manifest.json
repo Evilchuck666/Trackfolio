@@ -1,6 +1,6 @@
 {
   "sha256": {
-    "stylesheet.qss": "f0f4b40223e4eee5d99cf89fcd3313432a7a6ad5764311c6413131e4f766a7a6",
+    "stylesheet.qss": "22e8fa34de2cfe1a71210969ffaabb9b46d57d09324b05e5ceb58d806adf50f0",
     "icons/app.svg": "250fa792ce18d2ec3a42e616d6ffd10a0d2eb8966a8f41084f19b2abb646fc71",
     "icons/close.svg": "7ef70e6f6731d06c79c32370ec430866ba247a0f7b1a6b28647af52cc4cd2c91",
     "icons/maximize.svg": "3c2a101e00d033a784aac5f8d2ccc528cbd20f1726d649c934dd70f1c1d5cec5",
@@ -17,6 +17,7 @@
     "icons/tag.svg": "5a636675d7163a9e7824d4990170ee13193732746dc233f23c8a0e21b260a991",
     "icons/disc.svg": "fa611c1e02c956cad146dad6b95185c8c7dba312ca0408ba5d07af89382ca4b9",
     "icons/file.svg": "5f28feee0a60ee9a797891f50cd58bda425941742056edffa14c9aaf90b65d0a",
-    "icons/report.svg": "4b6848b91eb290064faebb9771414b7c1a468a28456b3468e417398311c09d1e"
+    "icons/report.svg": "4b6848b91eb290064faebb9771414b7c1a468a28456b3468e417398311c09d1e",
+    "icons/chevron-down.svg": "a16ab2e58d950fd83486880e198f60737f8e261f4e315db942993b30d8420699"
   }
 }

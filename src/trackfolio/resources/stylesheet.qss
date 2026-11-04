@@ -88,6 +88,21 @@ QLineEdit, QTextEdit, QPlainTextEdit, QComboBox {
     color: #eef0fa;
 }
 QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QComboBox:focus { border-color: #8e94ff; }
+QComboBox#SongFilter { padding-right: 40px; }
+QComboBox#SongFilter:hover { border-color: #657098; }
+QComboBox#SongFilter::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 24px;
+    border-left: 1px solid #303750;
+    border-top-right-radius: 5px;
+    border-bottom-right-radius: 5px;
+    background-color: #252b41;
+}
+QComboBox#SongFilter::drop-down:hover { background-color: #343c64; }
+QComboBox#SongFilter::down-arrow { image: none; width: 0; height: 0; }
+QComboBox#SongFilter:disabled { color: #6f7891; }
+QComboBox#SongFilter::drop-down:disabled { background-color: #181c29; }
 QLineEdit:read-only { background-color: #181c29; }
 QLineEdit#MetadataField { background-color: #1b2030; border-color: #303750; }
 QLineEdit#TrackTitle { background-color: #1b2030; font-size: 18px; font-weight: 600; }

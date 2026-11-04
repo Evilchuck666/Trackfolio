@@ -32,7 +32,6 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
-    QComboBox,
     QFrame,
     QGridLayout,
     QHBoxLayout,
@@ -64,6 +63,7 @@ from trackfolio.interfaces.gui.album_view import AlbumView
 from trackfolio.interfaces.gui.artist_view import ArtistView
 from trackfolio.interfaces.gui.catalog_model import CatalogTableModel
 from trackfolio.interfaces.gui.cover_widget import CoverLabel
+from trackfolio.interfaces.gui.filter_combo import FilterComboBox
 from trackfolio.interfaces.gui.ordered_labels import OrderedLabels
 from trackfolio.interfaces.gui.theme import icon
 
@@ -411,10 +411,10 @@ class MainWindow(QMainWindow):
         filters.addWidget(self.song_search)
         choices = QHBoxLayout()
         choices.setSpacing(8)
-        self.song_genre = QComboBox(panel)
+        self.song_genre = FilterComboBox(panel)
         self.song_genre.setAccessibleName("Filter songs by genre")
         self.song_genre.addItem("All genres", None)
-        self.song_year = QComboBox(panel)
+        self.song_year = FilterComboBox(panel)
         self.song_year.setAccessibleName("Filter songs by year")
         self.song_year.addItem("All years", None)
         self.clear_song_filters = QPushButton("Clear filters", panel)
