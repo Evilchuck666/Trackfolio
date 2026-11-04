@@ -97,7 +97,7 @@ def run_probe(argv: list[str]) -> dict[str, object]:
         database = Path(directory) / "catálogo portable.tfo"
         source = _audio_source(Path(directory))
         window, controller = create_window(tag_journal_root=Path(directory) / "tag-writes")
-        assert window.views.currentWidget() is window.album_view
+        assert window.views.currentWidget() is window.artist_view
         window.views.setCurrentWidget(window.splitter)
         app.close_guard = controller.request_close
         app.aboutToQuit.connect(controller.shutdown)

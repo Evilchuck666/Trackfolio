@@ -4,7 +4,7 @@ La pestaña **Artistas** muestra un listado con búsqueda por nombre y, a su der
 los álbumes del artista seleccionado, ordenados por año y título. Cada edición
 conserva su carpeta y sus pistas. Se abre el detalle con **Ver álbum**, doble clic
 o Intro; allí están disponibles la edición y la escritura de etiquetas habituales.
-**Álbumes** continúa siendo la pestaña inicial.
+**Artistas** es la pestaña inicial.
 
 La agrupación usa los artistas del álbum. Un álbum con varios artistas acreditados
 aparece bajo cada uno. Cuando faltan esos créditos, se usan los artistas de pista

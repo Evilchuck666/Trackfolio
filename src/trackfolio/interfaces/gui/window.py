@@ -295,7 +295,7 @@ class MainWindow(QMainWindow):
         self.views.addTab(self.artist_view, "Artistas")
         self.views.addTab(self.album_view, "Álbumes")
         self.views.addTab(self.splitter, "Canciones")
-        self.views.setCurrentWidget(self.album_view)
+        self.views.setCurrentWidget(self.artist_view)
         self._view_index = self.views.currentIndex()
         self.album_view.draft_changed.connect(self._update_actions)
         for field in (
