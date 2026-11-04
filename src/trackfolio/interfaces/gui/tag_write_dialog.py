@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
 
 from trackfolio.domain.catalog import CatalogSummary
 from trackfolio.domain.tag_write import TagWriteProgress, TagWriteReport
+from trackfolio.interfaces.gui.theme import icon
 
 _STATES = {
     "unchanged": "Unchanged",
@@ -151,9 +152,9 @@ class TagWriteDialog(QDialog):
         layout.addWidget(self.progress)
         buttons = QHBoxLayout()
         buttons.addStretch()
-        self.close_button = QPushButton("Close", self)
+        self.close_button = QPushButton(icon("close"), "Close", self)
         self.close_button.clicked.connect(self.reject)
-        self.write_button = QPushButton("Write tags", self)
+        self.write_button = QPushButton(icon("tag"), "Write tags", self)
         self.write_button.setObjectName("PrimaryButton")
         self.write_button.clicked.connect(self._request_write)
         self.write_button.setEnabled(bool(songs))
@@ -281,7 +282,9 @@ class TagWriteDialog(QDialog):
         popup.setInformativeText("You can save a report with errors and backup paths.")
         popup.setDetailedText(report_text(self._report) if self._report else self._error_message)
         save = popup.addButton("Save report…", QMessageBox.ButtonRole.ActionRole)
-        popup.addButton("Close", QMessageBox.ButtonRole.RejectRole)
+        save.setIcon(icon("report"))
+        close = popup.addButton("Close", QMessageBox.ButtonRole.RejectRole)
+        close.setIcon(icon("close"))
         popup.buttonClicked.connect(
             lambda button: self._export_report() if button is save else None
         )

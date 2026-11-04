@@ -11,7 +11,22 @@ from PySide6.QtWidgets import QApplication, QStyleFactory
 
 FONT_FILES = ("Inter-Regular.ttf", "Inter-SemiBold.ttf")
 ICON_NAMES = frozenset(
-    {"app", "open", "import", "refresh", "check", "close", "minimize", "maximize", "restore"}
+    {
+        "app",
+        "open",
+        "import",
+        "refresh",
+        "check",
+        "edit",
+        "tag",
+        "disc",
+        "file",
+        "report",
+        "close",
+        "minimize",
+        "maximize",
+        "restore",
+    }
 )
 _font_family: str | None = None
 

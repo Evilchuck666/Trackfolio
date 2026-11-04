@@ -12,6 +12,11 @@
     "fonts/Inter-SemiBold.ttf": "78a843fade9d4612a5567302fb595b56976eb5fcebf4fea5a5912d638bafcde3",
     "fonts/LICENSE.txt": "262481e844521b326f5ecd053e59b98c8b2da78c8ee1bdbb6e8174305e54935a",
     "icons/import.svg": "dcb4bd5d4934608ec38226f123ff68171599c165520ebc044fe4be098c570fef",
-    "icons/check.svg": "f59a75ec12acf83b636def549663785db14b1291123cab7ab8017fd930c8b66b"
+    "icons/check.svg": "f59a75ec12acf83b636def549663785db14b1291123cab7ab8017fd930c8b66b",
+    "icons/edit.svg": "0acedf146bae8de092868e8bde31a7e22305ab50c026a49502932acceb879b8e",
+    "icons/tag.svg": "5a636675d7163a9e7824d4990170ee13193732746dc233f23c8a0e21b260a991",
+    "icons/disc.svg": "fa611c1e02c956cad146dad6b95185c8c7dba312ca0408ba5d07af89382ca4b9",
+    "icons/file.svg": "5f28feee0a60ee9a797891f50cd58bda425941742056edffa14c9aaf90b65d0a",
+    "icons/report.svg": "4b6848b91eb290064faebb9771414b7c1a468a28456b3468e417398311c09d1e"
   }
 }

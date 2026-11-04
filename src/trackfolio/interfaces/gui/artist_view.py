@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 from trackfolio.application.artists import group_artists
 from trackfolio.domain.album import Album
 from trackfolio.interfaces.gui.cover_widget import CoverLabel
+from trackfolio.interfaces.gui.theme import icon
 
 
 class ArtistView(QWidget):
@@ -72,7 +73,7 @@ class ArtistView(QWidget):
         self.albums = QListWidget(panel)
         self.albums.setAccessibleName("Artist albums")
         right.addWidget(self.albums, 1)
-        self.open_button = QPushButton("View album", panel)
+        self.open_button = QPushButton(icon("disc"), "View album", panel)
         right.addWidget(self.open_button, 0, Qt.AlignmentFlag.AlignLeft)
         split.setSizes([300, 900])
         self.search.textChanged.connect(self._filter)

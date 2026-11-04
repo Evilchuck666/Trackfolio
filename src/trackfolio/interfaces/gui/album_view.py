@@ -31,6 +31,7 @@ from trackfolio.domain.album import Album
 from trackfolio.domain.catalog_edit import EditableTrack, EditField, FieldChange, TrackEditPatch
 from trackfolio.interfaces.gui.cover_widget import CoverLabel
 from trackfolio.interfaces.gui.ordered_labels import OrderedLabels
+from trackfolio.interfaces.gui.theme import icon
 
 
 class AlbumView(QWidget):
@@ -113,14 +114,14 @@ class AlbumView(QWidget):
         header.addLayout(info, 1)
         right.addLayout(header)
         actions = QHBoxLayout()
-        self.edit_button = QPushButton("Edit album", panel)
+        self.edit_button = QPushButton(icon("edit"), "Edit album", panel)
         self.edit_button.clicked.connect(self.edit_requested.emit)
-        self.write_button = QPushButton("Write album tags…", panel)
+        self.write_button = QPushButton(icon("tag"), "Write album tags…", panel)
         self.write_button.clicked.connect(self.write_requested.emit)
-        self.save_button = QPushButton("Save album", panel)
+        self.save_button = QPushButton(icon("check"), "Save album", panel)
         self.save_button.setObjectName("PrimaryButton")
         self.save_button.clicked.connect(self.save_requested.emit)
-        self.cancel_button = QPushButton("Cancel", panel)
+        self.cancel_button = QPushButton(icon("close"), "Cancel", panel)
         self.cancel_button.clicked.connect(self.cancel_requested.emit)
         for button in (self.edit_button, self.write_button, self.save_button, self.cancel_button):
             actions.addWidget(button)
