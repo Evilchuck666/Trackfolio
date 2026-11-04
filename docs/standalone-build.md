@@ -32,7 +32,24 @@ not an `.app` bundle. These builds are unsigned and are not notarized.
 
 The **Cross-platform environment** workflow builds all four targets, checks
 their offscreen and native Qt backends, and uploads archives and checksums as
-workflow artifacts. It does not publish a GitHub release automatically.
+workflow artifacts. Pushes and pull requests do not publish releases.
+
+## Publish a release
+
+1. Set `project.version` in `pyproject.toml` to the intended version, update
+   `uv.lock` with `uv lock`, and commit and push these changes to `main`.
+2. Open **Actions → Cross-platform environment → Run workflow** on GitHub.
+3. Select `main` and enter the version without `v` (for example, `0.1.0`).
+   Leave it empty to build and verify without publishing.
+
+After all four targets pass, the publication job checks that the version matches
+`pyproject.toml`, rejects existing tags, downloads the packages from that same
+run, and verifies their checksums. It creates `v<version>` on the tested commit
+and publishes a release with the four archives, `SHA256SUMS.txt` and generated
+release notes. Only that job receives `contents: write`. Manual runs are not
+automatically cancelled by subsequent pushes. Publication from other branches
+is skipped. Existing releases are never overwritten; a failed publication that
+already created a tag must be inspected before retrying.
 
 ## Verification
 

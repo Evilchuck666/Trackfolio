@@ -4,13 +4,18 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release, without v (e.g. 0.1.0). Leave empty to only build.'
+        required: false
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: release-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 
 jobs:
   environment:
@@ -556,3 +561,89 @@ jobs:
 
       - name: Verify checks do not change versioned files
         run: git diff --exit-code
+
+  release:
+    name: Publish release
+    needs: environment
+    if: github.event_name == 'workflow_dispatch' && inputs.version != '' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    concurrency:
+      group: trackfolio-release
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      VERSION: ${{ inputs.version }}
+      RELEASE_SHA: ${{ github.sha }}
+      PACKAGES: >-
+        Trackfolio-linux-x64.tar.gz
+        Trackfolio-windows-x64.zip
+        Trackfolio-macos-x64.zip
+        Trackfolio-macos-arm64.zip
+    steps:
+      - name: Check out the tested commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Validate release version
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          import tomllib
+          from pathlib import Path
+
+          version = os.environ["VERSION"]
+          if not re.fullmatch(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", version):
+              raise SystemExit("Use a version like 0.1.0, without the v.")
+          declared = tomllib.loads(Path("pyproject.toml").read_text())["project"]["version"]
+          if version != declared:
+              raise SystemExit(f"pyproject.toml declares {declared}; update it to {version} first.")
+          PY
+
+      - name: Reject an existing tag
+        run: |
+          set -euo pipefail
+          gh api --paginate "repos/$GH_REPO/git/matching-refs/tags/" --jq '.[].ref' > existing-tags.txt
+          if grep -Fxq "refs/tags/v$VERSION" existing-tags.txt; then
+            echo "::error::Tag v$VERSION already exists. Use another version."
+            exit 1
+          fi
+
+      - name: Download verified packages from this run
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          pattern: Trackfolio-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Verify all packages and checksums
+        working-directory: release-assets
+        run: |
+          set -euo pipefail
+          for file in $PACKAGES; do
+            test -s "$file"
+            test -s "$file.sha256"
+            expected=$(sha256sum "$file")
+            actual=$(tr -d '\r' < "$file.sha256")
+            if [[ "$actual" != "$expected" ]]; then
+              echo "::error::Checksum mismatch for $file."
+              exit 1
+            fi
+          done
+          sha256sum $PACKAGES > SHA256SUMS.txt
+
+      - name: Create tag and publish release
+        working-directory: release-assets
+        run: |
+          set -euo pipefail
+          gh release create "v$VERSION" $PACKAGES SHA256SUMS.txt \
+            --target "$RELEASE_SHA" \
+            --title "Trackfolio v$VERSION" \
+            --generate-notes \
+            --latest
