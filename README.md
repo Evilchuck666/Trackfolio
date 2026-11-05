@@ -1,215 +1,129 @@
-# Trackfolio
+# 🎵 Trackfolio
 
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20GNU%2FLinux%20%7C%20macOS-blue)
 ![Python](https://img.shields.io/badge/python-3.13-blue)
 ![PySide6](https://img.shields.io/badge/PySide6-6.11.2-blue)
-![Requires](https://img.shields.io/badge/requires-uv%200.13.4-blue)
 [![License](https://img.shields.io/badge/license-GPLv3-green)](LICENSE)
 [![Build and tests](https://github.com/Evilchuck666/Trackfolio/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/Evilchuck666/Trackfolio/actions/workflows/release.yml)
 
-Trackfolio is a cross-platform application for browsing and editing a catalog of FLAC and MP3 libraries. It uses Python, Qt 6 through PySide6, and SQLite through SQLAlchemy. The domain and use cases are independent of the GUI, allowing future CLI/TUI interfaces or a server with a web frontend.
+**Your music, its metadata, and the stories behind each album.**
 
-The GUI imports FLAC/MP3 folders and lets you edit songs, artists, albums, years, numbering, genres and lyrics in SQLite. Missing fields remain empty. The importer preserves embedded artwork or artwork from `album.jpg`. Edits are saved in the catalog and can be written to files through an explicit action with preview and backup.
+Trackfolio is a desktop application for organizing the metadata of your FLAC
+and MP3 collection. Browse artists, albums and songs, correct their details,
+and write the changes back to your music on Windows, GNU/Linux or macOS.
 
-## Set up a PC
+## 🧩 Why Trackfolio?
 
-Download the repository, enter its root directory and run a single command. **You do not need to install uv or Python beforehand.** Initial setup requires Internet access and a compatible system. This version is on the `gui` branch: select that branch when downloading the GitHub ZIP, or clone it if you already have Git:
+A music collection can have inconsistent artist names, missing years, different
+genres for the same album, or covers that never made it into the audio files.
+
+Trackfolio brings those details into a local catalog. You can review and edit
+them even when the music drive is disconnected, then write the saved changes
+to the files when you are ready.
+
+## ✨ What it does
+
+- Imports FLAC and MP3 folders into a local `.tfo` catalog.
+- Groups your collection into **Artists**, **Albums** and **Songs** views.
+- Searches songs by title, artist or album, with genre and year filters.
+- Edits titles, artists, albums, years, track/disc numbers, genres and lyrics.
+- Applies shared changes to an album or a selection of songs.
+- Embeds local JPG/PNG covers, with a preview and a choice when several exist.
+- Updates existing `album.nfo` files when writing tags.
+- Shows write progress and reports, with backups retained if an operation fails
+  or is cancelled.
+
+## 🚀 Getting started
+
+1. Open **Trackfolio** (`Trackfolio.exe` on Windows), or start it from source
+   using the commands below.
+2. Click **Import music…**, choose your music folder and create a catalog.
+   Use **Open catalog…** if you already have a `.tfo` file.
+3. Browse **Artists**, **Albums** or **Songs** and select what you want to edit.
+4. Save your corrections in the catalog.
+5. When ready, choose **Write tags…** or **Write album tags…**, review the list
+   and confirm the write.
+
+**Saving an edit updates the catalog. Writing tags updates the music files.**
+The original files must be accessible for tag writing.
+
+## 📥 Download and installation
+
+Check [Releases](https://github.com/Evilchuck666/Trackfolio/releases) for published
+packages. If no release is listed, use the source setup below. Successful runs
+of [GitHub Actions](https://github.com/Evilchuck666/Trackfolio/actions/workflows/release.yml)
+also provide downloadable build artifacts; these are development builds.
+
+| Platform | Package filename |
+| --- | --- |
+| GNU/Linux x64 | `Trackfolio-linux-x64.tar.gz` |
+| Windows x64 | `Trackfolio-windows-x64.zip` |
+| macOS Intel | `Trackfolio-macos-x64.zip` |
+| macOS Apple Silicon | `Trackfolio-macos-arm64.zip` |
+
+Extract the package and open **Trackfolio**. Standalone builds include Python
+and Qt, so you do not need to install them. Linux supports X11 and Wayland and
+still needs compatible system libraries. Packages are unsigned; macOS builds
+are native executables rather than `.app` bundles.
+
+See [platform requirements](TECHNICAL_GUIDE.md#intended-compatibility) and
+[standalone builds](docs/standalone-build.md) for compatibility and verification.
+Arch Linux packaging is covered in the [AUR guide](docs/aur-publishing.md).
+
+### Run from source
+
+Clone or download the repository and enter its root folder:
 
 ```sh
-git clone --branch gui https://github.com/Evilchuck666/Trackfolio.git
+git clone https://github.com/Evilchuck666/Trackfolio.git
 cd Trackfolio
 ```
 
 **Linux and macOS:**
 
 ```sh
-bash setup.sh
+bash setup.sh --skip-editor
+bash setup.sh --run-uv run --locked --extra gui trackfolio
 ```
 
 **Windows, from PowerShell:**
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\setup.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\setup.ps1 --skip-editor
+powershell -NoProfile -ExecutionPolicy Bypass -File .\setup.ps1 --run-uv run --locked --extra gui trackfolio
 ```
 
-The repository is private: you need an account with access to download it. To clone with Git, configure your credential manager; if you use GitHub CLI, run `gh auth login` and `gh auth setup-git`. Do not store credentials in the project.
+Setup downloads compatible uv and Python if needed and creates the project's
+`.venv` from the lockfile. Internet access is required for initial setup; you do
+not need to install Python beforehand or activate the environment yourself.
 
-Setup reuses a compatible uv (`>=0.13.4,<0.14`, such as 0.13.4). If none is available, it downloads the minimum version into `.tools/uv`, **without replacing system uv or modifying shell profiles**. It obtains uv-managed CPython 3.13.15, creates `.venv`, installs the GUI and development tools from `uv.lock`, and checks the environment.
+## 💾 Your catalog and music
 
-If graphical libraries or Git are missing, setup proposes installing them and requests permission. If VS Code is missing, it offers to download it into `.tools/vscode`; recommended extensions are installed when the editor is available. Setup does not touch music or catalogs and can be repeated. A failed mandatory requirement returns a nonzero exit code. See [options and platform limits](docs/environment.md#single-command-setup).
+The catalog stores metadata and album artwork locally. Browsing it does not
+require the original audio files; artist photos are loaded from their folders
+when available. Trackfolio remembers the last catalog you opened.
 
-To set up only Python and Qt, without downloading the editor or installing extensions:
+Writing tags uses each song's saved values. Local cover images can replace
+embedded front covers; without an image, the existing cover is preserved.
+Existing `album.nfo` files are updated, but missing ones are not created.
 
-```sh
-bash setup.sh --skip-editor
-```
+**Reimporting music replaces catalog metadata with the file tags**, so write
+corrections to your files before reimporting if you want to keep them. Successful
+write batches remove backups from the affected `.trackfolio-backups` folders;
+errors and cancellation retain them. See the [tag-writing and recovery guide](docs/tag-writing.md)
+for the full behavior.
 
-For core-only development, add `--core`. On Windows, use the same arguments after `-File .\setup.ps1`. You do not need to activate `.venv`.
+## 📚 Learn more
 
-## Check the environment
+- [Technical guide](TECHNICAL_GUIDE.md): setup, catalog behavior, development,
+  verification and packaging.
+- [Album view](docs/album-view.md) and [artist view](docs/artist-view.md): grouping
+  rules and editing behavior.
+- [Contributing](CONTRIBUTING.md): project conventions and development workflow.
+- [Validation record](VALIDATION.md): tested configurations and known limits.
 
-From the project root:
+Built with **Python**, **Qt 6 / PySide6** and **SQLite**.
 
-```sh
-bash setup.sh --run-uv run --locked --extra gui python scripts/doctor.py --gui
-bash setup.sh --run-uv run --locked --extra gui ruff check .
-bash setup.sh --run-uv run --locked --extra gui ruff format --check .
-bash setup.sh --run-uv run --locked --extra gui mypy
-bash setup.sh --run-uv run --locked --extra gui pytest
-```
+## 📄 License
 
-`--run-uv` runs a command with compatible uv without repeating setup. On Windows, replace `bash setup.sh` with `powershell -NoProfile -ExecutionPolicy Bypass -File .\setup.ps1`. If uv is already in `PATH`, direct `uv run ...` commands still work.
-
-The GUI check opens the product window with a temporary database and verifies its fields and artwork. On Linux, choose X11 with `--platform xcb` or Wayland with `--platform wayland`. On a machine without a desktop, use `--platform offscreen`; that check does not validate an actual desktop. The VS Code task **Trackfolio: run headless GUI tests** runs the suite with that backend.
-
-To check only the core:
-
-```sh
-bash setup.sh --core --skip-editor
-```
-
-`uv.lock` pins dependency versions, and `--locked` requires it to match `pyproject.toml`. Each PC must recreate its own `.venv` and `.tools`; do not copy these folders between machines. Share source through Git; keep databases, music and local configuration outside the repository.
-
-## Open in VS Code
-
-```sh
-bash setup.sh --open-code
-```
-
-This also works when the editor was downloaded into `.tools/vscode`. If `code` is in `PATH`, you can run `code Trackfolio.code-workspace` directly. If the editor uses a different interpreter, run **Python: Select Interpreter** and choose the one in `.venv`. Workspace tasks use the launchers to find uv; integrated terminals include the local copy in their `PATH`.
-
-## Start the GUI
-
-From the root, after setting up the environment:
-
-```sh
-bash setup.sh --run-uv run --locked --extra gui trackfolio
-```
-
-To open a specific database, add `--database "path/to/catalog.tfo"`. The sample database is local and excluded from Git: setup prepares the application. In a new clone, use **Import music…** to create your catalog or **Open catalog…** to browse an existing one.
-
-Without `--database`, the last opened catalog is restored if it is still available. To start without restoring it, use `--no-restore`. Open another database with **Open catalog…** and reload its records with **Refresh**. Select a song to view its details; text can be copied and lyrics are displayed as plain text.
-
-New catalogs default to `database.tfo` in the user's data folder: on Linux, usually `~/.local/share/Trackfolio/database.tfo` (respecting `XDG_DATA_HOME`); macOS and Windows use the equivalent location through `platformdirs`. The last opened catalog does not change this destination. For development, add `--dev-root "/path/to/project"`: the destination becomes `<project>/data/database.tfo`. VS Code GUI launchers and tasks include this argument; the empty launch also uses `--no-restore`. **Choose folder…** starts in the user's home folder.
-
-Browsing opens SQLite read-only; importing and saving edits use separate writers. Browsing and editing do not require access to the original FLAC/MP3: artwork is also stored in the catalog. Fonts, icons and styles are packaged and loaded without downloads during use.
-
-In VS Code, run **Trackfolio: start GUI with sample** or the debug configuration **Trackfolio: GUI with sample catalog**. See the [plan and its status](docs/gui-plan.md) and [verified results](VALIDATION.md).
-
-## Search and filter songs
-
-In **Songs**, search by song title, artist or album. Search is case-insensitive;
-multiple words must all appear somewhere in those fields. Combine the search
-with **All genres** and **All years**, or use **No genre** / **No year** to find
-missing metadata. The badge shows matching songs out of the catalog total.
-**Clear filters** restores the full list.
-
-Selection is retained among matching songs; hidden songs are not included in
-selection-based editing or writing. Changing filters protects unsaved drafts with
-**Save / Discard / Cancel**. Filters survive refreshes and reset when opening a
-different catalog. Saved changes immediately update matching results.
-
-**Write tags…** uses the selected songs. **Write tags for the entire catalog…**
-always includes the full catalog, even when filters hide some or all songs.
-
-## Edit a song
-
-1. Select a song and click **Edit** (`Ctrl+E`, or `Cmd+E` on macOS).
-2. Change its fields. For artists and genres, add, remove or reorder full names; suggestions let you choose existing values.
-3. Click **Save** (`Ctrl+S` / `Cmd+S`) to confirm, or **Cancel** (`Escape`) to restore catalog values.
-
-Changing **Abbath → Accept** on one song reuses the artist Accept without changing other songs. Changing its album or year does not modify the album's other tracks either. Invalid values are shown next to their fields; a conflict with another write preserves the draft for review. Navigating or closing with pending edits offers save, discard or cancel.
-
-Corrections are saved only in SQLite. **Reimporting music replaces catalog values with file tags**, including manual corrections. See the [implemented editing plan](docs/edit-plan.md).
-
-For batch editing, select multiple songs using **Ctrl/Cmd + click**, **Shift + click** or **Ctrl/Cmd + A**, then click **Edit N songs**. You can change **Album, Artist(s), Year and Genre(s)**; individual fields are disabled. Check **Apply** for fields to replace in every selected song. Mixed values are indicated in the editor and unchecked fields are preserved; applying an empty field clears it throughout the group. Artists and genres replace the entire list with the chosen one. Saving uses a single transaction: if a song changed externally or writing fails, none are saved and the draft remains available for review.
-
-## Browse and edit albums
-
-The **Albums** tab supports searching by name or artist and shows artwork, shared data and tracks sorted by disc and number. **Edit album** applies checked fields to all its tracks in one transaction, preserving individual song artists. **Save album** modifies SQLite; **Write album tags…** publishes changes to the music and updates optional NFO files.
-
-Editions are separated by library, folder and metadata. Recognized disc subdirectories are grouped when their numbers match the metadata. See the [grouping and editing rules](docs/album-view.md).
-
-The **Artists** tab groups each artist's albums and opens editions in the album view. It includes name search and works with disconnected music. See the [artist grouping rules](docs/artist-view.md).
-
-## Write tags to music
-
-1. Save corrections in the catalog and select one or more songs.
-2. Click **Write tags…**. The dialog immediately shows the full list.
-3. Click **Write tags** to overwrite all modified tags with each song's saved values and embed local artwork. Files without text or artwork differences are skipped.
-
-To write all saved tags for every song, click **Write tags for the entire catalog…** above the song list. This includes unselected songs and queries the complete catalog again. Review the list and click **Write tags** in the dialog to start the batch.
-
-The dialog contains the list, progress output and **Close** and **Write tags** buttons. An empty saved value removes the corresponding tag. Multiple selection preserves each song's individual values. Audio, other picture types and tags unrelated to modified fields are preserved.
-
-`.jpg`, `.jpeg` and `.png` files are searched for next to each song. A single image is used automatically; multiple images prompt once per folder, with a preview and an option to keep the current cover. The chosen image replaces the front cover, even without text changes. With no images, the existing cover or its absence is preserved. Cancelling the selector cancels the attempt before publication. See the [artwork rules](docs/tag-writing.md#embedding-artwork).
-
-If `album.nfo` exists in the audio folder, its album data and the titles of target songs already present in its XML list are updated once per folder, preserving unrelated information. It is checked even if the audio is already up to date; absence does not create it or cause an error. NFO issues appear in the report and preserve batch backups. See [NFO update rules and limits](docs/tag-writing.md#optional-albumnfo-updates).
-
-FLAC comments and ID3v2.4 are supported; ID3v2.3 is preserved when values can be represented without joining lists. Incompatible files are reported as issues. See the [matrix and limits](docs/tag-writing.md).
-
-Each original is backed up to `.trackfolio-backups/<operation>/<id>-<name>.tfo-bak` beside its music folder. After the entire batch is successfully written and confirmed, the complete `.trackfolio-backups` directory is removed from every affected folder, including any older UUID directories it contains. Errors or cancellation retain copies for recovery. They are not imported as songs. **Close** during writing requests cancellation and waits for a safe point; files already written remain in place.
-
-On errors, a popup offers **Save report…** with causes and backup paths. The batch and SQLite are not a single transaction. The [recovery guide](docs/tag-writing.md#recovery) explains logs, temporary files and manual backup restoration.
-
-## Import music
-
-1. Click **Import music…** (`Ctrl+I`).
-2. Choose a folder: subfolders and `.flac`/`.mp3` files are included.
-3. Create a new `.tfo` catalog or use the open catalog to add and update songs.
-4. Click **Import**. The window shows progress, counts and issues, then opens the result.
-
-You can cancel or close the application during import. Already saved files are retained, and closing waits for the current operation to finish. Reimporting the same root and path updates metadata without duplicate records; a different root or renamed file is a new location. Missing files are not deleted from the catalog. Symbolic links and junctions are not traversed.
-
-See the [import plan and criteria](docs/import-plan.md). To inspect an individual file using the existing script, import it from the project root without modifying it:
-
-```sh
-bash setup.sh --run-uv run --locked --extra gui python scripts/import_audio.py "path/to/song.flac" --database data/database.tfo
-```
-
-Artists are shared by exact name throughout the catalog. To consolidate duplicate rows in an older catalog without importing music:
-
-```sh
-bash setup.sh --run-uv run --locked python -m trackfolio.infrastructure.database --upgrade data/database.tfo
-```
-
-A backup is created next to the file and `002_unique_artists` is applied, preserving song and album relationships. Importing or saving an edit in an older catalog also performs this upgrade; browsing or preparing a draft leaves its data intact.
-
-Open `data/database.tfo` in SQLiteBrowser and query `track_details`. The [database guide](docs/database.md) explains tables, missing fields, backups and artwork inspection. Current SQL for a new database is in [migrations/002_current.sql](migrations/002_current.sql); the [historical initial SQL](migrations/001_initial.sql) is retained. The local database and music are excluded from Git.
-
-## Standalone executables (no Python installation)
-
-Build a native onefile executable with all Python dependencies and Qt resources:
-
-```sh
-uv run --locked --extra gui --group build python scripts/build.py
-```
-
-The build verifies the executable outside the checkout before producing an
-archive and SHA256 checksum in `dist/`. GitHub Actions builds Linux x64, Windows
-x64 and macOS Intel/Apple Silicon artifacts. End users extract the appropriate
-archive and run `Trackfolio` or `Trackfolio.exe`; Python and uv are not needed.
-
-See [standalone builds](docs/standalone-build.md) for downloads, verification,
-native build requirements and system-library compatibility limits.
-
-Arch Linux packaging and the optional AUR publishing workflow are described in
-[AUR publishing](docs/aur-publishing.md), including the required manual SSH setup.
-
-## Intended compatibility
-
-The GUI uses Fusion, a palette, packaged fonts and icons, and custom window controls. Scaling and rasterization may vary by screen. If a Wayland compositor rejects moving or resizing the window, its native frame is enabled to preserve those operations.
-
-| GUI platform | Initial baseline |
-| --- | --- |
-| Windows | Windows 10 1809+ or Windows 11, x86-64 |
-| macOS | macOS 13+, Intel x86-64 or Apple Silicon ARM64 |
-| GNU/Linux | x86-64, glibc 2.34+, X11 or Wayland desktop and required graphical libraries |
-
-A compatible wheel does not prove that the GUI works on every desktop. Completed and pending checks are recorded in [VALIDATION.md](VALIDATION.md). Alpine/musl, Windows ARM64 and Linux ARM64 are outside this initial matrix.
-
-See the [portable environment](docs/environment.md), [architecture](docs/architecture.md), [contribution guide](CONTRIBUTING.md) and [original plan](PLAN.md).
-
-## License
-
-This project is distributed under GPLv3. See [LICENSE](LICENSE).
+Trackfolio is distributed under **GPLv3**. See [LICENSE](LICENSE).
