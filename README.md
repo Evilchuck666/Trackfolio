@@ -49,17 +49,14 @@ The original files must be accessible for tag writing.
 
 ## 📥 Download and installation
 
-Check [Releases](https://github.com/Evilchuck666/Trackfolio/releases) for published
-packages. If no release is listed, use the source setup below. Successful runs
-of [GitHub Actions](https://github.com/Evilchuck666/Trackfolio/actions/workflows/release.yml)
-also provide downloadable build artifacts; these are development builds.
-
-| Platform | Package filename |
+| Platform | Latest stable release |
 | --- | --- |
-| GNU/Linux x64 | `Trackfolio-linux-x64.tar.gz` |
-| Windows x64 | `Trackfolio-windows-x64.zip` |
-| macOS Intel | `Trackfolio-macos-x64.zip` |
-| macOS Apple Silicon | `Trackfolio-macos-arm64.zip` |
+| GNU/Linux x64 | [Download](https://github.com/Evilchuck666/Trackfolio/releases/latest/download/Trackfolio-linux-x64.tar.gz) |
+| Windows x64 | [Download](https://github.com/Evilchuck666/Trackfolio/releases/latest/download/Trackfolio-windows-x64.zip) |
+| macOS Intel | [Download](https://github.com/Evilchuck666/Trackfolio/releases/latest/download/Trackfolio-macos-x64.zip) |
+| macOS Apple Silicon | [Download](https://github.com/Evilchuck666/Trackfolio/releases/latest/download/Trackfolio-macos-arm64.zip) |
+
+[Release notes](https://github.com/Evilchuck666/Trackfolio/releases/latest)
 
 Extract the package and open **Trackfolio**. Standalone builds include Python
 and Qt, so you do not need to install them. Linux supports X11 and Wayland and
