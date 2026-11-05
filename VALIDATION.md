@@ -4,6 +4,22 @@ This record preserves checks from each phase. Initial infrastructure was validat
 
 ## Local checks
 
+### AUR recipe and publication workflow — November 5, 2026
+
+- Generated a versioned `trackfolio-bin` recipe with SHA256 checksums for the
+  release archive, desktop entry and icon; generated `.SRCINFO` with makepkg.
+- Built `trackfolio-bin-0.1.0-1-x86_64.pkg.tar.zst` locally using the existing
+  Linux binary and `makepkg --nodeps --noconfirm`. This validates packaging,
+  not dependency resolution on a clean Arch system or a public release download.
+- Inspected the archive contents and confirmed the installed executable's hash
+  matches the input executable (`!strip` preserves the PyInstaller payload).
+- 16 packaging tests passed; Ruff, formatting, mypy, PKGBUILD syntax, workflow
+  YAML and AUR step shell syntax checks passed.
+- The workflow will build with dependency installation in an Arch Linux
+  container before pushing the recipe. That container job, AUR authentication,
+  package-name availability and the actual AUR push have not been verified here.
+  No workflow, release or AUR publication was triggered.
+
 ### Standalone packaging — November 4, 2026
 
 On Linux x86-64 (glibc 2.44), with CPython 3.13.15 and PyInstaller 6.22.3:

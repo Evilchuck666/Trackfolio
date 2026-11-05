@@ -9,6 +9,11 @@ on:
         description: 'Version to release, without v (e.g. 0.1.0). Leave empty to only build.'
         required: false
         type: string
+      publish_aur:
+        description: 'Publish trackfolio-bin to AUR after the release (requires version and AUR secrets).'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -647,3 +652,90 @@ jobs:
             --title "Trackfolio v$VERSION" \
             --generate-notes \
             --latest
+
+  aur:
+    name: Publish trackfolio-bin to AUR
+    needs: release
+    if: github.event_name == 'workflow_dispatch' && inputs.publish_aur && inputs.version != '' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    concurrency:
+      group: trackfolio-aur
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      VERSION: ${{ inputs.version }}
+      AUR_GIT_NAME: ${{ vars.AUR_GIT_NAME }}
+      AUR_GIT_EMAIL: ${{ vars.AUR_GIT_EMAIL }}
+    steps:
+      - name: Check out the released commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Download and verify the published Linux archive
+        run: |
+          set -euo pipefail
+          gh release download "v$VERSION" --dir release-assets \
+            --pattern Trackfolio-linux-x64.tar.gz --pattern SHA256SUMS.txt
+          cd release-assets
+          grep -E '^[0-9a-f]{64}  Trackfolio-linux-x64\.tar\.gz$' SHA256SUMS.txt > linux.sha256
+          test "$(wc -l < linux.sha256)" -eq 1
+          sha256sum --check linux.sha256
+
+      - name: Prepare the versioned AUR recipe
+        run: |
+          python3 scripts/prepare_aur.py --version "$VERSION" \
+            --archive release-assets/Trackfolio-linux-x64.tar.gz --output aur-package
+
+      - name: Build the package and generate SRCINFO on Arch Linux
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD/aur-package:/package" archlinux:base-devel bash -euc '
+            pacman -Syu --noconfirm --needed sudo
+            useradd --create-home builder
+            echo "builder ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/builder
+            chown -R builder:builder /package
+            su builder -c "cd /package && makepkg --syncdeps --noconfirm && makepkg --printsrcinfo > .SRCINFO"
+          '
+
+      - name: Configure AUR SSH authentication
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          AUR_KNOWN_HOSTS: ${{ secrets.AUR_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          : "${AUR_SSH_PRIVATE_KEY:?Set the AUR_SSH_PRIVATE_KEY repository secret}"
+          : "${AUR_KNOWN_HOSTS:?Set the verified AUR_KNOWN_HOSTS repository secret}"
+          : "${AUR_GIT_NAME:?Set the AUR_GIT_NAME repository variable}"
+          : "${AUR_GIT_EMAIL:?Set the AUR_GIT_EMAIL repository variable}"
+          install -dm700 "$RUNNER_TEMP/aur-ssh"
+          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > "$RUNNER_TEMP/aur-ssh/key"
+          printf '%s\n' "$AUR_KNOWN_HOSTS" > "$RUNNER_TEMP/aur-ssh/known_hosts"
+          chmod 600 "$RUNNER_TEMP/aur-ssh/"*
+          ssh-keygen -y -P '' -f "$RUNNER_TEMP/aur-ssh/key" > /dev/null
+          echo "GIT_SSH_COMMAND=ssh -i $RUNNER_TEMP/aur-ssh/key -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$RUNNER_TEMP/aur-ssh/known_hosts" >> "$GITHUB_ENV"
+
+      - name: Commit and push the recipe to AUR
+        run: |
+          set -euo pipefail
+          git -c init.defaultBranch=master clone ssh://aur@aur.archlinux.org/trackfolio-bin.git aur-repository
+          cp aur-package/PKGBUILD aur-package/.SRCINFO aur-package/trackfolio.desktop aur-package/trackfolio.svg aur-repository/
+          cd aur-repository
+          git config user.name "$AUR_GIT_NAME"
+          git config user.email "$AUR_GIT_EMAIL"
+          git add PKGBUILD .SRCINFO trackfolio.desktop trackfolio.svg
+          if git diff --cached --quiet; then
+            echo 'AUR already contains this recipe.'
+            exit 0
+          fi
+          git commit -m "Update trackfolio-bin to $VERSION"
+          git push origin HEAD:master
+
+      - name: Remove the temporary SSH key
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/aur-ssh"

@@ -51,6 +51,10 @@ automatically cancelled by subsequent pushes. Publication from other branches
 is skipped. Existing releases are never overwritten; a failed publication that
 already created a tag must be inspected before retrying.
 
+To also publish `trackfolio-bin` on AUR, first complete the
+[AUR authentication setup](aur-publishing.md), then enable `publish_aur` when
+starting the workflow. It is disabled by default and runs after the release.
+
 ## Verification
 
 Before archiving, the build script copies only the executable into a temporary

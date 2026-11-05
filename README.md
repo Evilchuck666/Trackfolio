@@ -193,6 +193,9 @@ archive and run `Trackfolio` or `Trackfolio.exe`; Python and uv are not needed.
 See [standalone builds](docs/standalone-build.md) for downloads, verification,
 native build requirements and system-library compatibility limits.
 
+Arch Linux packaging and the optional AUR publishing workflow are described in
+[AUR publishing](docs/aur-publishing.md), including the required manual SSH setup.
+
 ## Intended compatibility
 
 The GUI uses Fusion, a palette, packaged fonts and icons, and custom window controls. Scaling and rasterization may vary by screen. If a Wayland compositor rejects moving or resizing the window, its native frame is enabled to preserve those operations.
