@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from importlib.resources import files
+import atexit
+from contextlib import ExitStack
+from importlib.resources import as_file, files
 
 from PySide6.QtCore import QByteArray, Qt
 from PySide6.QtGui import QColor, QFont, QFontDatabase, QIcon, QPainter, QPalette, QPixmap
@@ -30,6 +32,9 @@ ICON_NAMES = frozenset(
     }
 )
 _font_family: str | None = None
+_resource_paths = ExitStack()
+atexit.register(_resource_paths.close)
+_arrow_path: str | None = None
 
 
 def _load_font_family() -> str:
@@ -83,9 +88,16 @@ def apply_theme(app: QApplication) -> None:
     for role in (QPalette.ColorRole.Text, QPalette.ColorRole.ButtonText):
         palette.setColor(QPalette.ColorGroup.Disabled, role, QColor("#6f7891"))
     app.setPalette(palette)
-    app.setStyleSheet(
-        files("trackfolio.resources").joinpath("stylesheet.qss").read_text(encoding="utf-8")
-    )
+    global _arrow_path
+    resources = files("trackfolio.resources")
+    if _arrow_path is None:
+        # Keep extracted resources alive for Qt's lazy stylesheet image loading.
+        arrow = _resource_paths.enter_context(
+            as_file(resources.joinpath("icons", "chevron-down.svg"))
+        )
+        _arrow_path = arrow.as_posix().replace('"', '\\"')
+    stylesheet = resources.joinpath("stylesheet.qss").read_text(encoding="utf-8")
+    app.setStyleSheet(stylesheet.replace("@CHEVRON_DOWN@", _arrow_path))
     # QSS wraps the selected Fusion style; retain its diagnostic identity.
     app.style().setObjectName("fusion")
     app.setWindowIcon(icon("app"))

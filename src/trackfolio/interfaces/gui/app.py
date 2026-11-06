@@ -44,7 +44,7 @@ def main(argv: list[str] | None = None) -> int:
     app = CatalogApplication(["Trackfolio", *qt_args])
     app.setApplicationName("Trackfolio")
     app.setOrganizationName("Trackfolio")
-    app.setApplicationVersion("0.1.0")
+    app.setApplicationVersion("0.2.0")
     apply_theme(app)
     preferences = CatalogPreferences()
     window, controller = create_window(preferences, dev_root=args.dev_root)
