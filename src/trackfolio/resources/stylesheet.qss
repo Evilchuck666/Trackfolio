@@ -88,7 +88,10 @@ QLineEdit, QTextEdit, QPlainTextEdit, QComboBox {
     color: #eef0fa;
 }
 QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QComboBox:focus { border-color: #8e94ff; }
-QComboBox { padding-right: 40px; }
+QComboBox { padding: 6px 40px 6px 8px; }
+QFileDialog QLineEdit#fileNameEdit { padding: 6px 8px; }
+/* The location selector shares a row with taller navigation tool buttons. */
+QFileDialog QComboBox#lookInCombo { padding-top: 8px; padding-bottom: 8px; }
 QComboBox:hover { border-color: #657098; }
 QComboBox::drop-down {
     subcontrol-origin: padding;
