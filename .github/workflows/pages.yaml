@@ -5,11 +5,15 @@ on:
     branches: [main]
     paths:
       - 'site/**'
-      - '.github/workflows/pages.yml'
+      - '.github/workflows/pages.yaml'
   workflow_dispatch:
 
 permissions:
   contents: read
+
+# The JavaScript actions below run on Node 24.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 concurrency:
   group: project-pages

@@ -4,7 +4,7 @@
 ![Python](https://img.shields.io/badge/python-3.13-blue)
 ![PySide6](https://img.shields.io/badge/PySide6-6.11.2-blue)
 [![License](https://img.shields.io/badge/license-GPLv3-green)](LICENSE)
-[![Build and tests](https://github.com/Evilchuck666/Trackfolio/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/Evilchuck666/Trackfolio/actions/workflows/release.yml)
+[![Build and tests](https://github.com/Evilchuck666/Trackfolio/actions/workflows/release.yaml/badge.svg?branch=main)](https://github.com/Evilchuck666/Trackfolio/actions/workflows/release.yaml)
 
 **Your music, its metadata, and the stories behind each album.**
 
