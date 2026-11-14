@@ -12,6 +12,28 @@ Trackfolio is a desktop application for organizing the metadata of your FLAC
 and MP3 collection. Browse artists, albums and songs, correct their details,
 and write the changes back to your music on Windows, GNU/Linux or macOS.
 
+<!-- SCREENSHOTS:START -->
+## Screenshots
+
+![Trackfolio — qt-window](site/assets/screenshots/songs.png)
+
+Trackfolio Songs view with nine generated sample tracks. All artists and albums are fictional.
+
+<details>
+<summary>More screenshots</summary>
+
+![Trackfolio — qt-window](site/assets/screenshots/albums.png)
+
+Trackfolio Albums view of the generated sample library.
+
+![Trackfolio — qt-window](site/assets/screenshots/artists.png)
+
+Trackfolio Artists view of the generated sample library.
+
+</details>
+
+<!-- SCREENSHOTS:END -->
+
 ## 🧩 Why Trackfolio?
 
 A music collection can have inconsistent artist names, missing years, different
