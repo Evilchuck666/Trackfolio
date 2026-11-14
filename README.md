@@ -4,6 +4,7 @@
 ![Python](https://img.shields.io/badge/python-3.13-blue)
 ![PySide6](https://img.shields.io/badge/PySide6-6.11.2-blue)
 [![License](https://img.shields.io/badge/license-GPLv3-green)](LICENSE)
+[![Latest release](https://img.shields.io/github/v/release/Evilchuck666/Trackfolio?label=download&sort=semver)](https://github.com/Evilchuck666/Trackfolio/releases/latest)
 [![Build and tests](https://github.com/Evilchuck666/Trackfolio/actions/workflows/release.yaml/badge.svg?branch=main)](https://github.com/Evilchuck666/Trackfolio/actions/workflows/release.yaml)
 
 **Your music, its metadata, and the stories behind each album.**
@@ -12,8 +13,10 @@ Trackfolio is a desktop application for organizing the metadata of your FLAC
 and MP3 collection. Browse artists, albums and songs, correct their details,
 and write the changes back to your music on Windows, GNU/Linux or macOS.
 
+🌐 **Website:** https://evilchuck666.github.io/Trackfolio/
+
 <!-- SCREENSHOTS:START -->
-## Screenshots
+## 📸 Screenshots
 
 ![Trackfolio — qt-window](site/assets/screenshots/songs.png)
 
@@ -43,7 +46,7 @@ Trackfolio brings those details into a local catalog. You can review and edit
 them even when the music drive is disconnected, then write the saved changes
 to the files when you are ready.
 
-## ✨ What it does
+## ✨ Features
 
 - Imports FLAC and MP3 folders into a local `.tfo` catalog.
 - Groups your collection into **Artists**, **Albums** and **Songs** views.
@@ -55,21 +58,7 @@ to the files when you are ready.
 - Shows write progress and reports, with backups retained if an operation fails
   or is cancelled.
 
-## 🚀 Getting started
-
-1. Open **Trackfolio** (`Trackfolio.exe` on Windows), or start it from source
-   using the commands below.
-2. Click **Import music…**, choose your music folder and create a catalog.
-   Use **Open catalog…** if you already have a `.tfo` file.
-3. Browse **Artists**, **Albums** or **Songs** and select what you want to edit.
-4. Save your corrections in the catalog.
-5. When ready, choose **Write tags…** or **Write album tags…**, review the list
-   and confirm the write.
-
-**Saving an edit updates the catalog. Writing tags updates the music files.**
-The original files must be accessible for tag writing.
-
-## 📥 Download and installation
+## 📥 Download
 
 | Platform | Latest stable release |
 | --- | --- |
@@ -88,6 +77,20 @@ are native executables rather than `.app` bundles.
 See [platform requirements](TECHNICAL_GUIDE.md#intended-compatibility) and
 [standalone builds](docs/standalone-build.md) for compatibility and verification.
 Arch Linux packaging is covered in the [AUR guide](docs/aur-publishing.md).
+
+## 🚀 Getting started
+
+1. Open **Trackfolio** (`Trackfolio.exe` on Windows), or start it from source
+   using the commands below.
+2. Click **Import music…**, choose your music folder and create a catalog.
+   Use **Open catalog…** if you already have a `.tfo` file.
+3. Browse **Artists**, **Albums** or **Songs** and select what you want to edit.
+4. Save your corrections in the catalog.
+5. When ready, choose **Write tags…** or **Write album tags…**, review the list
+   and confirm the write.
+
+**Saving an edit updates the catalog. Writing tags updates the music files.**
+The original files must be accessible for tag writing.
 
 ### Run from source
 
@@ -143,6 +146,6 @@ for the full behavior.
 
 Built with **Python**, **Qt 6 / PySide6** and **SQLite**.
 
-## 📄 License
+## ⚖️ License
 
-Trackfolio is distributed under **GPLv3**. See [LICENSE](LICENSE).
+Trackfolio is free software released under the **GNU General Public License v3.0** (GPL-3.0). See [LICENSE](LICENSE).
