@@ -4,5 +4,11 @@
     "ms-python.vscode-pylance",
     "ms-python.debugpy",
     "charliermarsh.ruff"
+  ],
+  "unwantedRecommendations": [
+    "ms-python.black-formatter",
+    "ms-python.isort",
+    "ms-python.flake8",
+    "ms-python.pylint"
   ]
 }

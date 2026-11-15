@@ -2,55 +2,6 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Trackfolio: build standalone executable",
-      "type": "process",
-      "command": "bash",
-      "args": ["${workspaceFolder}/setup.sh", "--run-uv", "run", "--locked", "--extra", "gui", "--group", "build", "python", "scripts/build.py"],
-      "windows": {
-        "command": "powershell",
-        "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/setup.ps1", "--run-uv", "run", "--locked", "--extra", "gui", "--group", "build", "python", "scripts/build.py"]
-      },
-      "options": { "cwd": "${workspaceFolder}" },
-      "problemMatcher": []
-    },
-    {
-      "label": "Trackfolio: start GUI with sample",
-      "type": "process",
-      "command": "bash",
-      "args": ["${workspaceFolder}/setup.sh", "--run-uv", "run", "--locked", "--extra", "gui", "python", "-m", "trackfolio.interfaces.gui", "--dev-root", "${workspaceFolder}", "--database", "${workspaceFolder}/data/database.tfo"],
-      "windows": {
-        "command": "powershell",
-        "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/setup.ps1", "--run-uv", "run", "--locked", "--extra", "gui", "python", "-m", "trackfolio.interfaces.gui", "--dev-root", "${workspaceFolder}", "--database", "${workspaceFolder}/data/database.tfo"]
-      },
-      "options": { "cwd": "${workspaceFolder}" },
-      "problemMatcher": []
-    },
-    {
-      "label": "Trackfolio: start GUI",
-      "type": "process",
-      "command": "bash",
-      "args": ["${workspaceFolder}/setup.sh", "--run-uv", "run", "--locked", "--extra", "gui", "python", "-m", "trackfolio.interfaces.gui", "--dev-root", "${workspaceFolder}", "--no-restore"],
-      "windows": {
-        "command": "powershell",
-        "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/setup.ps1", "--run-uv", "run", "--locked", "--extra", "gui", "python", "-m", "trackfolio.interfaces.gui", "--dev-root", "${workspaceFolder}", "--no-restore"]
-      },
-      "options": { "cwd": "${workspaceFolder}" },
-      "problemMatcher": []
-    },
-    {
-      "label": "Trackfolio: run headless GUI tests",
-      "type": "process",
-      "command": "bash",
-      "args": ["${workspaceFolder}/setup.sh", "--run-uv", "run", "--locked", "--extra", "gui", "pytest"],
-      "windows": {
-        "command": "powershell",
-        "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/setup.ps1", "--run-uv", "run", "--locked", "--extra", "gui", "pytest"]
-      },
-      "options": { "cwd": "${workspaceFolder}", "env": { "QT_QPA_PLATFORM": "offscreen" } },
-      "problemMatcher": [],
-      "group": "test"
-    },
-    {
       "label": "Trackfolio: set up core",
       "type": "process",
       "command": "bash",
@@ -111,6 +62,30 @@
       "problemMatcher": []
     },
     {
+      "label": "Trackfolio: start GUI",
+      "type": "process",
+      "command": "bash",
+      "args": ["${workspaceFolder}/setup.sh", "--run-uv", "run", "--locked", "--extra", "gui", "python", "-m", "trackfolio.interfaces.gui", "--dev-root", "${workspaceFolder}", "--no-restore"],
+      "windows": {
+        "command": "powershell",
+        "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/setup.ps1", "--run-uv", "run", "--locked", "--extra", "gui", "python", "-m", "trackfolio.interfaces.gui", "--dev-root", "${workspaceFolder}", "--no-restore"]
+      },
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Trackfolio: start GUI with sample",
+      "type": "process",
+      "command": "bash",
+      "args": ["${workspaceFolder}/setup.sh", "--run-uv", "run", "--locked", "--extra", "gui", "python", "-m", "trackfolio.interfaces.gui", "--dev-root", "${workspaceFolder}", "--database", "${workspaceFolder}/data/database.tfo"],
+      "windows": {
+        "command": "powershell",
+        "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/setup.ps1", "--run-uv", "run", "--locked", "--extra", "gui", "python", "-m", "trackfolio.interfaces.gui", "--dev-root", "${workspaceFolder}", "--database", "${workspaceFolder}/data/database.tfo"]
+      },
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
       "label": "Trackfolio: lint code",
       "type": "process",
       "command": "bash",
@@ -144,7 +119,19 @@
         "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/setup.ps1", "--run-uv", "run", "--locked", "--extra", "gui", "mypy"]
       },
       "options": { "cwd": "${workspaceFolder}" },
-      "problemMatcher": []
+      "problemMatcher": {
+        "owner": "mypy",
+        "source": "mypy",
+        "fileLocation": ["relative", "${workspaceFolder}"],
+        "pattern": {
+          "regexp": "^(.+?):(\\d+):(?:(\\d+):)? (error): (.+)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "severity": 4,
+          "message": 5
+        }
+      }
     },
     {
       "label": "Trackfolio: run tests",
@@ -157,7 +144,12 @@
       },
       "options": { "cwd": "${workspaceFolder}", "env": { "QT_QPA_PLATFORM": "offscreen" } },
       "problemMatcher": [],
-      "group": "test"
+      "group": { "kind": "test", "isDefault": true }
+    },
+    {
+      "label": "Trackfolio: run headless GUI tests",
+      "dependsOn": ["Trackfolio: run tests"],
+      "problemMatcher": []
     },
     {
       "label": "Trackfolio: checks",
@@ -170,6 +162,18 @@
       ],
       "problemMatcher": [],
       "group": { "kind": "build", "isDefault": true }
+    },
+    {
+      "label": "Trackfolio: build standalone executable",
+      "type": "process",
+      "command": "bash",
+      "args": ["${workspaceFolder}/setup.sh", "--run-uv", "run", "--locked", "--extra", "gui", "--group", "build", "python", "scripts/build.py"],
+      "windows": {
+        "command": "powershell",
+        "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/setup.ps1", "--run-uv", "run", "--locked", "--extra", "gui", "--group", "build", "python", "scripts/build.py"]
+      },
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
     }
   ]
 }

@@ -1,44 +1,55 @@
-# Local environments and caches.
+# uv environment and project-local tools downloaded by setup.sh / setup.ps1
+# (.tools/uv and .tools/vscode).
 .venv/
 .tools/
-venv/
+
+# Python bytecode and caches from pytest, mypy and Ruff.
 __pycache__/
 *.py[cod]
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
-.coverage
-htmlcov/
 
-# Generated distributions.
+# Build outputs: PyInstaller (Trackfolio.spec, scripts/build.py) and uv build.
 build/
 dist/
-*.egg-info/
 
-# Machine-specific configuration and data.
-.env
-.env.*
-!.env.example
-*.local
+# Working directories of .github/workflows/release.yaml.
+release-assets/
+aur-package/
+aur-repository/
+
+# Local catalogs: --dev-root and alembic.ini use data/; the GUI opens
+# *.tfo, *.sqlite3, *.sqlite and *.db, plus SQLite journal side files.
 data/
-music/
-*.db
+*.tfo
 *.sqlite
 *.sqlite3
-*.tfo
+*.db
+*-journal
 *-wal
 *-shm
+
+# User music and the backups/temporaries written next to it by tag writes.
+music/
 *.flac
 *.mp3
+.trackfolio-backups/
+.trackfolio-*.tmp
+*.tfo-bak
+
+# Deliberate, redistributable test data stays tracked.
 !tests/fixtures/**/*.flac
 !tests/fixtures/**/*.mp3
 !tests/fixtures/**/*.sqlite3
 !tests/fixtures/**/*.tfo
 
-# System and editor files.
+# Local secrets.
+.env
+.env.*
+!.env.example
+
+# OS metadata on the supported platforms.
 .DS_Store
 Thumbs.db
 Desktop.ini
-*.swp
-*.swo
-*.code-workspace.local

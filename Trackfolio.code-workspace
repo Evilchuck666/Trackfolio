@@ -1,8 +1,12 @@
 {
+  // Open the project with this file. Shared editor settings live only here;
+  // extensions, tasks and debug configurations live in .vscode/*.json.
   "folders": [{ "path": "." }],
   "settings": {
+    // Environment created by setup.sh / setup.ps1 with uv.
     "python.defaultInterpreterPath": "${workspaceFolder}/.venv",
-    "python.terminal.activateEnvironment": true,
+
+    // Integrated terminals find the project-local uv downloaded into .tools/uv.
     "terminal.integrated.env.linux": {
       "PATH": "${workspaceFolder}/.tools/uv:${env:PATH}"
     },
@@ -12,24 +16,54 @@
     "terminal.integrated.env.windows": {
       "PATH": "${workspaceFolder}\\.tools\\uv;${env:PATH}"
     },
+
+    // pytest reads testpaths and options from pyproject.toml; tests/conftest.py
+    // selects the offscreen Qt backend.
     "python.testing.pytestEnabled": true,
     "python.testing.unittestEnabled": false,
-    "python.testing.pytestArgs": ["tests"],
-    "pylint.enabled": false,
-    "ruff.enable": true,
+
+    // Use the Ruff pinned in uv.lock, configured by pyproject.toml.
     "ruff.importStrategy": "fromEnvironment",
+
+    // Mirror .editorconfig and .gitattributes.
     "files.eol": "\n",
     "files.insertFinalNewline": true,
     "files.trimTrailingWhitespace": true,
+    "editor.insertSpaces": true,
+    "editor.tabSize": 4,
     "[python]": {
       "editor.defaultFormatter": "charliermarsh.ruff",
       "editor.formatOnSave": true,
-      "editor.insertSpaces": true,
-      "editor.tabSize": 4,
       "editor.codeActionsOnSave": {
         "source.fixAll.ruff": "explicit",
         "source.organizeImports.ruff": "explicit"
-      }
+      },
+      // [tool.ruff] line-length
+      "editor.rulers": [100]
+    },
+    "[json]": { "editor.tabSize": 2 },
+    "[jsonc]": { "editor.tabSize": 2 },
+    "[yaml]": { "editor.tabSize": 2 },
+    "[markdown]": { "files.trimTrailingWhitespace": false },
+    "[powershell]": { "files.encoding": "utf8bom" },
+    "[bat]": { "files.eol": "\r\n" },
+
+    // Hide tool caches and keep generated trees out of the file watcher.
+    "files.exclude": {
+      "**/__pycache__": true,
+      "**/.pytest_cache": true,
+      "**/.mypy_cache": true,
+      "**/.ruff_cache": true
+    },
+    "files.watcherExclude": {
+      "**/.venv/**": true,
+      "**/.tools/**": true,
+      "**/build/**": true,
+      "**/dist/**": true,
+      "**/__pycache__/**": true,
+      "**/.pytest_cache/**": true,
+      "**/.mypy_cache/**": true,
+      "**/.ruff_cache/**": true
     }
   }
 }
