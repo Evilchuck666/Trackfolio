@@ -40,7 +40,8 @@ jobs:
           test -s site/index.html
           test -s site/styles.css
           test -f site/.nojekyll
-          test "$(find site -type f | wc -l)" -eq 6
+          test -s site/favicon.svg
+          test "$(find site -type f | wc -l)" -eq 7
           test -s site/assets/screenshots/songs.png
           test -s site/assets/screenshots/albums.png
           test -s site/assets/screenshots/artists.png
