@@ -92,3 +92,51 @@ def test_invalid_queries_report_message_and_position(text, message, position):
 def test_empty_query_flag():
     assert parse_song_query("  ").is_empty
     assert not parse_song_query("has:lyrics").is_empty
+
+
+def test_reference_documents_every_field_and_flag():
+    from trackfolio.domain.song_query import FILTER_REFERENCE, FLAGS, SYNTAX_HELP, TEXT_FIELDS
+
+    syntaxes = {item.syntax for item in FILTER_REFERENCE}
+    assert {f"{field}:" for field in TEXT_FIELDS} <= syntaxes
+    assert {f"has:{flag}" for flag in FLAGS} <= syntaxes
+    for item in FILTER_REFERENCE:
+        parse_song_query(item.example)
+        assert item.syntax in SYNTAX_HELP
+
+
+@pytest.mark.parametrize(
+    ("prefix", "expected"),
+    [
+        (
+            "ha",
+            [
+                "has:lyrics",
+                "has:cover",
+                "has:genre",
+                "has:year",
+                "has:artist",
+                "has:album",
+                "has:title",
+            ],
+        ),
+        ("ye", ["year:"]),
+        ("-has:l", ["-has:lyrics"]),
+        ("!HAS:c", ["!has:cover"]),
+        ("genre:", ["genre:Jazz", 'genre:"Hip Hop"']),
+        ('genre:"hip', ['genre:"Hip Hop"']),
+        ("artist:b", ["artist:Björk"]),
+        ("year:19", ["year:1993", "year:1981"]),
+        ("path:", []),
+        ("zzz", []),
+    ],
+)
+def test_completion_candidates(prefix, expected):
+    from trackfolio.domain.song_query import completion_candidates
+
+    assert (
+        completion_candidates(
+            prefix, ("Jazz", "Hip Hop"), ("Björk", "Accept"), ("Debut",), (1993, 1981)
+        )
+        == expected
+    )

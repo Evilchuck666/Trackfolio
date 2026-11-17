@@ -71,6 +71,7 @@ from trackfolio.interfaces.gui.catalog_model import CatalogTableModel
 from trackfolio.interfaces.gui.cover_widget import CoverLabel
 from trackfolio.interfaces.gui.filter_combo import FilterComboBox
 from trackfolio.interfaces.gui.ordered_labels import OrderedLabels
+from trackfolio.interfaces.gui.song_search import SongSearchField
 from trackfolio.interfaces.gui.theme import icon
 
 
@@ -411,14 +412,15 @@ class MainWindow(QMainWindow):
         filters = QVBoxLayout()
         filters.setContentsMargins(16, 0, 16, 12)
         filters.setSpacing(8)
-        self.song_search = QLineEdit(panel)
+        self.song_search_field = SongSearchField(panel)
+        self.song_search = self.song_search_field.line_edit
         self.song_search.setPlaceholderText(
             "Search… /regex/, artist:, year:1990..1999, has:lyrics, -has:cover"
         )
         self.song_search.setToolTip(SYNTAX_HELP)
         self.song_search.setAccessibleName("Search songs")
         self.song_search.setClearButtonEnabled(True)
-        filters.addWidget(self.song_search)
+        filters.addWidget(self.song_search_field)
         choices = QHBoxLayout()
         choices.setSpacing(8)
         self.song_genre = FilterComboBox(panel)
@@ -767,6 +769,12 @@ class MainWindow(QMainWindow):
         query, genre, year = self._song_filters
         genres = sorted({name for row in rows for name in row.genres}, key=str.casefold)
         years = sorted({row.album_year for row in rows if row.album_year is not None}, reverse=True)
+        self.song_search_field.set_vocabulary(
+            tuple(genres),
+            tuple(sorted({name for row in rows for name in row.artists}, key=str.casefold)),
+            tuple(sorted({row.album for row in rows if row.album}, key=str.casefold)),
+            tuple(years),
+        )
         blockers = [QSignalBlocker(self.song_genre), QSignalBlocker(self.song_year)]
         self.song_genre.clear()
         self.song_genre.addItem("All genres", None)

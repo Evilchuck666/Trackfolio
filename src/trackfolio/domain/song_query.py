@@ -24,13 +24,71 @@ FLAGS: dict[str, Callable[[CatalogSummary], bool]] = {
     "album": lambda row: bool(row.album),
     "title": lambda row: bool(row.title),
 }
-SYNTAX_HELP = (
-    'word · "exact phrase" · /regex/ or /regex/i\n'
-    'title: artist: album: genre: path: (word, "phrase" or /regex/)\n'
-    "year:1993 · year:1990..1999 · year:>=2000 · year:<1980\n"
-    "has:lyrics has:cover has:genre has:year has:artist has:album has:title\n"
-    "Prefix - or ! to negate: -has:lyrics, -artist:accept, -/live/i"
+
+
+@dataclass(frozen=True, slots=True)
+class FilterHelp:
+    syntax: str
+    example: str
+    description: str
+
+
+FILTER_REFERENCE: tuple[FilterHelp, ...] = (
+    FilterHelp("word", "song", "Title, artist or album contains the word"),
+    FilterHelp('"phrase"', '"second song"', "Title, artist or album contains the phrase"),
+    FilterHelp("/regex/", "/^The /", "Regular expression, case sensitive"),
+    FilterHelp("/regex/i", "/live/i", "Regular expression, ignoring case"),
+    FilterHelp("title:", "title:intro", "Song title"),
+    FilterHelp("artist:", 'artist:"Daft Punk"', "Any track artist"),
+    FilterHelp("album:", "album:/^greatest/i", "Album title"),
+    FilterHelp("genre:", "genre:metal", "Any genre"),
+    FilterHelp("path:", "path:.flac", "File path inside the library"),
+    FilterHelp("year:N", "year:1993", "Exact album year"),
+    FilterHelp("year:A..B", "year:1990..1999", "Album year range (either end optional)"),
+    FilterHelp("year:>N", "year:>=2000", "Album year compared with >, >=, < or <="),
+    FilterHelp("has:lyrics", "has:lyrics", "Songs with lyrics"),
+    FilterHelp("has:cover", "has:cover", "Songs with a cover image"),
+    FilterHelp("has:genre", "has:genre", "Songs with at least one genre"),
+    FilterHelp("has:year", "has:year", "Songs with an album year"),
+    FilterHelp("has:artist", "has:artist", "Songs with at least one artist"),
+    FilterHelp("has:album", "has:album", "Songs with an album"),
+    FilterHelp("has:title", "has:title", "Songs with a title"),
+    FilterHelp("-term or !term", "-has:lyrics", "Negate any term"),
 )
+SYNTAX_HELP = "\n".join(f"{item.syntax:<16} {item.description}" for item in FILTER_REFERENCE) + (
+    "\nAll terms must match."
+)
+
+
+def completion_candidates(
+    prefix: str,
+    genres: tuple[str, ...] = (),
+    artists: tuple[str, ...] = (),
+    albums: tuple[str, ...] = (),
+    years: tuple[int, ...] = (),
+) -> list[str]:
+    """Suggestions for the term being typed; each starts with ``prefix`` (case-insensitive)."""
+    sign = prefix[:1] if prefix[:1] in "-!" else ""
+    body = prefix[len(sign) :]
+    name, colon, _value = body.partition(":")
+    name = name.lower()
+    if not colon:
+        options = [f"{field}:" for field in (*TEXT_FIELDS, "year")] + [f"has:{f}" for f in FLAGS]
+    else:
+        values: tuple[str, ...]
+        if name == "has":
+            values = tuple(FLAGS)
+        elif name == "year":
+            values = tuple(str(year) for year in years)
+        else:
+            values = {"genre": genres, "artist": artists, "album": albums}.get(name, ())
+        options = [
+            f'{name}:"{v}"' if any(c.isspace() for c in v) else f"{name}:{v}" for v in values
+        ]
+    folded = body.replace('"', "").casefold()
+    return [
+        sign + option for option in options if option.replace('"', "").casefold().startswith(folded)
+    ]
 
 
 class SongQueryError(ValueError):

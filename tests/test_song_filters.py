@@ -204,3 +204,37 @@ def test_advanced_search_flags_regex_and_invalid_text(window):
     window.clear_song_filters.click()
     assert window.song_search.property("invalid") is False
     assert visible(window) == (1, 2, 3)
+
+
+def test_help_menu_lists_filters_and_inserts_examples(window):
+    window.set_catalog(Path("catalog.tfo"), (replace(rows()[0], has_lyrics=True), *rows()[1:]))
+    field = window.song_search_field
+    assert field.help_button.accessibleName() == "Search syntax help"
+    actions = {action.data(): action for action in field.help_menu.actions()}
+    assert "has:lyrics" in actions and "year:1990..1999" in actions
+    window.song_search.setText("song")
+    window.song_search.setCursorPosition(4)
+    actions["has:lyrics"].trigger()
+    assert window.song_search.text() == "song has:lyrics"
+    assert visible(window) == (1,)
+
+
+def test_autocomplete_replaces_only_the_current_term(window):
+    window.set_catalog(Path("catalog.tfo"), rows())
+    field = window.song_search_field
+    window.song_search.setText("song -has:l")
+    window.song_search.setCursorPosition(len("song -has:l"))
+    field.update_completions()
+    assert field._suggestions.stringList() == ["-has:lyrics"]
+    field.accept_completion("-has:lyrics")
+    assert window.song_search.text() == "song -has:lyrics "
+    window.song_search.setText("gen")
+    window.song_search.setCursorPosition(3)
+    field.accept_completion("genre:")
+    assert window.song_search.text() == "genre:"
+    assert "genre:Jazz" in field._suggestions.stringList()
+    window.song_search.setText('artist:"a b" ti')
+    window.song_search.setCursorPosition(len(window.song_search.text()))
+    assert field.current_prefix() == "ti"
+    window.song_search.setCursorPosition(len('artist:"a b'))
+    assert field.current_prefix() == 'artist:"a b'
