@@ -238,3 +238,33 @@ def test_autocomplete_replaces_only_the_current_term(window):
     assert field.current_prefix() == "ti"
     window.song_search.setCursorPosition(len('artist:"a b'))
     assert field.current_prefix() == 'artist:"a b'
+
+
+def test_instrumental_saves_filters_and_cancel_restores(qt_app, edit_catalog, tmp_path):
+    database, first, second = edit_catalog
+    window, controller = create_window(CatalogPreferences(tmp_path / "settings.json"))
+    window.views.setCurrentWidget(window.splitter)
+    try:
+        open_ready(qt_app, window, controller, database)
+        begin_edit(qt_app, window, controller)
+        window.instrumental.click()
+        window.save_button.click()
+        wait_until(qt_app, lambda: not controller._jobs and not controller.saving)
+        assert read_entry(database, first.file_id).instrumental is True
+        assert window.instrumental.isChecked() and not window.instrumental.isEnabled()
+        window.song_search.setText("is:instrumental")
+        assert visible(window) == (first.file_id,)
+        window.song_search.setText("-is:instrumental")
+        assert visible(window) == (second.file_id,)
+        window.song_search.setText("")
+        window.select_files((first.file_id,))
+        wait_until(qt_app, lambda: not controller._jobs)
+        begin_edit(qt_app, window, controller)
+        window.instrumental.click()
+        assert not window.instrumental.isChecked()
+        window.cancel_edit_button.click()
+        wait_until(qt_app, lambda: not controller._jobs)
+        assert window.instrumental.isChecked()
+        assert read_entry(database, first.file_id).instrumental is True
+    finally:
+        teardown(window, controller)

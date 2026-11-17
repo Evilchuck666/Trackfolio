@@ -355,3 +355,40 @@ def test_reimport_update_explains_manual_corrections_are_replaced(qt_app, tmp_pa
     finally:
         dialog.close()
         dialog.deleteLater()
+
+
+def test_instrumental_checkbox_reflects_detail_and_joins_the_draft(window):
+    values = load_detail(window)
+    window.set_detail(
+        CatalogEntry(1, 11, Path("unavailable"), "1.flac", TrackMetadata(), instrumental=True)
+    )
+    assert window.instrumental.isChecked()
+    assert not window.instrumental.isEnabled()
+    window.set_detail(CatalogEntry(1, 11, Path("unavailable"), "1.flac", TrackMetadata()))
+    assert not window.instrumental.isChecked()
+    window.begin_edit(values)
+    assert window.instrumental.isEnabled()
+    window.instrumental.click()
+    assert window.edit_patch().as_dict() == {"instrumental": True}
+    assert window.edit_dirty()
+    assert window.save_button.isEnabled()
+    window.instrumental.click()
+    assert window.edit_patch().empty
+
+
+def test_batch_instrumental_needs_apply_and_resolves_mixed_values(window):
+    window.begin_batch_edit((EditableValues(instrumental=True), EditableValues()))
+    assert window.instrumental.checkState() == Qt.CheckState.PartiallyChecked
+    assert window.instrumental_apply.isVisible()
+    assert not window.instrumental.isEnabled()
+    assert "Mixed values" in window.instrumental_apply.toolTip()
+    assert window.edit_patch().empty
+    window.instrumental_apply.setChecked(True)
+    assert window.instrumental.checkState() == Qt.CheckState.Unchecked
+    assert window.edit_patch().as_dict() == {"instrumental": False}
+    window.instrumental.click()
+    assert window.edit_patch().as_dict() == {"instrumental": True}
+    window.instrumental.click()
+    assert window.instrumental.checkState() == Qt.CheckState.Unchecked
+    window.instrumental_apply.setChecked(False)
+    assert window.edit_patch().empty

@@ -7,8 +7,20 @@ import json
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from sqlalchemy import Connection, Engine, Table, and_, delete, func, insert, select, update
+from sqlalchemy import (
+    Connection,
+    Engine,
+    Table,
+    and_,
+    delete,
+    false,
+    func,
+    insert,
+    select,
+    update,
+)
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.sql.elements import ColumnElement
 
 from trackfolio.application.import_catalog import SaveOutcome
 from trackfolio.domain.catalog import CatalogEntry, CatalogSummary
@@ -31,6 +43,19 @@ from trackfolio.infrastructure.schema_validation import validate_catalog_connect
 _HAS_LYRICS = and_(tracks.c.lyrics.is_not(None), func.trim(tracks.c.lyrics, " \t\r\n") != "").label(
     "has_lyrics"
 )
+
+
+def has_instrumental_column(connection: Connection) -> bool:
+    """Revisions before 003 are readable without the column; their tracks are not instrumental."""
+    return any(
+        row[1] == "instrumental"
+        for row in connection.exec_driver_sql("PRAGMA table_info('tracks')")
+    )
+
+
+def _instrumental(connection: Connection) -> ColumnElement[bool]:
+    column = tracks.c.instrumental if has_instrumental_column(connection) else false()
+    return column.label("instrumental")
 
 
 def _insert_id(connection: Connection, table: Table, values: dict[str, Any]) -> int:
@@ -333,6 +358,7 @@ class SqliteCatalogRepository:
                     tracks.c.disc_number,
                     tracks.c.disc_total,
                     tracks.c.lyrics,
+                    _instrumental(connection),
                     albums.c.id.label("album_id"),
                     albums.c.title.label("album_title"),
                     albums.c.year.label("album_year"),
@@ -437,6 +463,7 @@ class SqliteCatalogRepository:
             library_root=Path(record["root_path"]),
             relative_path=record["relative_path"],
             metadata=metadata,
+            instrumental=bool(record["instrumental"]),
         )
 
     def list_entries(self) -> tuple[CatalogEntry, ...]:
@@ -461,6 +488,7 @@ class SqliteCatalogRepository:
                     albums.c.year.label("album_year"),
                     _HAS_LYRICS,
                     audio_files.c.cover_artwork_id.is_not(None).label("has_cover"),
+                    _instrumental(connection),
                 )
                 .join(tracks, tracks.c.id == audio_files.c.track_id)
                 .outerjoin(albums, albums.c.id == tracks.c.album_id)
@@ -499,6 +527,7 @@ class SqliteCatalogRepository:
             ),
             has_lyrics=bool(row["has_lyrics"]),
             has_cover=bool(row["has_cover"]),
+            is_instrumental=bool(row["instrumental"]),
         )
 
     def list_summaries(self) -> tuple[CatalogSummary, ...]:
@@ -519,6 +548,7 @@ class SqliteCatalogRepository:
                 artists.c.name.label("artist_name"),
                 _HAS_LYRICS,
                 audio_files.c.cover_artwork_id.is_not(None).label("has_cover"),
+                _instrumental(connection),
             )
             .join(tracks, tracks.c.id == audio_files.c.track_id)
             .outerjoin(albums, albums.c.id == tracks.c.album_id)
@@ -544,6 +574,7 @@ class SqliteCatalogRepository:
                     relative_path=row["relative_path"],
                     has_lyrics=bool(row["has_lyrics"]),
                     has_cover=bool(row["has_cover"]),
+                    is_instrumental=bool(row["instrumental"]),
                 )
                 credits[file_id] = []
             if row["artist_name"] is not None:
@@ -567,6 +598,7 @@ class SqliteCatalogRepository:
                 genres=tuple(genre_names.get(summary.track_id, ())),
                 has_lyrics=summary.has_lyrics,
                 has_cover=summary.has_cover,
+                is_instrumental=summary.is_instrumental,
             )
             for file_id, summary in summaries.items()
         )

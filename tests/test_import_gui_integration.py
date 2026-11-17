@@ -205,7 +205,7 @@ def test_update_legacy_catalog_migrates_only_when_writer_opens(qt_app, tmp_path)
         with closing(sqlite3.connect(database)) as connection, connection:
             assert connection.execute("SELECT id, name FROM artists").fetchall() == [(1, "Accept")]
             assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == (
-                "002_unique_artists",
+                "003_instrumental",
             )
             assert connection.execute("SELECT track_id FROM audio_files WHERE id=1").fetchone() == (
                 1,

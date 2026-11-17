@@ -24,6 +24,9 @@ FLAGS: dict[str, Callable[[CatalogSummary], bool]] = {
     "album": lambda row: bool(row.album),
     "title": lambda row: bool(row.title),
 }
+IS_FLAGS: dict[str, Callable[[CatalogSummary], bool]] = {
+    "instrumental": lambda row: row.is_instrumental,
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,6 +56,7 @@ FILTER_REFERENCE: tuple[FilterHelp, ...] = (
     FilterHelp("has:artist", "has:artist", "Songs with at least one artist"),
     FilterHelp("has:album", "has:album", "Songs with an album"),
     FilterHelp("has:title", "has:title", "Songs with a title"),
+    FilterHelp("is:instrumental", "is:instrumental", "Songs marked as instrumental"),
     FilterHelp("-term or !term", "-has:lyrics", "Negate any term"),
 )
 SYNTAX_HELP = "\n".join(f"{item.syntax:<16} {item.description}" for item in FILTER_REFERENCE) + (
@@ -73,11 +77,17 @@ def completion_candidates(
     name, colon, _value = body.partition(":")
     name = name.lower()
     if not colon:
-        options = [f"{field}:" for field in (*TEXT_FIELDS, "year")] + [f"has:{f}" for f in FLAGS]
+        options = [
+            *(f"{field}:" for field in (*TEXT_FIELDS, "year")),
+            *(f"has:{flag}" for flag in FLAGS),
+            *(f"is:{flag}" for flag in IS_FLAGS),
+        ]
     else:
         values: tuple[str, ...]
         if name == "has":
             values = tuple(FLAGS)
+        elif name == "is":
+            values = tuple(IS_FLAGS)
         elif name == "year":
             values = tuple(str(year) for year in years)
         else:
@@ -218,20 +228,22 @@ def parse_song_query(text: str) -> SongQuery:
             test = _text_test(pattern, _default_text)
         else:
             field = re.match(r"([A-Za-z]+):", text[index:])
-            if field is None or field.group(1).lower() not in (*TEXT_FIELDS, "has", "year"):
+            if field is None or field.group(1).lower() not in (*TEXT_FIELDS, "has", "is", "year"):
                 word, index = _read_word(text, index)
                 test = _text_test(word, _default_text)
             else:
                 name = field.group(1).lower()
                 index += field.end()
                 value_start = index
-                if name == "has":
+                if name in ("has", "is"):
+                    flags = FLAGS if name == "has" else IS_FLAGS
                     flag, index = _read_word(text, index)
-                    if flag.lower() not in FLAGS:
+                    if flag.lower() not in flags:
                         raise SongQueryError(
-                            f"Unknown flag has:{flag}. Use one of: {', '.join(FLAGS)}.", value_start
+                            f"Unknown flag {name}:{flag}. Use one of: {', '.join(flags)}.",
+                            value_start,
                         )
-                    test = FLAGS[flag.lower()]
+                    test = flags[flag.lower()]
                 elif name == "year":
                     value, index = _read_word(text, index)
                     test = _year_test(value, value_start)

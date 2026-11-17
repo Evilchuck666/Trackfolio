@@ -19,8 +19,9 @@ EditField = Literal[
     "disc_total",
     "genres",
     "lyrics",
+    "instrumental",
 ]
-EditValue = str | int | tuple[str, ...] | None
+EditValue = str | int | bool | tuple[str, ...] | None
 EDIT_FIELDS: tuple[EditField, ...] = (
     "title",
     "artists",
@@ -33,6 +34,12 @@ EDIT_FIELDS: tuple[EditField, ...] = (
     "disc_total",
     "genres",
     "lyrics",
+    "instrumental",
+)
+# Saved only in the catalog; never read from or written to music file tags.
+CATALOG_ONLY_FIELDS: frozenset[EditField] = frozenset(("instrumental",))
+TAG_WRITE_FIELDS: tuple[EditField, ...] = tuple(
+    field for field in EDIT_FIELDS if field not in CATALOG_ONLY_FIELDS
 )
 BATCH_EDIT_FIELDS: tuple[EditField, ...] = (
     "album",
@@ -40,6 +47,7 @@ BATCH_EDIT_FIELDS: tuple[EditField, ...] = (
     "album_year",
     "genres",
     "album_artists",
+    "instrumental",
 )
 
 
@@ -56,6 +64,7 @@ class EditableValues:
     genres: tuple[str, ...] = ()
     lyrics: str | None = None
     album_artists: tuple[str, ...] = ()
+    instrumental: bool = False
 
     def as_dict(self) -> dict[EditField, EditValue]:
         return {
@@ -65,7 +74,14 @@ class EditableValues:
 
     @classmethod
     def from_metadata(cls, metadata: TrackMetadata) -> EditableValues:
-        return cls(**{field.name: getattr(metadata, field.name) for field in fields(cls)})
+        """Values present in tags; catalog-only fields keep their defaults."""
+        return cls(
+            **{
+                field.name: getattr(metadata, field.name)
+                for field in fields(cls)
+                if field.name not in CATALOG_ONLY_FIELDS
+            }
+        )
 
 
 @dataclass(frozen=True, slots=True)

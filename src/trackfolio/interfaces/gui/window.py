@@ -609,6 +609,26 @@ class MainWindow(QMainWindow):
         numbering.addWidget(self._field("disc_total", "TOTAL DISCS", panel), 0, 3)
         layout.addLayout(numbering)
         layout.addWidget(self._field("genres", "GENRE(S)", panel))
+        instrumental_row = QHBoxLayout()
+        instrumental_row.setSpacing(8)
+        self.instrumental = QCheckBox("Instrumental", panel)
+        self.instrumental.setAccessibleName("Instrumental")
+        self.instrumental.setToolTip(
+            "Saved only in the catalog; never written to the music file's tags.\n"
+            "Search with is:instrumental or -is:instrumental."
+        )
+        self.instrumental.setEnabled(False)
+        self.instrumental.toggled.connect(lambda _checked: self._draft_changed("instrumental"))
+        # A mixed batch value is shown as partial; the first click leaves the mixed state.
+        self.instrumental.clicked.connect(lambda _checked: self.instrumental.setTristate(False))
+        self.instrumental_apply = QCheckBox("Apply", panel)
+        self.instrumental_apply.setAccessibleName("Apply instrumental to all selected songs")
+        self.instrumental_apply.hide()
+        self.instrumental_apply.toggled.connect(self._instrumental_apply_changed)
+        instrumental_row.addWidget(self.instrumental_apply)
+        instrumental_row.addWidget(self.instrumental)
+        instrumental_row.addStretch(1)
+        layout.addLayout(instrumental_row)
         lyrics_layout = QVBoxLayout()
         lyrics_layout.setSpacing(8)
         lyrics_label = QLabel("LYRICS", panel)
@@ -928,6 +948,8 @@ class MainWindow(QMainWindow):
         for field in self.fields.values():
             field.clear()
         self.lyrics.clear()
+        self.instrumental.setTristate(False)
+        self.instrumental.setChecked(False)
         self.cover.set_cover(None)
         self._update_actions()
         if entry is None:
@@ -948,6 +970,7 @@ class MainWindow(QMainWindow):
             self.fields[key].setText(str(value) if value is not None else "")
             self.fields[key].setCursorPosition(0)
         self.lyrics.setPlainText(data.lyrics or "")
+        self.instrumental.setChecked(entry.instrumental)
         self.cover.set_cover(data.artwork.data if data.artwork is not None else None)
 
     def set_edit_enabled(self, enabled: bool) -> None:
@@ -978,6 +1001,8 @@ class MainWindow(QMainWindow):
         self.ordered_labels["artists"].set_names(values.artists)
         self.ordered_labels["genres"].set_names(values.genres)
         self.lyrics.setPlainText(values.lyrics or "")
+        self.instrumental.setTristate(False)
+        self.instrumental.setChecked(values.instrumental)
         self._updating_edit = False
         self.set_field_errors({})
         self._dirty = False
@@ -999,9 +1024,22 @@ class MainWindow(QMainWindow):
                 artists=cast(tuple[str, ...], common["artists"]),
                 album_year=cast(int | None, common["album_year"]),
                 genres=cast(tuple[str, ...], common["genres"]),
+                instrumental=bool(common["instrumental"]),
             )
         )
         self._batch_count = len(values)
+        blocker = QSignalBlocker(self.instrumental_apply)
+        self.instrumental_apply.setChecked(False)
+        del blocker
+        self.instrumental_apply.setToolTip(
+            ("Mixed values. " if "instrumental" in mixed else "")
+            + "Replace the instrumental mark in all selected songs."
+        )
+        if "instrumental" in mixed:
+            self._updating_edit = True
+            self.instrumental.setTristate(True)
+            self.instrumental.setCheckState(Qt.CheckState.PartiallyChecked)
+            self._updating_edit = False
         for key, checkbox in self.batch_fields.items():
             blocker = QSignalBlocker(checkbox)
             checkbox.setChecked(False)
@@ -1018,6 +1056,15 @@ class MainWindow(QMainWindow):
         self._update_actions()
         self.batch_fields["artists"].setFocus()
         self._detail_scroll.verticalScrollBar().setValue(0)
+
+    def _instrumental_apply_changed(self, checked: bool) -> None:
+        # Applying must show the value that will be saved, never a hidden mixed state.
+        if checked and self.instrumental.checkState() == Qt.CheckState.PartiallyChecked:
+            self._updating_edit = True
+            self.instrumental.setTristate(False)
+            self.instrumental.setChecked(False)
+            self._updating_edit = False
+        self._batch_field_changed("instrumental")
 
     def _batch_field_changed(self, field: str) -> None:
         self._update_actions()
@@ -1053,6 +1100,13 @@ class MainWindow(QMainWindow):
         lyrics = self.lyrics.toPlainText() or None
         if not self._batch_count and lyrics != self._edit_values.lyrics:
             changes.append(FieldChange("lyrics", lyrics))
+        instrumental = self.instrumental.checkState() == Qt.CheckState.Checked
+        if (
+            self.instrumental_apply.isChecked()
+            if self._batch_count
+            else instrumental != self._edit_values.instrumental
+        ):
+            changes.append(FieldChange("instrumental", instrumental))
         return TrackEditPatch(tuple(changes))
 
     def edit_dirty(self) -> bool:
@@ -1220,6 +1274,13 @@ class MainWindow(QMainWindow):
                 labels.setVisible(self._editing)
                 labels.setEnabled(not self._saving and allowed)
         self.lyrics.setReadOnly(not self._editing or bool(self._batch_count))
+        self.instrumental_apply.setVisible(self._editing and self._batch_count > 1)
+        self.instrumental_apply.setEnabled(not self._saving)
+        self.instrumental.setEnabled(
+            self._editing
+            and not self._saving
+            and (not self._batch_count or self.instrumental_apply.isChecked())
+        )
         self.lyrics.setEnabled(not self._saving and not self._batch_count)
         self.cover.setVisible(not self._batch_count)
         self.edit_status.setVisible(self._editing)

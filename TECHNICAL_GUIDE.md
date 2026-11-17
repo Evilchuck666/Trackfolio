@@ -157,9 +157,9 @@ Artists are shared by exact name throughout the catalog. To consolidate duplicat
 bash setup.sh --run-uv run --locked python -m trackfolio.infrastructure.database --upgrade data/database.tfo
 ```
 
-A backup is created next to the file and `002_unique_artists` is applied, preserving song and album relationships. Importing or saving an edit in an older catalog also performs this upgrade; browsing or preparing a draft leaves its data intact.
+A backup is created next to the file and the pending revisions up to `003_instrumental` are applied, preserving song and album relationships. Importing or saving an edit in an older catalog also performs this upgrade; browsing or preparing a draft leaves its data intact.
 
-Open `data/database.tfo` in SQLiteBrowser and query `track_details`. The [database guide](docs/database.md) explains tables, missing fields, backups and artwork inspection. Current SQL for a new database is in [migrations/002_current.sql](migrations/002_current.sql); the [historical initial SQL](migrations/001_initial.sql) is retained. The local database and music are excluded from Git.
+Open `data/database.tfo` in SQLiteBrowser and query `track_details`. The [database guide](docs/database.md) explains tables, missing fields, backups and artwork inspection. Current SQL for a new database is in [migrations/003_current.sql](migrations/003_current.sql); the [historical initial SQL](migrations/001_initial.sql) is retained. The local database and music are excluded from Git.
 
 ## Search and filter songs
 

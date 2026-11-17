@@ -19,7 +19,7 @@ from trackfolio.application.write_tags import (
     TagWriteError,
     TagWriteService,
 )
-from trackfolio.domain.catalog_edit import EDIT_FIELDS
+from trackfolio.domain.catalog_edit import TAG_WRITE_FIELDS
 from trackfolio.domain.tag_write import AlbumNfoSong, AlbumNfoValues, TagWriteRequest
 from trackfolio.infrastructure.album_nfo import MAX_NFO_BYTES, XmlAlbumNfoCodec
 from trackfolio.infrastructure.metadata import read_metadata
@@ -342,7 +342,7 @@ def album(setup_tags, tmp_path):
 
 def prepare(service, database, ids):
     preview = service.previewer.execute(
-        TagWriteRequest(database, ids, EDIT_FIELDS, allow_date_loss=True)
+        TagWriteRequest(database, ids, TAG_WRITE_FIELDS, allow_date_loss=True)
     )
     return replace(
         preview, nfo_items=service.nfo_writer.prepare(preview, lambda: False, lambda _: None)
@@ -844,7 +844,9 @@ def test_space_reservation_includes_nfo_before_writing(album, monkeypatch):
 
 def test_old_journal_is_still_readable(album):
     database, _, _, entry, _, service = album
-    preview = service.previewer.execute(TagWriteRequest(database, (entry.file_id,), EDIT_FIELDS))
+    preview = service.previewer.execute(
+        TagWriteRequest(database, (entry.file_id,), TAG_WRITE_FIELDS)
+    )
     journal = service.files.journal(preview)
     data = json.loads(journal.path.read_text(encoding="utf-8"))
     data["schema"] = 1

@@ -33,7 +33,7 @@ def schema_rows(connection):
     "revision,exporter,artifact",
     [
         (db.LEGACY_REVISION, db.initial_schema_sql, "001_initial.sql"),
-        (db.REVISION, db.current_schema_sql, "002_current.sql"),
+        (db.REVISION, db.current_schema_sql, "003_current.sql"),
     ],
 )
 def test_exports_match_their_revision_and_committed_artifact(
@@ -176,7 +176,7 @@ def test_backup_failure_leaves_legacy_catalog_unchanged(tmp_path, monkeypatch):
     legacy_catalog(path)
     before = path.read_bytes()
 
-    def fail_backup(_path):
+    def fail_backup(_path, _revision):
         raise OSError("simulated backup failure")
 
     monkeypatch.setattr(db, "_backup_database", fail_backup)
@@ -203,7 +203,7 @@ def test_failed_backup_removes_only_its_reserved_output(tmp_path, monkeypatch):
 
     monkeypatch.setattr(db.sqlite3, "connect", fail_destination)
     with pytest.raises(OSError, match="destination failure"):
-        db._backup_database(path)
+        db._backup_database(path, db.LEGACY_REVISION)
     assert list(tmp_path.glob("*.bak")) == [foreign_backup]
     assert foreign_backup.read_bytes() == b"preserve"
 

@@ -123,7 +123,7 @@ def test_update_backup_failure_preserves_legacy_and_reports_target_error(
     legacy_catalog(destination)
     before = destination.read_bytes()
 
-    def fail_backup(_path):
+    def fail_backup(_path, _revision):
         raise OSError("simulated backup failure")
 
     monkeypatch.setattr(db, "_backup_database", fail_backup)

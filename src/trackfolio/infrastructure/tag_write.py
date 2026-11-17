@@ -13,7 +13,7 @@ from mutagen.flac import FLAC, Picture
 from mutagen.id3 import APIC, ID3, Frames, ID3NoHeaderError
 
 from trackfolio.application.write_tags import TagWriteError
-from trackfolio.domain.catalog_edit import EditableValues, EditField
+from trackfolio.domain.catalog_edit import TAG_WRITE_FIELDS, EditableValues, EditField
 from trackfolio.domain.metadata import TrackMetadata
 from trackfolio.domain.tag_write import (
     PlannedTags,
@@ -422,7 +422,7 @@ class MutagenTagCodec:
             raise TagWriteError("The cover is not correctly embedded in the music file.")
         actual = self.observed(temporary)
         actual_values = EditableValues.from_metadata(actual)
-        for field in actual_values.as_dict():
+        for field in TAG_WRITE_FIELDS:
             value = getattr(actual_values, field)
             if field == "lyrics" and "lyrics" in fields and plan.selected_lyrics:
                 tags = _id3(temporary)

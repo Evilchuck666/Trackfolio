@@ -27,7 +27,7 @@ from trackfolio.application.tag_write_errors import (
 from trackfolio.application.tag_write_errors import (
     TagWriteError as TagWriteError,
 )
-from trackfolio.domain.catalog_edit import EDIT_FIELDS, FieldChange, TrackEditPatch
+from trackfolio.domain.catalog_edit import TAG_WRITE_FIELDS, FieldChange, TrackEditPatch
 from trackfolio.domain.metadata import TrackMetadata
 from trackfolio.domain.tag_write import (
     AlbumNfoItem,
@@ -166,7 +166,7 @@ class PreviewTagWrites:
         if (
             not request.fields
             or len(set(request.fields)) != len(request.fields)
-            or any(field not in EDIT_FIELDS for field in request.fields)
+            or any(field not in TAG_WRITE_FIELDS for field in request.fields)
         ):
             raise TagWriteError("Select the fields you want to write.")
         identity = self.files.identity(request.database_path)
@@ -709,7 +709,7 @@ class TagWriteService:
         cover_choices: tuple[CoverChoice, ...] = (),
     ) -> TagWriteReport:
         """Publish every saved difference in one action, with internal verification."""
-        request = TagWriteRequest(database, file_ids, EDIT_FIELDS, allow_date_loss=True)
+        request = TagWriteRequest(database, file_ids, TAG_WRITE_FIELDS, allow_date_loss=True)
         try:
             cover_errors: dict[int, str] = {}
             if self.cover_sources is not None:

@@ -33,6 +33,7 @@ from trackfolio.infrastructure.catalog import (
     SqliteCatalogRepository,
     _insert_id,
     album_import_key,
+    has_instrumental_column,
     separate_shared_track,
 )
 from trackfolio.infrastructure.database import (
@@ -74,7 +75,16 @@ def _read_snapshot(connection: Connection, file_id: int) -> _Snapshot | None:
         return None
     file = dict(record)
     track_id = int(file["track_id"])
-    track = dict(connection.execute(select(tracks).where(tracks.c.id == track_id)).mappings().one())
+    columns = [
+        column
+        for column in tracks.c
+        if column.name != "instrumental" or has_instrumental_column(connection)
+    ]
+    track = dict(
+        connection.execute(select(*columns).where(tracks.c.id == track_id)).mappings().one()
+    )
+    # Revisions before 003 lack the column; normalize so tokens survive the upgrade.
+    track["instrumental"] = bool(track.get("instrumental", False))
     album = (
         dict(
             connection.execute(select(albums).where(albums.c.id == track["album_id"]))
@@ -141,6 +151,7 @@ def _read_snapshot(connection: Connection, file_id: int) -> _Snapshot | None:
         genres=tuple(name for _position, name in genre_credits),
         lyrics=track["lyrics"],
         album_artists=tuple(name for role, _, name in album_credits if role == "album_artist"),
+        instrumental=track["instrumental"],
     )
     return _Snapshot(EditableTrack(file_id, track_id, values, token), file, album, album_credits)
 

@@ -483,7 +483,9 @@ def test_summary_query_has_no_details_per_row_and_preserves_credits(
     )
     with repository.engine.connect() as connection:
         assert repository.summary_from_connection(connection, first.file_id) == summaries[0]
-    assert len(statements) == 2
+    # One schema probe (older revisions lack the instrumental column) plus two data queries.
+    assert [s for s in statements if not s.startswith("pragma")] == statements[1:]
+    assert len(statements) == 3
     for excluded in ("artworks", "raw_tags", "track_details"):
         assert all(excluded not in statement for statement in statements)
     # Lyrics are only tested for presence in SQL; their text never reaches the list.

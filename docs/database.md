@@ -12,7 +12,7 @@ The catalog uses multiple tables. `track_details` joins data for querying; it ne
 | --- | --- |
 | `libraries` | Each library's local root |
 | `albums` | Provisional album groups: library, directory, title, year, date and disc total |
-| `tracks` | Track title, numbering, optional album reference and available lyrics |
+| `tracks` | Track title, numbering, optional album reference, available lyrics and the catalog-only `instrumental` mark (0/1, never written to tags) |
 | `artists` | Artists shared by unique exact name and optional external identifier |
 | `genres` | Genres reused when name text matches exactly |
 | `track_artists` | Track artist credits with role and position |
@@ -78,7 +78,7 @@ Without `--database`, create/update `data/database.tfo`. Explicit paths, includi
 
 ## Upgrade an older catalog
 
-The current revision is `002_unique_artists`. The GUI reads `001_initial` without modifying it. Importing or saving edits creates a consistent SQLite backup and migrates before writing. Preparing/cancelling drafts, saving without changes, validating import forms or importing folders without valid audio do not trigger this upgrade.
+The current revision is `003_instrumental`, which adds `tracks.instrumental` (default 0). The GUI reads `001_initial` and `002_unique_artists` without modifying them; their songs appear as not instrumental. Importing or saving edits creates a consistent SQLite backup and migrates before writing. Preparing/cancelling drafts, saving without changes, validating import forms or importing folders without valid audio do not trigger this upgrade.
 
 To consolidate artists without rereading music, close other catalog-writing applications and run:
 
@@ -86,15 +86,15 @@ To consolidate artists without rereading music, close other catalog-writing appl
 uv run --locked python -m trackfolio.infrastructure.database --upgrade data/database.tfo
 ```
 
-The command prints the previous-copy path beside the catalog, matching `database.tfo.001_initial.<identifier>.bak`. Existing copies are not overwritten. Backup failure prevents migration; upgrade failure rolls back changes. Repeating on `002` changes no data and creates no backup.
+The command prints the previous-copy path beside the catalog, matching `database.tfo.<previous revision>.<identifier>.bak` (for example `database.tfo.002_unique_artists.<identifier>.bak`). Every older revision is copied before upgrading. Existing copies are not overwritten. Backup failure prevents migration; upgrade failure rolls back changes. Repeating on the current revision changes no data and creates no backup.
 
 Consolidation retains the lowest ID per exact name and redirects track and album credits. Rows, roles, positions and track/file/album IDs/data are preserved. If canonical `external_id` is empty, take the first non-null value by group ID. Downgrade removes only the index; restoring original duplicate rows requires restoring the backup with the application closed.
 
-Historical [001_initial.sql](../migrations/001_initial.sql) remains intact. [002_current.sql](../migrations/002_current.sql) creates a new database through the current revision; do not run it on populated catalogs. Both are generated from Alembic:
+Historical [001_initial.sql](../migrations/001_initial.sql) remains intact. [003_current.sql](../migrations/003_current.sql) creates a new database through the current revision; do not run it on populated catalogs. Both are generated from Alembic:
 
 ```sh
 uv run --locked python -m trackfolio.infrastructure.database --export-sql migrations/001_initial.sql
-uv run --locked python -m trackfolio.infrastructure.database --export-current-sql migrations/002_current.sql
+uv run --locked python -m trackfolio.infrastructure.database --export-current-sql migrations/003_current.sql
 ```
 
 ## Check in SQLiteBrowser
@@ -127,7 +127,7 @@ PRAGMA foreign_key_check;
 PRAGMA integrity_check;
 ```
 
-An upgraded catalog reports `002_unique_artists`; duplicate-name and `foreign_key_check` queries return no rows; `integrity_check` returns `ok`. SQLiteBrowser can inspect image BLOBs in `artworks`; the query above checks properties without displaying binary contents.
+An upgraded catalog reports `003_instrumental`; duplicate-name and `foreign_key_check` queries return no rows; `integrity_check` returns `ok`. SQLiteBrowser can inspect image BLOBs in `artworks`; the query above checks properties without displaying binary contents.
 
 Expected validation sample:
 

@@ -19,7 +19,7 @@ from trackfolio.application.write_tags import (
     TagWriteService,
     WriteTagWrites,
 )
-from trackfolio.domain.catalog_edit import EDIT_FIELDS
+from trackfolio.domain.catalog_edit import TAG_WRITE_FIELDS
 from trackfolio.domain.tag_write import TagWriteRequest
 from trackfolio.infrastructure.catalog import SqliteCatalogRepository
 from trackfolio.infrastructure.database import create_engine, migrate_database
@@ -234,7 +234,7 @@ def prepare_change(setup_tags, tmp_path, *, kind="flac", fields=("title",), **ch
 
 
 @pytest.mark.parametrize("kind", ["flac", "mp3"])
-@pytest.mark.parametrize("field", EDIT_FIELDS)
+@pytest.mark.parametrize("field", TAG_WRITE_FIELDS)
 def test_explicit_clearing_of_each_field(setup_tags, tmp_path, kind, field):
     value = () if field in ("artists", "genres", "album_artists") else None
     source, entry, preview = prepare_change(

@@ -17,6 +17,7 @@ ROWS = (
         ("Pop", "Jazz"),
         has_lyrics=True,
         has_cover=True,
+        is_instrumental=True,
     ),
     CatalogSummary(2, 12, "Second song (Live)", ("Accept",), "Breaker", 1981, "b.flac", ("Metal",)),
     CatalogSummary(3, 13, None, (), None, None, "c.mp3", has_cover=True),
@@ -59,6 +60,9 @@ def ids(text):
         ("has:genre", (1, 2)),
         ("-has:artist", (3,)),
         ("HAS:Album Title:SONG", (1, 2)),
+        ("is:instrumental", (1,)),
+        ("-is:instrumental", (2, 3)),
+        ("IS:Instrumental song", (1,)),
         ("-", ()),
         ("re:zero", ()),
         ("AC/DC", ()),
@@ -77,6 +81,7 @@ def test_query_matches(text, expected):
         ('"open', "Unclosed quote", 0),
         ("ok has:nope", "Unknown flag has:nope", 7),
         ("year:abc", "Invalid year filter", 5),
+        ("is:lyrics", "Unknown flag is:lyrics", 3),
         ("year:", "Invalid year filter", 5),
         ("artist:", "Missing value after artist:", 7),
         ('"a"b', "Expected a space", 3),
@@ -95,11 +100,18 @@ def test_empty_query_flag():
 
 
 def test_reference_documents_every_field_and_flag():
-    from trackfolio.domain.song_query import FILTER_REFERENCE, FLAGS, SYNTAX_HELP, TEXT_FIELDS
+    from trackfolio.domain.song_query import (
+        FILTER_REFERENCE,
+        FLAGS,
+        IS_FLAGS,
+        SYNTAX_HELP,
+        TEXT_FIELDS,
+    )
 
     syntaxes = {item.syntax for item in FILTER_REFERENCE}
     assert {f"{field}:" for field in TEXT_FIELDS} <= syntaxes
     assert {f"has:{flag}" for flag in FLAGS} <= syntaxes
+    assert {f"is:{flag}" for flag in IS_FLAGS} <= syntaxes
     for item in FILTER_REFERENCE:
         parse_song_query(item.example)
         assert item.syntax in SYNTAX_HELP
@@ -121,6 +133,8 @@ def test_reference_documents_every_field_and_flag():
             ],
         ),
         ("ye", ["year:"]),
+        ("is", ["is:instrumental"]),
+        ("-is:i", ["-is:instrumental"]),
         ("-has:l", ["-has:lyrics"]),
         ("!HAS:c", ["!has:cover"]),
         ("genre:", ["genre:Jazz", 'genre:"Hip Hop"']),

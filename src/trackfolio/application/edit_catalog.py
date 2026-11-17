@@ -118,6 +118,10 @@ def validate_edit_patch(values: EditableValues, patch: TrackEditPatch) -> TrackE
                 )
                 errors.append(FieldError(field, message))
                 continue
+        elif field == "instrumental":
+            if type(value) is not bool:
+                errors.append(FieldError(field, "Mark or unmark the song as instrumental."))
+                continue
         elif field in ("artists", "genres", "album_artists"):
             if not isinstance(value, tuple) or any(not isinstance(item, str) for item in value):
                 errors.append(FieldError(field, "Enter a list of full names."))

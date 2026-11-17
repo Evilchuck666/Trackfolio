@@ -50,8 +50,8 @@ to the files when you are ready.
 
 - Imports FLAC and MP3 folders into a local `.tfo` catalog.
 - Groups your collection into **Artists**, **Albums** and **Songs** views.
-- Searches songs by title, artist or album, with genre and year filters.
-- Edits titles, artists, albums, years, track/disc numbers, genres and lyrics.
+- Searches songs by words, phrases, regular expressions and filters such as `artist:`, `year:1990..1999`, `has:lyrics` or `is:instrumental`, with a syntax menu and autocompletion.
+- Edits titles, artists, albums, years, track/disc numbers, genres and lyrics, and marks songs as instrumental (stored only in the catalog).
 - Applies shared changes to an album or a selection of songs.
 - Embeds local JPG/PNG covers, with a preview and a choice when several exist.
 - Updates existing `album.nfo` files when writing tags.

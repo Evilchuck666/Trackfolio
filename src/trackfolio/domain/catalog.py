@@ -13,6 +13,8 @@ class CatalogEntry:
     library_root: Path
     relative_path: str
     metadata: TrackMetadata
+    # Catalog-only flag: never read from or written to the music file's tags.
+    instrumental: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,3 +31,4 @@ class CatalogSummary:
     genres: tuple[str, ...] = ()
     has_lyrics: bool = False
     has_cover: bool = False
+    is_instrumental: bool = False
