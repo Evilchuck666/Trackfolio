@@ -394,6 +394,7 @@ jobs:
                   "trackfolio/infrastructure/migrations/initial_schema.py",
                   "trackfolio/infrastructure/migrations/versions/001_initial.py",
                   "trackfolio/infrastructure/migrations/versions/002_unique_artists.py",
+                  "trackfolio/infrastructure/migrations/versions/003_instrumental.py",
                   "trackfolio/infrastructure/migrations/script.py.mako",
               ):
                   assert member in artifact.namelist(), member
