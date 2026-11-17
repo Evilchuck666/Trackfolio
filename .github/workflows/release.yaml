@@ -247,11 +247,12 @@ jobs:
 
       - name: Check the X11 backend under Xvfb
         if: runner.os == 'Linux'
-        run: xvfb-run --auto-servernum uv run --locked --extra gui python scripts/doctor.py --gui --platform xcb
+        run: xvfb-run --auto-servernum uv run --locked --extra gui python scripts/doctor.py --gui --platform xcb --qt-timeout 60
 
+      # Real display backends are slower on hosted runners (macOS Intel took 12-16 s).
       - name: Check the native Windows or macOS backend
         if: runner.os != 'Linux'
-        run: uv run --locked --extra gui python scripts/doctor.py --gui
+        run: uv run --locked --extra gui python scripts/doctor.py --gui --qt-timeout 60
 
       - name: Lint code
         run: uv run --locked --extra gui ruff check .
