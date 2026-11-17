@@ -27,3 +27,5 @@ class CatalogSummary:
     album_year: int | None
     relative_path: str
     genres: tuple[str, ...] = ()
+    has_lyrics: bool = False
+    has_cover: bool = False

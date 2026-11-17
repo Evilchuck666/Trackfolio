@@ -28,6 +28,10 @@ from trackfolio.infrastructure.database import (
 )
 from trackfolio.infrastructure.schema_validation import validate_catalog_connection
 
+_HAS_LYRICS = and_(tracks.c.lyrics.is_not(None), func.trim(tracks.c.lyrics, " \t\r\n") != "").label(
+    "has_lyrics"
+)
+
 
 def _insert_id(connection: Connection, table: Table, values: dict[str, Any]) -> int:
     result = connection.execute(insert(table).values(**values))
@@ -455,6 +459,8 @@ class SqliteCatalogRepository:
                     tracks.c.title,
                     albums.c.title.label("album_title"),
                     albums.c.year.label("album_year"),
+                    _HAS_LYRICS,
+                    audio_files.c.cover_artwork_id.is_not(None).label("has_cover"),
                 )
                 .join(tracks, tracks.c.id == audio_files.c.track_id)
                 .outerjoin(albums, albums.c.id == tracks.c.album_id)
@@ -491,6 +497,8 @@ class SqliteCatalogRepository:
                     .order_by(track_genres.c.position)
                 ).scalars()
             ),
+            has_lyrics=bool(row["has_lyrics"]),
+            has_cover=bool(row["has_cover"]),
         )
 
     def list_summaries(self) -> tuple[CatalogSummary, ...]:
@@ -509,6 +517,8 @@ class SqliteCatalogRepository:
                 albums.c.title.label("album_title"),
                 albums.c.year.label("album_year"),
                 artists.c.name.label("artist_name"),
+                _HAS_LYRICS,
+                audio_files.c.cover_artwork_id.is_not(None).label("has_cover"),
             )
             .join(tracks, tracks.c.id == audio_files.c.track_id)
             .outerjoin(albums, albums.c.id == tracks.c.album_id)
@@ -532,6 +542,8 @@ class SqliteCatalogRepository:
                     album=row["album_title"],
                     album_year=row["album_year"],
                     relative_path=row["relative_path"],
+                    has_lyrics=bool(row["has_lyrics"]),
+                    has_cover=bool(row["has_cover"]),
                 )
                 credits[file_id] = []
             if row["artist_name"] is not None:
@@ -553,6 +565,8 @@ class SqliteCatalogRepository:
                 album_year=summary.album_year,
                 relative_path=summary.relative_path,
                 genres=tuple(genre_names.get(summary.track_id, ())),
+                has_lyrics=summary.has_lyrics,
+                has_cover=summary.has_cover,
             )
             for file_id, summary in summaries.items()
         )

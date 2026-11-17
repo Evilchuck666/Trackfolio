@@ -476,14 +476,28 @@ def test_summary_query_has_no_details_per_row_and_preserves_credits(
             2021,
             "Album/song.flac",
             ("Rock", "Metal"),
+            has_lyrics=True,
+            has_cover=True,
         ),
         CatalogSummary(second.file_id, second.track_id, None, (), None, None, "empty.mp3"),
     )
     with repository.engine.connect() as connection:
         assert repository.summary_from_connection(connection, first.file_id) == summaries[0]
     assert len(statements) == 2
-    for excluded in ("lyrics", "artworks", "raw_tags", "track_details"):
+    for excluded in ("artworks", "raw_tags", "track_details"):
         assert all(excluded not in statement for statement in statements)
+    # Lyrics are only tested for presence in SQL; their text never reaches the list.
+    assert all("trim(tracks.lyrics" in s for s in statements if "tracks.lyrics" in s)
+
+
+def test_summary_flags_ignore_blank_lyrics_and_missing_cover(repository, tmp_path):
+    saved = repository.save(
+        TrackMetadata(title="Blank", lyrics="  \n ", audio_format="flac"), tmp_path, "blank.flac"
+    )
+    (summary,) = repository.list_summaries()
+    assert (summary.has_lyrics, summary.has_cover) == (False, False)
+    with repository.engine.connect() as connection:
+        assert repository.summary_from_connection(connection, saved.file_id) == summary
 
 
 def test_summary_listing_returns_no_rows_for_an_empty_catalog(repository):

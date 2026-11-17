@@ -179,3 +179,28 @@ def test_failed_save_keeps_filter_and_draft(qt_app, edit_catalog, tmp_path, monk
         assert read_entry(database, first.file_id).metadata.title == "Original"
     finally:
         teardown(window, controller)
+
+
+def test_advanced_search_flags_regex_and_invalid_text(window):
+    rows_with_flags = (
+        replace(rows()[0], has_lyrics=True),
+        *rows()[1:],
+    )
+    window.set_catalog(Path("catalog.tfo"), rows_with_flags)
+    window.song_search.setText("has:lyrics")
+    assert visible(window) == (1,)
+    window.song_search.setText("-has:lyrics")
+    assert visible(window) == (2, 3)
+    assert window.count_label.text() == "2 / 3"
+    window.song_search.setText("/^second/i")
+    assert visible(window) == (2,)
+    assert window.song_search.property("invalid") is False
+    window.song_search.setText("/[")
+    assert visible(window) == (2,)
+    assert window.song_search.property("invalid") is True
+    assert "Unclosed regular expression" in window.song_search.toolTip()
+    choose(window.song_genre, "Pop")
+    assert visible(window) == ()
+    window.clear_song_filters.click()
+    assert window.song_search.property("invalid") is False
+    assert visible(window) == (1, 2, 3)

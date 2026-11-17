@@ -59,6 +59,12 @@ from trackfolio.domain.catalog_edit import (
     FieldChange,
     TrackEditPatch,
 )
+from trackfolio.domain.song_query import (
+    SYNTAX_HELP,
+    SongQuery,
+    SongQueryError,
+    parse_song_query,
+)
 from trackfolio.interfaces.gui.album_view import AlbumView
 from trackfolio.interfaces.gui.artist_view import ArtistView
 from trackfolio.interfaces.gui.catalog_model import CatalogTableModel
@@ -239,6 +245,7 @@ class MainWindow(QMainWindow):
         self.close_guard: Callable[[], bool] | None = None
         self.song_filter_guard: Callable[[Callable[[], None]], bool] | None = None
         self._song_filters: tuple[str, str | None, int | None] = ("", None, None)
+        self._song_query = SongQuery()
         self.selection_guard: Callable[[int], bool] | None = None
         self.selection_group_guard: Callable[[tuple[int, ...]], bool] | None = None
         self._current_file_id: int | None = None
@@ -405,7 +412,10 @@ class MainWindow(QMainWindow):
         filters.setContentsMargins(16, 0, 16, 12)
         filters.setSpacing(8)
         self.song_search = QLineEdit(panel)
-        self.song_search.setPlaceholderText("Search songs, artists or albums…")
+        self.song_search.setPlaceholderText(
+            "Search… /regex/, artist:, year:1990..1999, has:lyrics, -has:cover"
+        )
+        self.song_search.setToolTip(SYNTAX_HELP)
         self.song_search.setAccessibleName("Search songs")
         self.song_search.setClearButtonEnabled(True)
         filters.addWidget(self.song_search)
@@ -770,13 +780,12 @@ class MainWindow(QMainWindow):
             self.song_year.addItem(str(value), value)
         self._restore_song_filter_controls()
         del blockers
-        terms = query.casefold().split()
+        self._song_query = self._parse_song_search(query)
         visible = []
         blocker = QSignalBlocker(self.table.selectionModel())
         for index, row in enumerate(rows):
-            text = " ".join((row.title or "", *row.artists, row.album or "")).casefold()
             matches = (
-                all(term in text for term in terms)
+                self._song_query.matches(row)
                 and (genre is None or (genre in row.genres if genre else not row.genres))
                 and (year is None or (row.album_year or 0) == year)
             )
@@ -784,7 +793,7 @@ class MainWindow(QMainWindow):
             if matches:
                 visible.append(row.file_id)
         del blocker
-        active = bool(query.strip()) or genre is not None or year is not None
+        active = not self._song_query.is_empty or genre is not None or year is not None
         self.count_label.setText(f"{len(visible)} / {len(rows)}" if active else str(len(rows)))
         self.count_label.setToolTip("Matching songs / total songs" if active else "Total songs")
         self.empty_label.setVisible(not visible)
@@ -796,6 +805,22 @@ class MainWindow(QMainWindow):
             else "Open a catalog or import a music folder."
         )
         return tuple(visible)
+
+    def _parse_song_search(self, query: str) -> SongQuery:
+        """Parse the search box; keep the last valid query while the text is invalid."""
+        try:
+            parsed = parse_song_query(query)
+        except SongQueryError as exc:
+            error: str | None = f"{exc} (at character {exc.position + 1})"
+            parsed = self._song_query
+        else:
+            error = None
+        self.song_search.setProperty("invalid", error is not None)
+        self.song_search.setToolTip(SYNTAX_HELP if error is None else f"{error}\n\n{SYNTAX_HELP}")
+        style = self.song_search.style()
+        style.unpolish(self.song_search)
+        style.polish(self.song_search)
+        return parsed
 
     def refresh_song_filters(self) -> None:
         """Reapply filters after edits without selecting hidden songs."""
