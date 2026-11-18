@@ -13,6 +13,8 @@ class CatalogTableModel(QAbstractTableModel):
     """Display catalog data without opening files or consulting persistence."""
 
     HEADERS = ("Song", "Artist(s)", "Album", "Year", "File")
+    # The song search sort: key for each column, in the same order as HEADERS.
+    SORT_KEYS = ("title", "artist", "album", "year", "path")
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -25,6 +27,15 @@ class CatalogTableModel(QAbstractTableModel):
 
     def summaries(self) -> tuple[CatalogSummary, ...]:
         return self._rows
+
+    def reorder(self, rows: tuple[CatalogSummary, ...]) -> bool:
+        """Show the same songs in another order; False when the order is unchanged."""
+        if tuple(row.file_id for row in rows) == tuple(row.file_id for row in self._rows):
+            return False
+        self.beginResetModel()
+        self._rows = rows
+        self.endResetModel()
+        return True
 
     def update_summary(self, summary: CatalogSummary) -> bool:
         """Update a song while preserving the selection and the rest of the list."""

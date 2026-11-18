@@ -8,6 +8,8 @@ import pytest
 
 pytest.importorskip("PySide6")
 
+from PySide6.QtCore import QPoint, Qt
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QMessageBox
 from test_edit_gui_integration import (
     begin_edit,
@@ -268,3 +270,94 @@ def test_instrumental_saves_filters_and_cancel_restores(qt_app, edit_catalog, tm
         assert read_entry(database, first.file_id).instrumental is True
     finally:
         teardown(window, controller)
+
+
+def table_order(window):
+    return tuple(row.file_id for row in window.model.summaries())
+
+
+def test_in_lists_and_sort_reorder_while_keeping_the_selection(window):
+    window.set_catalog(Path("catalog.tfo"), rows())
+    window.song_search.setText("genre:metal,jazz")
+    assert visible(window) == (1, 2)
+    assert window.count_label.text() == "2 / 3"
+    window.song_search.setText("")
+    window.select_files((2,))
+    window.song_search.setText("sort:year")
+    assert table_order(window) == (2, 1, 3)
+    assert visible(window) == (2, 1, 3)
+    assert window.count_label.text() == "3"
+    assert window.selected_file_ids() == (2,)
+    assert window.table.currentIndex().row() == 0
+    window.song_search.setText("sort:-title")
+    assert table_order(window) == (2, 1, 3)
+    window.song_search.setText("")
+    assert table_order(window) == (1, 2, 3)
+    assert window.selected_file_ids() == (2,)
+    assert window.table.currentIndex().row() == 1
+
+
+def click_header(window, column):
+    header = window.table.horizontalHeader()
+    x = header.sectionViewportPosition(column) + header.sectionSize(column) // 2
+    QTest.mouseClick(header.viewport(), Qt.MouseButton.LeftButton, pos=QPoint(x, 5))
+
+
+def test_header_clicks_cycle_the_sort_term_and_indicator(window):
+    window.set_catalog(Path("catalog.tfo"), rows())
+    header = window.table.horizontalHeader()
+    assert not header.isSortIndicatorShown()
+    window.song_search.setText("song")
+    click_header(window, 3)
+    assert window.song_search.text() == "song sort:year"
+    assert header.isSortIndicatorShown() and header.sortIndicatorSection() == 3
+    assert header.sortIndicatorOrder() == Qt.SortOrder.AscendingOrder
+    assert table_order(window) == (2, 1, 3)
+    click_header(window, 3)
+    assert window.song_search.text() == "song sort:-year"
+    assert header.sortIndicatorOrder() == Qt.SortOrder.DescendingOrder
+    assert table_order(window) == (1, 2, 3)
+    click_header(window, 3)
+    assert window.song_search.text() == "song"
+    assert not header.isSortIndicatorShown()
+    click_header(window, 0)
+    assert window.song_search.text() == "song sort:title"
+    assert header.sortIndicatorSection() == 0
+    window.song_search.setText("song sort:title /[")
+    click_header(window, 1)
+    assert window.song_search.text() == "song sort:title /["
+
+
+def test_saved_edit_moves_the_song_to_its_sorted_position(qt_app, edit_catalog, tmp_path):
+    database, first, second = edit_catalog
+    window, controller = create_window(CatalogPreferences(tmp_path / "settings.json"))
+    window.views.setCurrentWidget(window.splitter)
+    try:
+        open_ready(qt_app, window, controller, database)
+        window.song_search.setText("sort:title")
+        assert table_order(window) == (first.file_id, second.file_id)
+        assert window.current_file_id() == first.file_id
+        begin_edit(qt_app, window, controller)
+        replace_text(window.fields["title"], "Zulu")
+        window.save_button.click()
+        wait_until(qt_app, lambda: not controller._jobs and not controller.saving)
+        assert read_entry(database, first.file_id).metadata.title == "Zulu"
+        assert table_order(window) == (second.file_id, first.file_id)
+        assert window.current_file_id() == first.file_id
+        assert window.table.currentIndex().row() == 1
+    finally:
+        teardown(window, controller)
+
+
+def test_artist_filter_matches_the_whole_name(window):
+    catalog = (
+        CatalogSummary(1, 11, "Winterbane", ("Abbath",), "Abbath", 2016, "a.flac"),
+        CatalogSummary(2, 12, "Paranoid", ("Black Sabbath",), "Paranoid", 1970, "b.flac"),
+    )
+    window.set_catalog(Path("catalog.tfo"), catalog)
+    window.song_search.setText("artist:abbath")
+    assert visible(window) == (1,)
+    window.song_search.setText("artist:%abbath")
+    assert visible(window) == (1, 2)
+    window.song_search.setText("abbath")
+    assert visible(window) == (1, 2)

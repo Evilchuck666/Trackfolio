@@ -64,6 +64,7 @@ from trackfolio.domain.song_query import (
     SongQuery,
     SongQueryError,
     parse_song_query,
+    with_sort,
 )
 from trackfolio.interfaces.gui.album_view import AlbumView
 from trackfolio.interfaces.gui.artist_view import ArtistView
@@ -247,6 +248,9 @@ class MainWindow(QMainWindow):
         self.song_filter_guard: Callable[[Callable[[], None]], bool] | None = None
         self._song_filters: tuple[str, str | None, int | None] = ("", None, None)
         self._song_query = SongQuery()
+        self._reordered = False
+        # Catalog order of each song, restored when the search has no sort: term.
+        self._catalog_order: dict[int, int] = {}
         self.selection_guard: Callable[[int], bool] | None = None
         self.selection_group_guard: Callable[[tuple[int, ...]], bool] | None = None
         self._current_file_id: int | None = None
@@ -456,6 +460,10 @@ class MainWindow(QMainWindow):
         self.table.horizontalHeader().setMinimumSectionSize(45)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         self.table.horizontalHeader().setStretchLastSection(True)
+        # The search box owns the order (sort:); header clicks rewrite its sort: term.
+        self.table.horizontalHeader().setSectionsClickable(True)
+        self.table.horizontalHeader().setSortIndicatorShown(False)
+        self.table.horizontalHeader().sectionClicked.connect(self._sort_by_column)
         for column, width in enumerate((176, 112, 126, 56, 160)):
             self.table.setColumnWidth(column, width)
         self.table.setAccessibleName("Catalog songs")
@@ -724,6 +732,7 @@ class MainWindow(QMainWindow):
             self.album_view.set_albums(())
             self.artist_view.set_albums(())
         blocker = QSignalBlocker(self.table.selectionModel())
+        self._catalog_order = {row.file_id: index for index, row in enumerate(rows)}
         self.model.set_summaries(rows)
         visible = self._filter_song_rows()
         self.table.clearSelection()
@@ -785,8 +794,20 @@ class MainWindow(QMainWindow):
             apply()
 
     def _filter_song_rows(self) -> tuple[int, ...]:
-        rows = self.model.summaries()
         query, genre, year = self._song_filters
+        self._song_query = self._parse_song_search(query)
+        selection_blocker = QSignalBlocker(self.table.selectionModel())
+        catalog = tuple(
+            sorted(
+                self.model.summaries(),
+                key=lambda row: self._catalog_order.get(row.file_id, len(self._catalog_order)),
+            )
+        )
+        if self.model.reorder(self._song_query.sort(catalog)):
+            self._reordered = True
+        del selection_blocker
+        self._show_sort_indicator()
+        rows = self.model.summaries()
         genres = sorted({name for row in rows for name in row.genres}, key=str.casefold)
         years = sorted({row.album_year for row in rows if row.album_year is not None}, reverse=True)
         self.song_search_field.set_vocabulary(
@@ -808,7 +829,6 @@ class MainWindow(QMainWindow):
             self.song_year.addItem(str(value), value)
         self._restore_song_filter_controls()
         del blockers
-        self._song_query = self._parse_song_search(query)
         visible = []
         blocker = QSignalBlocker(self.table.selectionModel())
         for index, row in enumerate(rows):
@@ -833,6 +853,40 @@ class MainWindow(QMainWindow):
             else "Open a catalog or import a music folder."
         )
         return tuple(visible)
+
+    def _show_sort_indicator(self) -> None:
+        header = self.table.horizontalHeader()
+        order = self._song_query.order
+        column = (
+            self.model.SORT_KEYS.index(order[0].field)
+            if order and order[0].field in self.model.SORT_KEYS
+            else -1
+        )
+        header.setSortIndicatorShown(column >= 0)
+        if column >= 0:
+            header.setSortIndicator(
+                column,
+                Qt.SortOrder.DescendingOrder
+                if order[0].descending
+                else Qt.SortOrder.AscendingOrder,
+            )
+
+    def _sort_by_column(self, column: int) -> None:
+        """Ascending, then descending, then the default order, through the search text."""
+        if not 0 <= column < len(self.model.SORT_KEYS) or not self.song_search.isEnabled():
+            return
+        text = self.song_search.text()
+        try:
+            query = parse_song_query(text)
+        except SongQueryError:
+            return  # The field already shows the error; do not rewrite invalid text.
+        key = self.model.SORT_KEYS[column]
+        primary = query.order[0] if query.order else None
+        if primary is not None and primary.field == key:
+            value = None if primary.descending else f"-{key}"
+        else:
+            value = key
+        self.song_search.setText(with_sort(text, query, value))
 
     def _parse_song_search(self, query: str) -> SongQuery:
         """Parse the search box; keep the last valid query while the text is invalid."""
@@ -919,6 +973,9 @@ class MainWindow(QMainWindow):
             QItemSelectionModel.SelectionFlag.NoUpdate,
         )
         del blocker
+        if self._reordered and row is not None:
+            self.table.scrollTo(self.model.index(row, 0))
+        self._reordered = False
 
     def select_files(self, file_ids: tuple[int, ...]) -> None:
         selection = self.table.selectionModel()
