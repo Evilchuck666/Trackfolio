@@ -1193,7 +1193,9 @@ class MainWindow(QMainWindow):
             control.setEnabled(navigating and self._catalog_path is not None)
         self.views.tabBar().setEnabled(navigating)
         self.album_view.set_busy(self._busy or not navigating, blocked=not navigating)
-        self.artist_view.setEnabled(not self._busy and navigating)
+        # Like the album view, block artists only for imports, saves and tag writes:
+        # disabling the focused list while a portrait loads would drop keyboard focus.
+        self.artist_view.setEnabled(navigating)
         self.edit_action.setEnabled(
             self._edit_enabled
             and self._detail_loaded

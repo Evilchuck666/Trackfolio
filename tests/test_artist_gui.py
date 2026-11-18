@@ -4,7 +4,10 @@ import pytest
 
 pytest.importorskip("PySide6")
 
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QImage
+from PySide6.QtTest import QTest
+from PySide6.QtWidgets import QApplication
 from test_album_gui import library
 from test_catalog_edit import edit
 from test_import_gui_integration import wait_until
@@ -73,5 +76,35 @@ def test_artist_portrait_loads_and_clears_when_unavailable(qt_app, setup_tags, t
         view.search.setText("album artist")
         wait_until(qt_app, lambda: not controller._jobs)
         assert view.cover.pixmap().isNull()
+    finally:
+        teardown(window, controller)
+
+
+def test_artist_list_keeps_keyboard_focus_while_portraits_load(qt_app, setup_tags, tmp_path):
+    library(setup_tags, tmp_path)
+    window, controller = create_window(tag_journal_root=tmp_path / "journal")
+    try:
+        window.show()
+        window.activateWindow()
+        controller.open_database(setup_tags[0])
+        wait_until(qt_app, lambda: not controller._jobs)
+        view = window.artist_view
+        assert window.views.currentWidget() is view
+        assert view.list.count() >= 2
+        view.list.setCurrentRow(0)
+        wait_until(qt_app, lambda: not controller._jobs)
+        view.list.setFocus()
+        wait_until(qt_app, lambda: QApplication.focusWidget() is view.list)
+        QTest.keyClick(view.list, Qt.Key.Key_Down)
+        # Loading the portrait marks the window busy; the list must stay usable.
+        assert any(job.kind == "artist_image" for job in controller._jobs.values())
+        assert view.list.isEnabled()
+        wait_until(qt_app, lambda: not controller._jobs)
+        assert view.list.currentRow() == 1
+        assert QApplication.focusWidget() is view.list
+        QTest.keyClick(view.list, Qt.Key.Key_Up)
+        wait_until(qt_app, lambda: not controller._jobs)
+        assert view.list.currentRow() == 0
+        assert QApplication.focusWidget() is view.list
     finally:
         teardown(window, controller)
