@@ -235,12 +235,12 @@ jobs:
 
       - name: Set up the headless GUI with the Unix launcher
         if: runner.os != 'Windows'
-        run: bash setup.sh --gui --skip-editor --non-interactive --platform offscreen
+        run: bash setup.sh --gui --skip-editor --non-interactive --platform offscreen --qt-timeout 60
 
       - name: Set up the headless GUI with Windows PowerShell
         if: runner.os == 'Windows'
         shell: powershell
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\setup.ps1 --gui --skip-editor --non-interactive --platform offscreen
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\setup.ps1 --gui --skip-editor --non-interactive --platform offscreen --qt-timeout 60
 
       - name: Diagnose the product window headlessly
         run: uv run --locked --extra gui python scripts/doctor.py --gui --platform offscreen
