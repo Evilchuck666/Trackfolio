@@ -932,7 +932,9 @@ jobs:
           import os
 
           results = json.loads(os.environ['RESULTS'])
-          failed = [name for name, job in results.items() if job['result'] in ('failure', 'cancelled')]
+          # Only success or skipped count as passing; cancelled and abandoned (a job that never
+          # got a runner) fail too.
+          failed = [name for name, job in results.items() if job['result'] not in ('success', 'skipped')]
           if results['changes']['result'] != 'success':
               failed.append('changes')
           if failed:
